@@ -49,3 +49,20 @@ describe("createRng (mulberry32)", () => {
     expect(() => r.pick([])).toThrow(VisError);
   });
 });
+
+describe("createRng input", () => {
+  it("defaults the seed only for undefined and rejects anything but a safe integer", () => {
+    expect(createRng(undefined).next()).toBe(createRng(1).next());
+    for (const seed of [null, "1", Number.NaN, 1.5, Infinity, 2 ** 53])
+      expect(() => createRng(seed as never)).toThrow(VisError);
+    expect(() => createRng(null as never)).toThrow(
+      /seed must be a safe integer/,
+    );
+    expect(createRng(-5).next()).toBeGreaterThanOrEqual(0);
+  });
+
+  it("pick rejects a non-array", () => {
+    for (const items of [null, "abc", 5, {}])
+      expect(() => createRng(1).pick(items as never)).toThrow(VisError);
+  });
+});

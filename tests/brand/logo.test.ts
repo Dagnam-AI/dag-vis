@@ -46,6 +46,21 @@ describe("logoSvg", () => {
     expect(() => logoSvg({ padding: -0.1 })).toThrow(VisError);
   });
 
+  it("names the colour parameter and takes null or a non-string for none", () => {
+    for (const color of [5, null, {}, [], true, "nope", "x".repeat(200)])
+      expect(() => logoSvg({ color } as never)).toThrow(/^color/);
+    for (const background of [5, null, {}, [], true, "nope"])
+      expect(() => logoSvg({ background } as never)).toThrow(/^background/);
+    for (const bad of [5, null])
+      expect(() => logoSvg({ color: bad } as never)).toThrow(VisError);
+    expect(logoSvg({ color: undefined, background: undefined } as never)).toBe(
+      logoSvg(),
+    );
+    expect(logoSvg({ color: "rgb(255 0 0 / 50%)" })).toContain(
+      'fill="#ff000080"',
+    );
+  });
+
   it("caps the size at 16384 and rejects null and non-numeric values by name", () => {
     expect(logoSvg({ size: 16384 })).toContain('width="16384"');
     expect(logoSvg({ size: 1 })).toContain('width="1"');

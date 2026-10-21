@@ -2,6 +2,8 @@ import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import {
   assertOptions,
+  bounded,
+  describeValue,
   finite,
   orDefault,
   parseFlag,
@@ -13,7 +15,7 @@ import { cssStops, normalizeStops, repeatSpan } from "./stops.js";
 import type { GradientSpec } from "./types.js";
 
 export interface AnimatedOptions {
-  /** Seconds per cycle. Default 10. */
+  /** Seconds per cycle, 0.001..86400. Default 10. */
   duration?: number;
   kind: "rotate" | "shift" | "hue";
   /** CSS selector the rules target. Default ".vis-gradient". */
@@ -21,6 +23,10 @@ export interface AnimatedOptions {
   /** Prefix for the keyframes / custom property names (a CSS identifier). Default "vis". */
   name?: string;
 }
+
+/** Shortest and longest cycle: 0.001 is the finest `fmt` prints; a day is longer than any loop. */
+const MIN_DURATION = 0.001;
+const MAX_DURATION = 86400;
 
 /** An identifier a stylesheet can embed anywhere without opening a new rule. */
 const IDENT = /^[A-Za-z_][\w-]*$/;
@@ -80,24 +86,26 @@ export function animatedGradientCss(
   opts: AnimatedOptions,
 ): { css: string; keyframes: string } {
   assertOptions(opts);
-  const duration = opts.duration ?? 10;
-  if (!Number.isFinite(duration) || duration <= 0)
-    throw new VisError(
-      `duration must be positive seconds, got ${String(duration)}`,
-    );
-  const selector = opts.selector ?? ".vis-gradient";
+  const duration = bounded(
+    "duration",
+    orDefault<unknown>(opts.duration, 10),
+    MIN_DURATION,
+    MAX_DURATION,
+  );
+  const selector = orDefault<unknown>(opts.selector, ".vis-gradient");
   if (
+    typeof selector !== "string" ||
     selector.trim() === "" ||
     !SELECTOR_CHARS.test(selector) ||
     !balanced(selector)
   )
     throw new VisError(
-      `selector must be a plain CSS selector (letters, digits, _ - . # * > + ~ , : = ^ $ |, spaces, balanced [] and (); no quotes, escapes or @), got ${JSON.stringify(selector)}`,
+      `selector must be a plain CSS selector (letters, digits, _ - . # * > + ~ , : = ^ $ |, spaces, balanced [] and (); no quotes, escapes or @), got ${describeValue(selector)}`,
     );
-  const name = opts.name ?? "vis";
-  if (!IDENT.test(name))
+  const name = orDefault<unknown>(opts.name, "vis");
+  if (typeof name !== "string" || !IDENT.test(name))
     throw new VisError(
-      `name must be a CSS identifier (letters, digits, - and _, not starting with a digit), got ${JSON.stringify(name)}`,
+      `name must be a CSS identifier (letters, digits, - and _, not starting with a digit), got ${describeValue(name)}`,
     );
   const reduced = `@media (prefers-reduced-motion: reduce) { ${selector} { animation: none; } }`;
   const seconds = fmt(duration);

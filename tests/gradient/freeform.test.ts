@@ -394,6 +394,17 @@ describe("freeform gradient", () => {
     expect(() => gradient({ ...spec, points: a })).not.toThrow();
   });
 
+  it("freeformRandom takes the default seed only for undefined", () => {
+    const palette = ["#ff0000", "#00ff00"];
+    expect(
+      freeformRandom({ count: 2, palette, seed: undefined } as never),
+    ).toEqual(freeformRandom({ count: 2, palette, seed: 1 }));
+    for (const seed of [null, "1", 1.5, Number.NaN])
+      expect(() =>
+        freeformRandom({ count: 2, palette, seed: seed as never }),
+      ).toThrow(/seed must be a safe integer/);
+  });
+
   it("freeformRandom rejects options that are not an object", () => {
     for (const opts of [null, 5, "x"])
       expect(() => freeformRandom(opts as never)).toThrow(

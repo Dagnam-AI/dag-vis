@@ -8,6 +8,7 @@ import {
   bounded,
   orDefault,
   parseRgba,
+  parseSeed,
 } from "../core/validate.js";
 import { assertUnit } from "./radial.js";
 import { assertList, cssStops, svgStops } from "./stops.js";
@@ -92,11 +93,7 @@ export function freeformRandom(opts: {
       );
     parseColor(c); // throws a VisError naming the value
   });
-  const seed = opts.seed ?? 1;
-  if (!Number.isSafeInteger(seed))
-    throw new VisError(
-      `freeformRandom seed must be a safe integer, got ${String(seed)}`,
-    );
+  const seed = parseSeed(opts.seed);
   const rng = createRng(seed);
   const round = (n: number): number => Math.round(n * 1000) / 1000;
   return Array.from({ length: opts.count }, () => ({

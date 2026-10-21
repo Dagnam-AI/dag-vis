@@ -108,6 +108,36 @@ describe("animatedGradientCss", () => {
       );
   });
 
+  it("never lets null default, and bounds the duration to 0.001..86400 seconds", () => {
+    for (const opts of [
+      { duration: null },
+      { selector: null },
+      { name: null },
+      { selector: 5 },
+      { name: 5 },
+      { selector: {} },
+      { duration: "5" },
+      { duration: 1e308 },
+      { duration: 86401 },
+      { duration: 0.0004 },
+    ])
+      expect(() =>
+        animatedGradientCss(conic, { kind: "hue", ...opts } as never),
+      ).toThrow(VisError);
+    expect(() =>
+      animatedGradientCss(conic, { kind: "hue", duration: 1e308 }),
+    ).toThrow(/duration must be a number in 0\.001\.\.86400/);
+    expect(
+      animatedGradientCss(conic, { kind: "hue", duration: 86400 }).css,
+    ).toContain("86400s");
+    expect(
+      animatedGradientCss(conic, { kind: "hue", duration: 0.001 }).css,
+    ).toContain("0.001s");
+    expect(() =>
+      animatedGradientCss(conic, { kind: "hue", name: null } as never),
+    ).toThrow(/name must be a CSS identifier/);
+  });
+
   it("rejects rotate on kinds without an angle and bad durations", () => {
     expect(() =>
       animatedGradientCss(

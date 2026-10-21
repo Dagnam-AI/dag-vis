@@ -25,3 +25,19 @@ describe("fmt", () => {
     },
   );
 });
+
+describe("fmt range", () => {
+  it("takes every number a generator can emit, up to 1e15 exclusive", () => {
+    expect(fmt(16384)).toBe("16384");
+    expect(fmt(999_999_999_999_999)).toBe("999999999999999");
+    expect(fmt(-999_999_999_999_999)).toBe("-999999999999999");
+  });
+
+  it.each([1e15, -1e15, 1e21, 1e306, -1e306, Number.MAX_VALUE])(
+    "throws VisError, not exponent form or Infinity, on %s",
+    (n) => {
+      expect(() => fmt(n)).toThrow(VisError);
+      expect(() => fmt(n)).toThrow(/magnitude/);
+    },
+  );
+});

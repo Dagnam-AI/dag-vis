@@ -11,13 +11,13 @@ import {
 } from "../core/validate.js";
 import type { Blend, Stop } from "./types.js";
 
-export const BLENDS: readonly Blend[] = [
+export const BLENDS: readonly Blend[] = Object.freeze([
   "normal",
   "multiply",
   "screen",
   "overlay",
   "soft-light",
-];
+]);
 
 /** A non-empty array: JS callers can pass anything, and a type guard here would widen to any[]. */
 export function assertList(message: string, list: unknown): void {

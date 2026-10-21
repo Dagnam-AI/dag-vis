@@ -202,6 +202,8 @@ describe("pattern() validation", () => {
       null,
       5,
       "256",
+      [],
+      [10, 10],
     ];
     for (const size of sizes) {
       expect(() => pattern({ kind: "dots", size } as never)).toThrow(VisError);

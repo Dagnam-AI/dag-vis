@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { toHex } from "../../src/core/color.js";
 import { VisError } from "../../src/core/errors.js";
 import {
+  BLENDS,
   cssStops,
   normalizeStops,
   phaseShift,
@@ -230,5 +231,14 @@ describe("css/svg stop lists", () => {
     expect(svgStops(s)).toBe(
       '<stop offset="0" stop-color="#ff0000" stop-opacity="0.5"/><stop offset="1" stop-color="#0000ff"/>',
     );
+  });
+});
+
+describe("BLENDS", () => {
+  it("is frozen, so a consumer cannot change the accepted modes", () => {
+    expect(Object.isFrozen(BLENDS)).toBe(true);
+    expect(() => {
+      (BLENDS as string[]).push("hard-light");
+    }).toThrow(TypeError);
   });
 });

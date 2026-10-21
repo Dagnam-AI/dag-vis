@@ -36,6 +36,27 @@ describe("dag-vis CLI", () => {
     expect(none.out).toEqual([]);
   });
 
+  it("never throws: an argv that is not an array of strings is one error line", async () => {
+    for (const argv of [
+      null,
+      undefined,
+      "og",
+      5,
+      {},
+      [1],
+      ["og", null],
+      [["og"]],
+    ]) {
+      const t = capture();
+      expect(await run(argv as never, t.io)).toBe(1);
+      expect(t.out).toEqual([]);
+      expect(t.err).toHaveLength(1);
+      expect(t.err[0]).toMatch(
+        /^dag-vis: argv must be an array of strings, got [^\n]+\n$/,
+      );
+    }
+  });
+
   it("treats -h as a value, not help, when an option consumes it", async () => {
     const out = join(tmp(), "dash.svg");
     const t = capture();

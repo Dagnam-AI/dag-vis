@@ -1,34 +1,18 @@
 import { parseColor, toHex, withAlpha } from "./color.js";
 import type { Rgba } from "./color.js";
 import { VisError } from "./errors.js";
+import { QUOTE_LIMIT, describeValue } from "./describe.js";
 import type { Size } from "./geometry.js";
+
+export { describeValue };
 
 /** Largest size, spacing or tile side: keeps every number far from exponent notation. */
 export const MAX_DIMENSION = 16384;
-
-/** Longest string an error message quotes, and the longest colour accepted. */
-const QUOTE_LIMIT = 80;
 
 /** A parsed colour: opaque hex plus its alpha, so output never needs 8-digit hex. */
 export interface Paint {
   hex: string;
   alpha: number;
-}
-
-/** A value for an error message. Never throws and never runs long, whatever the caller passed. */
-export function describeValue(v: unknown): string {
-  switch (typeof v) {
-    case "string":
-      return JSON.stringify(
-        v.length > QUOTE_LIMIT ? `${v.slice(0, QUOTE_LIMIT)}...` : v,
-      );
-    case "number":
-    case "bigint":
-    case "boolean":
-      return String(v);
-    default:
-      return v === null ? "null" : typeof v;
-  }
 }
 
 /**

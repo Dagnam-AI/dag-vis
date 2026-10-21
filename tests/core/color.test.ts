@@ -184,3 +184,100 @@ describe("mix / ramp (OKLab)", () => {
     expect(() => ramp(["#fff", "#000"], 0)).toThrow(VisError);
   });
 });
+
+describe("public colour helpers reject wrong types with a VisError", () => {
+  const red = { r: 1, g: 0, b: 0, a: 1 };
+  const blue = { r: 0, g: 0, b: 1, a: 1 };
+
+  it.each([null, undefined, 5, {}, [], true])(
+    "parseColor and toVec3 reject %j, naming the colour",
+    (bad) => {
+      expect(() => parseColor(bad as never)).toThrow(VisError);
+      expect(() => parseColor(bad as never)).toThrow(
+        /^colour must be a string/,
+      );
+      expect(() => toVec3(bad as never)).toThrow(VisError);
+    },
+  );
+
+  it.each([null, undefined, 5, "red", [], {}, { r: 1, g: 0, b: 0 }])(
+    "toHex, toCss, withAlpha and mix reject the colour %j",
+    (bad) => {
+      expect(() => toHex(bad as never)).toThrow(VisError);
+      expect(() => toCss(bad as never)).toThrow(VisError);
+      expect(() => withAlpha(bad as never, 0.5)).toThrow(VisError);
+      expect(() => mix(bad as never, blue, 0.5)).toThrow(/^mix a[ .]/);
+      expect(() => mix(red, bad as never, 0.5)).toThrow(/^mix b[ .]/);
+    },
+  );
+
+  it("names the bad channel", () => {
+    expect(() => toCss({ ...red, g: "0" } as never)).toThrow(
+      /colour\.g must be a number, got "0"/,
+    );
+    expect(() => toCss({ r: 0, g: 0, b: 0 } as never)).toThrow(
+      /colour\.a must be a number, got undefined/,
+    );
+  });
+
+  it("rejects a non-numeric t or alpha instead of returning junk", () => {
+    expect(() => mix(red, blue, "0.5" as never)).toThrow(
+      /^mix t must be a number/,
+    );
+    expect(() => mix(red, blue, null as never)).toThrow(VisError);
+    expect(() => withAlpha(red, "1" as never)).toThrow(
+      /^withAlpha alpha must be a number/,
+    );
+  });
+
+  it("toCss never prints NaN: a NaN alpha counts as 0", () => {
+    expect(toCss({ ...red, a: Number.NaN })).toBe("rgba(255, 0, 0, 0)");
+  });
+
+  it("ramp rejects a non-array stops, a non-integer n and an n over the cap", () => {
+    for (const stops of [null, "ab", 5, {}])
+      expect(() => ramp(stops as never, 3)).toThrow(/ramp\(\) stops/);
+    for (const n of [null, "3", 1.5, Number.NaN, 0, -1])
+      expect(() => ramp(["#000", "#fff"], n as never)).toThrow(
+        /ramp\(\) needs an integer n/,
+      );
+    expect(ramp(["#000", "#fff"], 4096)).toHaveLength(4096);
+    expect(() => ramp(["#000", "#fff"], 4097)).toThrow(VisError);
+    expect(() => ramp(["#000", "#fff"], 1e9)).toThrow(/n.*4096/);
+  });
+
+  it("ramp names a bad stop", () => {
+    expect(() => ramp(["#000", 5 as never], 3)).toThrow(VisError);
+  });
+});
+
+describe("parseColor error messages stay short", () => {
+  it("truncates the echoed value but still names its start", () => {
+    const long = `nope${"x".repeat(5000)}`;
+    let message = "";
+    try {
+      parseColor(long);
+    } catch (e) {
+      message = (e as Error).message;
+    }
+    expect(message.length).toBeLessThan(200);
+    expect(message).toContain("invalid colour: nopexxx");
+    for (const bad of [
+      `rgb(${"1,".repeat(3000)})`,
+      `rgb(${"9".repeat(5000)}, 0, 0)`,
+      `oklch(${"1 ".repeat(3000)})`,
+      `rgb(1, 2, 3 / ${"4 / ".repeat(3000)})`,
+    ])
+      expect(() => parseColor(bad)).toThrow(VisError);
+    for (const bad of [
+      `rgb(${"9".repeat(5000)}, 0, 0)`,
+      `rgba(1, 2, 3, ${"7".repeat(5000)})`,
+    ]) {
+      try {
+        parseColor(bad);
+      } catch (e) {
+        expect((e as Error).message.length).toBeLessThan(400);
+      }
+    }
+  });
+});

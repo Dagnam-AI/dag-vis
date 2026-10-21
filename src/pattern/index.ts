@@ -10,6 +10,7 @@ import {
   parseId,
   parsePaint,
   parseSeed,
+  parseSize,
 } from "../core/validate.js";
 import { renderContours } from "./contours.js";
 import { renderDagMesh } from "./dag-mesh.js";
@@ -67,19 +68,6 @@ function renderKind(spec: PatternSpec, ctx: PatternCtx): TileOutput {
   }
 }
 
-/** `size` as given: an object with both sides in 1..MAX_DIMENSION. */
-function parseSize(v: unknown): Size {
-  if (typeof v !== "object" || v === null)
-    throw new VisError(
-      `size must be { width, height }, got ${describeValue(v)}`,
-    );
-  const { width, height } = v as { width?: unknown; height?: unknown };
-  return {
-    width: bounded("size.width", width, 1, MAX_DIMENSION),
-    height: bounded("size.height", height, 1, MAX_DIMENSION),
-  };
-}
-
 /**
  * A tiling pattern: the `<pattern>` for SVG `<defs>` plus the `fill` that uses
  * it, a standalone sample document, and that sample as a CSS data-URI image.
@@ -118,7 +106,8 @@ export function pattern(spec: PatternSpec): PatternResult {
     spec.background === undefined
       ? undefined
       : parsePaint("background", spec.background);
-  const given = spec.size === undefined ? undefined : parseSize(spec.size);
+  const given =
+    spec.size === undefined ? undefined : parseSize("size", spec.size);
   const out = renderKind(spec, {
     id,
     rng: createRng(seed),

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseColor, toHex } from "../../src/core/color.js";
 import { VisError } from "../../src/core/errors.js";
+import { LOGO } from "../../src/brand/logo.js";
 import { BRAND, PALETTES, palette } from "../../src/brand/tokens.js";
 
 describe("BRAND", () => {
@@ -30,5 +31,36 @@ describe("BRAND", () => {
     expect(palette("red")).toBe(PALETTES.red);
     expect(() => palette("neon")).toThrow(VisError);
     expect(() => palette("neon")).toThrow("neon");
+  });
+
+  it.each(["constructor", "__proto__", "toString", "hasOwnProperty", ""])(
+    "palette(%j) is unknown, not an inherited member",
+    (name) => {
+      expect(() => palette(name)).toThrow(VisError);
+      expect(() => palette(name)).toThrow(/unknown palette/);
+    },
+  );
+
+  it.each([null, undefined, 5, {}])("palette(%j) is unknown", (name) => {
+    expect(() => palette(name as never)).toThrow(VisError);
+  });
+
+  it("freezes every token, so a consumer cannot change global output", () => {
+    const deepFrozen = (v: unknown): boolean =>
+      typeof v !== "object" ||
+      v === null ||
+      (Object.isFrozen(v) && Object.values(v).every(deepFrozen));
+    expect(deepFrozen(BRAND)).toBe(true);
+    expect(deepFrozen(PALETTES)).toBe(true);
+    expect(deepFrozen(LOGO)).toBe(true);
+    expect(() => {
+      (PALETTES.red as string[]).push("#000");
+    }).toThrow(TypeError);
+    expect(() => {
+      (BRAND.background as { dark: string }).dark = "#fff";
+    }).toThrow(TypeError);
+    expect(() => {
+      (BRAND.stripes as unknown as string[])[0] = "#fff";
+    }).toThrow(TypeError);
   });
 });

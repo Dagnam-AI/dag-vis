@@ -280,6 +280,13 @@ const COMMANDS = new Map<string, Command>([
  * unexpected error (message only, no stack).
  */
 export async function run(argv: readonly string[], io: CliIo): Promise<number> {
+  const input: unknown = argv;
+  if (!Array.isArray(input) || input.some((a) => typeof a !== "string")) {
+    io.stderr(
+      `dag-vis: argv must be an array of strings, got ${describeValue(input)}\n`,
+    );
+    return 1;
+  }
   const [name, ...rest] = argv;
   if (name === undefined) {
     io.stderr(USAGE);
