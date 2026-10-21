@@ -50,32 +50,41 @@ describe("dag-vis CLI files", () => {
         ["gradient", "--spec", spec, "--out", out],
         ["pattern", "--spec", spec, "--out", out],
       ];
-      for (const name of [
-        "card.jpg",
-        "card.JPEG",
-        "card.webp",
-        "card.txt",
-        "card",
-        "card.",
-        ".svg.bak",
-        "-",
-        "dir/",
-        "a.svg/",
-        "svg",
-        "png",
-        ".png ",
-      ]) {
-        const out = name === "-" ? name : join(tmp(), name);
-        for (const argv of commands(out)) {
-          const t = capture();
-          expect(await run(argv, t.io)).toBe(1);
-          expect(t.out).toEqual([]);
-          expect(t.err).toEqual([
-            `dag-vis: --out must end in .svg or .png, got ${describeValue(out)}\n`,
-          ]);
+      // `-` is a relative value: run from the temp dir so a regression that
+      // wrote it would create ./- there, never in the repo.
+      const cwd = process.cwd();
+      process.chdir(tmp());
+      try {
+        for (const name of [
+          "card.jpg",
+          "card.JPEG",
+          "card.webp",
+          "card.txt",
+          "card",
+          "card.",
+          ".svg.bak",
+          "-",
+          "dir/",
+          "a.svg/",
+          "a.b/out",
+          "svg",
+          "png",
+          ".png ",
+        ]) {
+          const out = name === "-" ? name : join(tmp(), name);
+          for (const argv of commands(out)) {
+            const t = capture();
+            expect(await run(argv, t.io)).toBe(1);
+            expect(t.out).toEqual([]);
+            expect(t.err).toEqual([
+              `dag-vis: --out must end in .svg or .png, got ${describeValue(out)}\n`,
+            ]);
+          }
         }
+        expect(readdirSync(tmp())).toEqual(["spec.json"]);
+      } finally {
+        process.chdir(cwd);
       }
-      expect(readdirSync(tmp())).toEqual(["spec.json"]);
     });
 
     it("favicons --out is a directory and is not subject to the extension rule", async () => {

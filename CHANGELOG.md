@@ -7,12 +7,6 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
-### Changed
-
-- CLI: `--out` of `og`, `background`, `gradient` and `pattern` must now end in `.svg` or `.png` (any case). Any other value (`card.jpg`, `.webp`, no extension, a trailing dot, `-`) exits 1 with one line naming the value and the accepted extensions, and writes nothing; before, it wrote SVG text into the file whatever its name. `favicons --out` (a directory) is unaffected.
-- Release workflow: the `publish` job now runs in the protected `npm` GitHub Environment (limited to `vis/v*` tags). No other workflow logic changed.
-- `favicons`: the icon `src` values in `site.webmanifest` are now relative to the manifest (`icon-192.png`, `icon-512.png`, `icon-maskable-512.png`) instead of root-absolute (`/icon-192.png`), so they resolve at the site root and under any sub-path. Nothing else in the manifest changed.
-
 ## [0.1.0] - 2026-10-21
 
 ### Added
@@ -22,8 +16,8 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 - Gradients: linear, radial, conic (with `repeat`/`reverse`/per-stop opacity), mesh, aurora, banded, layers (blend modes), freeform (+ palettes, seeded scatter), fluted glass, grain and image overlays, `animatedGradientCss`, `BLENDS`.
 - Patterns: dots, grid, lines, stripes, dagMesh, contours, noise.
 - Scenes: `brandBackground` (the og-default look) and `brandBackgroundLayers`, `ogCard`, `ribbon` (+ pure `ribbonCurves`), `measureText`/`wrapText`/`FONT_FAMILY`.
-- Node: `renderPng` (resvg, bundled Inter), `icoFromPngs`, `favicons`, the `dag-vis` CLI.
-- Tooling: CI (lint, format, types, tests at 100% coverage, and a packed-tarball smoke test that installs the package in an empty directory, checks both entries and the types, and runs the CLI) and a tag-triggered npm release with provenance.
+- Node: `renderPng` (resvg, bundled Inter), `icoFromPngs`, `favicons` (the icon `src` values in `site.webmanifest` are relative to the manifest, so they resolve at the site root and under any sub-path), the `dag-vis` CLI (`--out` of `og`, `background`, `gradient` and `pattern` must end in `.svg` or `.png`, any case; any other value exits 1 with one line naming it and writes nothing).
+- Tooling: CI (lint, format, types, tests at 100% coverage, and a packed-tarball smoke test that installs the package in an empty directory, checks both entries and the types, and runs the CLI) and a tag-triggered npm release with provenance, published from the protected `npm` GitHub Environment (limited to `vis/v*` tags).
 
 ### Notes
 

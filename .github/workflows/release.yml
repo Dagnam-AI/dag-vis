@@ -130,10 +130,10 @@ jobs:
       # and automation tokens are not the right thing any more). It may be
       # stored as an Environment secret on `npm` (readable only by runs the
       # Environment admits, i.e. `vis/v*` tags) instead of a repository
-      # secret; the `secrets.NPM_TOKEN` reference below reads either. Use it only until trusted publishing is configured, then delete
-      # the secret: a long-lived token is the hole OIDC exists to close. When
-      # the secret is set it is the credential; when it is absent the step is
-      # the OIDC path.
+      # secret; the `secrets.NPM_TOKEN` reference below reads either. Use it
+      # only until trusted publishing is configured, then delete the secret: a
+      # long-lived token is the hole OIDC exists to close. When the secret is
+      # set it is the credential; when it is absent the step is the OIDC path.
       #
       # `--provenance` signs a build attestation (needs id-token: write above).
       # Idempotent on re-runs: a moved tag must skip a version npm already has

@@ -79,10 +79,13 @@ describe("renderPng href rules are element-aware and deny by default", () => {
           createRequire(import.meta.url).resolve("@resvg/resvg-js"),
           JSON.stringify(svgs),
         ],
-        { cwd, encoding: "utf8" },
+        // The child blocks this thread; the timeout still bounds a real hang.
+        { cwd, encoding: "utf8", timeout: 20_000 },
       );
       expect(JSON.parse(out)).toEqual(svgs.map(() => true));
     },
+    // Load alone made this take seconds; the 20 s child timeout is the real bound.
+    30_000,
   );
 
   const bypasses: Record<string, string> = {
