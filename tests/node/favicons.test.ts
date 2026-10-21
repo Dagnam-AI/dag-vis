@@ -144,10 +144,10 @@ describe("favicons", () => {
       name: "Dagnam.AI",
       short_name: "Dagnam",
       icons: [
-        { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
-        { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+        { src: "icon-192.png", sizes: "192x192", type: "image/png" },
+        { src: "icon-512.png", sizes: "512x512", type: "image/png" },
         {
-          src: "/icon-maskable-512.png",
+          src: "icon-maskable-512.png",
           sizes: "512x512",
           type: "image/png",
           purpose: "maskable",
@@ -157,9 +157,12 @@ describe("favicons", () => {
       background_color: "#0a0a0a",
       display: "standalone",
     });
-    // every manifest icon exists on disk with the size it claims
+    // every manifest icon exists on disk with the size it claims, and its src
+    // is relative to the manifest (no leading slash), so it also resolves when
+    // the site is served under a sub-path
     for (const icon of manifest.icons as { src: string; sizes: string }[]) {
-      const [w] = dims(read(out, icon.src.slice(1)));
+      expect(icon.src).not.toMatch(/^[/\\]|^[a-z][a-z0-9+.-]*:/i);
+      const [w] = dims(read(out, icon.src));
       expect(icon.sizes).toBe(`${w}x${w}`);
     }
   });

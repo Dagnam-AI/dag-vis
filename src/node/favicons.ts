@@ -144,15 +144,17 @@ export async function favicons(opts: FaviconsOptions): Promise<string[]> {
     "icon-512.png": await renderPng(opaque(512, 0.1)),
     // Padding 0.2 keeps the mark inside the maskable safe zone (the central 80% circle).
     "icon-maskable-512.png": await renderPng(opaque(512, 0.2)),
+    // Icon `src` values are relative: they resolve against the manifest's own
+    // URL, so the set works at the site root and under any sub-path.
     "site.webmanifest": `${JSON.stringify(
       {
         name,
         short_name: shortName,
         icons: [
-          { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
-          { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+          { src: "icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "icon-512.png", sizes: "512x512", type: "image/png" },
           {
-            src: "/icon-maskable-512.png",
+            src: "icon-maskable-512.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",

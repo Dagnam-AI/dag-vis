@@ -74,7 +74,7 @@ await favicons({ outDir: "public" }); // favicon.ico/svg, apple-touch-icon, PWA 
 ```
 
 - `renderPng(svg, { width?, background?, fontFiles? })` resolves to a PNG `Buffer`. Text is drawn with the bundled Inter only (no system fonts), so output does not depend on the machine's fonts.
-- `favicons({ outDir, background?, color?, name?, shortName? })` writes the files listed in `FAVICON_FILES` and resolves to their paths.
+- `favicons({ outDir, background?, color?, name?, shortName? })` writes the files listed in `FAVICON_FILES` and resolves to their paths. The icon `src` values in `site.webmanifest` are relative (`icon-192.png`, not `/icon-192.png`), so they resolve against the manifest's own URL and work at the site root and under any sub-path; serve the icons next to the manifest and link it with `<link rel="manifest" href="site.webmanifest">` (a path relative to the page, or an absolute one for a root deployment).
 - `icoFromPngs(pngs)` packs PNG buffers into an `.ico`; `FONT_FILES` lists the bundled font paths; `run(argv, io)` is the CLI entry (it never calls `process.exit`).
 
 ### Security
