@@ -3,7 +3,7 @@ import { Resvg } from "@resvg/resvg-js";
 export interface Raster {
   width: number;
   height: number;
-  /** Straight (un-premultiplied) RGBA bytes. */
+  /** PREMULTIPLIED RGBA bytes, as resvg-js returns them (#ef4444 at alpha 64 is [60, 17, 17, 64]). */
   pixels: Uint8Array;
 }
 

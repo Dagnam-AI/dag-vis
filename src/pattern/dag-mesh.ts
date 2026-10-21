@@ -5,10 +5,11 @@ import {
   bounded,
   fade,
   integerIn,
+  orDefault,
 } from "./types.js";
 import type { DagMeshSpec, PatternCtx, TileOutput } from "./types.js";
 
-/** 400 nodes x 8 links is at most 3200 links: about 300 KB of SVG. */
+/** 400 nodes x 8 links is at most 3200 links: about 190 KB of SVG (measured). */
 const MAX_NODES = 400;
 const MAX_LINKS = 8;
 
@@ -23,11 +24,11 @@ interface Node {
  * neighbours, one line per pair: the product's DAG motif. The tile is `size`.
  */
 export function renderDagMesh(spec: DagMeshSpec, ctx: PatternCtx): TileOutput {
-  const count = integerIn("density", spec.density ?? 12, 2, MAX_NODES);
-  const links = integerIn("links", spec.links ?? 2, 1, MAX_LINKS);
+  const count = integerIn("density", orDefault(spec.density, 12), 2, MAX_NODES);
+  const links = integerIn("links", orDefault(spec.links, 2), 1, MAX_LINKS);
   const radius = bounded(
     "nodeRadius",
-    spec.nodeRadius ?? 3,
+    orDefault(spec.nodeRadius, 3),
     MIN_RESOLUTION,
     MAX_DIMENSION,
   );

@@ -15,6 +15,7 @@ import {
   bounded,
   describeValue,
   fade,
+  orDefault,
   parseId,
   parsePaint,
 } from "./types.js";
@@ -93,21 +94,29 @@ export function pattern(spec: PatternSpec): PatternResult {
     throw new VisError(
       `pattern spec must be an object, got ${describeValue(input)}`,
     );
-  const opacity = bounded("opacity", spec.opacity ?? 1, 0, 1);
-  const spacing = bounded("spacing", spec.spacing ?? 24, 1, MAX_DIMENSION);
+  const opacity = bounded("opacity", orDefault(spec.opacity, 1), 0, 1);
+  const spacing = bounded(
+    "spacing",
+    orDefault(spec.spacing, 24),
+    1,
+    MAX_DIMENSION,
+  );
   const strokeWidth = bounded(
     "strokeWidth",
-    spec.strokeWidth ?? 1,
+    orDefault(spec.strokeWidth, 1),
     MIN_RESOLUTION,
     MAX_DIMENSION,
   );
-  const seed = spec.seed ?? 1;
+  const seed = orDefault(spec.seed, 1);
   if (!Number.isSafeInteger(seed))
     throw new VisError(
       `seed must be a safe integer, got ${describeValue(seed)}`,
     );
-  const id = parseId("idPrefix", spec.idPrefix ?? `vis${seed}`);
-  const color = parsePaint("color", spec.color ?? "#ef4444");
+  const id = parseId(
+    "idPrefix",
+    orDefault<unknown>(spec.idPrefix, `vis${seed}`),
+  );
+  const color = parsePaint("color", orDefault<unknown>(spec.color, "#ef4444"));
   const background =
     spec.background === undefined
       ? undefined

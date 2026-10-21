@@ -170,6 +170,23 @@ describe("pattern() validation", () => {
     }
   });
 
+  it("treats null as a bad value, never as absent", () => {
+    for (const name of [
+      "opacity",
+      "spacing",
+      "strokeWidth",
+      "seed",
+      "idPrefix",
+      "color",
+      "background",
+      "size",
+    ]) {
+      const spec = { kind: "dots", [name]: null } as never;
+      expect(() => pattern(spec), name).toThrow(VisError);
+      expect(() => pattern(spec), name).toThrow(name);
+    }
+  });
+
   it("rejects bad sizes, naming the dimension", () => {
     const sizes: unknown[] = [
       { width: 0, height: 1 },

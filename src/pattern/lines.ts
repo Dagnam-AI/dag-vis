@@ -1,6 +1,6 @@
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
-import { fade, finite } from "./types.js";
+import { fade, finite, orDefault } from "./types.js";
 import type { LinesSpec, PatternCtx, TileOutput } from "./types.js";
 
 /**
@@ -12,8 +12,10 @@ import type { LinesSpec, PatternCtx, TileOutput } from "./types.js";
  */
 export function renderLines(spec: LinesSpec, ctx: PatternCtx): TileOutput {
   const s = ctx.spacing;
-  // A turn is a turn: keeps `rotate()` small however large the input.
-  const angle = finite("angle", spec.angle ?? 0) % 360;
+  // A turn is a turn: keeps `rotate()` small however large the input. Rounded to what
+  // `fmt` writes first, so 359.9996 and 0.0004 both mean "no rotation".
+  const angle =
+    Number(fmt(finite("angle", orDefault(spec.angle, 0)) % 360)) % 360;
   const out: TileOutput = {
     tile: { width: s, height: s },
     body: el("line", {

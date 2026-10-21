@@ -7,6 +7,7 @@ import {
   describeValue,
   fade,
   integerIn,
+  orDefault,
   parsePaint,
 } from "./types.js";
 import type { PatternCtx, StripesSpec, TileOutput } from "./types.js";
@@ -19,19 +20,24 @@ const MAX_COLORS = 64;
  * is one row of bars, `gap` px taller than the bars so rows are separated too.
  */
 export function renderStripes(spec: StripesSpec, ctx: PatternCtx): TileOutput {
-  const raw: unknown = spec.colors ?? BRAND.stripes;
+  const raw: unknown = orDefault<unknown>(spec.colors, BRAND.stripes);
   if (!Array.isArray(raw))
     throw new VisError(
       `colors must be an array of colour strings, got ${describeValue(raw)}`,
     );
   const list: readonly unknown[] = raw;
   integerIn("colors length", list.length, 1, MAX_COLORS);
-  const paints = list.map((c, i) => parsePaint(`colors[${i}]`, c));
-  const barWidth = bounded("barWidth", spec.barWidth ?? 16, 1, MAX_DIMENSION);
-  const gap = bounded("gap", spec.gap ?? 4, 0, MAX_DIMENSION);
+  const paints = Array.from(list, (c, i) => parsePaint(`colors[${i}]`, c));
+  const barWidth = bounded(
+    "barWidth",
+    orDefault(spec.barWidth, 16),
+    1,
+    MAX_DIMENSION,
+  );
+  const gap = bounded("gap", orDefault(spec.gap, 4), 0, MAX_DIMENSION);
   const barHeight = bounded(
     "barHeight",
-    spec.barHeight ?? 44,
+    orDefault(spec.barHeight, 44),
     1,
     MAX_DIMENSION,
   );

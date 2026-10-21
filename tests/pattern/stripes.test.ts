@@ -74,7 +74,7 @@ describe("stripes", () => {
   });
 
   it("validates colours, naming the offender", () => {
-    for (const colors of [[], "#fff", {}, [1], ["#fff", null]]) {
+    for (const colors of [[], "#fff", {}, [1], ["#fff", null], null]) {
       expect(() => pattern({ kind: "stripes", colors } as never)).toThrow(
         VisError,
       );
@@ -87,6 +87,19 @@ describe("stripes", () => {
     );
   });
 
+  it("rejects holes in the colours array, naming the index", () => {
+    const leading: unknown[] = [];
+    leading[1] = "#fff";
+    expect(() =>
+      pattern({ kind: "stripes", colors: leading as never }),
+    ).toThrow("colors[0] must be a colour string, got undefined");
+    const trailing: unknown[] = ["#fff", "#000"];
+    trailing.length = 3;
+    expect(() =>
+      pattern({ kind: "stripes", colors: trailing as never }),
+    ).toThrow("colors[2]");
+  });
+
   it("validates bar geometry", () => {
     const bad: [string, Record<string, unknown>][] = [
       ["barWidth", { barWidth: 0 }],
@@ -94,6 +107,9 @@ describe("stripes", () => {
       ["barWidth", { barWidth: Number.NaN }],
       ["barWidth", { barWidth: 1e9 }],
       ["barWidth", { barWidth: "16" }],
+      ["barWidth", { barWidth: null }],
+      ["gap", { gap: null }],
+      ["barHeight", { barHeight: null }],
       ["gap", { gap: -1 }],
       ["gap", { gap: Infinity }],
       ["gap", { gap: 16385 }],

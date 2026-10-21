@@ -95,9 +95,13 @@ export interface PatternResult {
   fill: string;
   /**
    * `url("data:image/svg+xml,…")` of `svg`: the same picture as a CSS image.
-   * It repeats seamlessly when the sample is a whole number of tiles (the
-   * default); an explicit `size` that is not, and `lines` at an angle that
-   * is not a multiple of 90 degrees, show a seam at the sample edge.
+   * Repeating it is seamless only for dots, grid, stripes and `lines` at a
+   * multiple of 90 degrees, and only when the sample is a whole number of
+   * tiles (the default; an explicit `size` that is not shows a seam). Other
+   * `lines` angles show a seam at the sample edge. `contours` rings run past
+   * the tile edge and are cut there; `dagMesh` repeats as identical copies of
+   * its tile; `noise` repeats seamlessly only where the engine honours
+   * `stitchTiles` (see `NoiseSpec`).
    */
   cssBackground: string;
   tile: Size;
@@ -217,6 +221,15 @@ export function parseId(name: string, v: unknown): string {
     throw new VisError(
       `${name} must be a valid id (a letter or "_", then up to 63 letters, digits, "_" or "-"), got ${describeValue(v)}`,
     );
+  return v;
+}
+
+/**
+ * `v`, or `fallback` ONLY when `v` is undefined. Unlike `??` it leaves `null`
+ * (from a JS caller) for the validator to reject, naming the parameter.
+ */
+export function orDefault<T>(v: T | undefined, fallback: T): T {
+  if (v === undefined) return fallback;
   return v;
 }
 

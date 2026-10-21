@@ -1,18 +1,33 @@
 import { el } from "../core/svg.js";
-import { bounded, integerIn } from "./types.js";
+import { bounded, fade, integerIn, orDefault } from "./types.js";
 import type { NoiseSpec, PatternCtx, TileOutput } from "./types.js";
 
 const MAX_OCTAVES = 10;
 
 /**
- * Monochrome fractal noise, seamless across tiles (`stitchTiles`). `color`
- * does not apply; `opacity` sets its strength. The tile is `size`. Its CSS
- * form is `cssBackground` (an SVG filter inside an image: supported by
- * browsers, but not by every SVG-in-CSS consumer).
+ * Monochrome fractal noise. `color` does not apply; `opacity` sets its
+ * strength. The tile is `size`; a single tile has no seam. `stitchTiles` is
+ * written so browsers can make repeats continuous, but resvg ignores it, so
+ * repeated tiles can show a seam at low frequencies (at the default 0.9
+ * neither engine shows one), and the grain itself differs between engines at
+ * low frequencies. Its CSS form is `cssBackground` (an SVG filter inside an
+ * image: supported by browsers, not by every SVG-in-CSS consumer). Render
+ * cost is bounded only by the 16384 px size cap: 10 octaves at 2048x2048
+ * takes about 1.2 s in resvg.
  */
 export function renderNoise(spec: NoiseSpec, ctx: PatternCtx): TileOutput {
-  const frequency = bounded("frequency", spec.frequency ?? 0.9, 0.001, 10);
-  const octaves = integerIn("octaves", spec.octaves ?? 3, 1, MAX_OCTAVES);
+  const frequency = bounded(
+    "frequency",
+    orDefault(spec.frequency, 0.9),
+    0.001,
+    10,
+  );
+  const octaves = integerIn(
+    "octaves",
+    orDefault(spec.octaves, 3),
+    1,
+    MAX_OCTAVES,
+  );
   const fid = `${ctx.id}-noise`;
   const { width, height } = ctx.size;
   return {
@@ -34,7 +49,7 @@ export function renderNoise(spec: NoiseSpec, ctx: PatternCtx): TileOutput {
         width,
         height,
         filter: `url(#${fid})`,
-        opacity: ctx.opacity,
+        opacity: fade(ctx.opacity),
       }),
   };
 }

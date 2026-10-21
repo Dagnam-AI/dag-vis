@@ -1,5 +1,11 @@
 import { el } from "../core/svg.js";
-import { MAX_DIMENSION, MIN_RESOLUTION, bounded, fade } from "./types.js";
+import {
+  MAX_DIMENSION,
+  MIN_RESOLUTION,
+  bounded,
+  fade,
+  orDefault,
+} from "./types.js";
 import type { DotsSpec, PatternCtx, TileOutput } from "./types.js";
 
 /** One dot per square tile. CSS form: `cssBackground` (the same SVG as a data URI). */
@@ -7,7 +13,7 @@ export function renderDots(spec: DotsSpec, ctx: PatternCtx): TileOutput {
   const s = ctx.spacing;
   const r = bounded(
     "radius",
-    spec.radius ?? s * 0.12,
+    orDefault(spec.radius, s * 0.12),
     MIN_RESOLUTION,
     MAX_DIMENSION,
   );

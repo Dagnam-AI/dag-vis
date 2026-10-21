@@ -31,6 +31,37 @@ function boxes(defs: string): Box[] {
   });
 }
 
+type Pt = [number, number];
+
+/** The vertex list of every `<path d="M…Z">` in the markup. */
+function polygons(defs: string): Pt[][] {
+  return [...defs.matchAll(/<path d="M([^"]+)Z"/g)].map((m) =>
+    (m[1] ?? "").split("L").map((p) => p.split(" ").map(Number) as Pt),
+  );
+}
+
+const cross = (o: Pt, a: Pt, b: Pt): number =>
+  (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+
+/** The closed polygon's edges as [from, to] pairs. */
+const edges = (poly: Pt[]): [Pt, Pt][] =>
+  poly.map((a, i): [Pt, Pt] => [a, poly[(i + 1) % poly.length] ?? a]);
+
+/** Number of proper intersections between the edges of two closed polygons. */
+function crossings(p: Pt[], q: Pt[]): number {
+  let n = 0;
+  for (const [a, b] of edges(p)) {
+    for (const [c, d] of edges(q)) {
+      if (
+        cross(a, b, c) * cross(a, b, d) < 0 &&
+        cross(c, d, a) * cross(c, d, b) < 0
+      )
+        n++;
+    }
+  }
+  return n;
+}
+
 describe("contours", () => {
   it("draws seeded wobbly rings around seeded centres", () => {
     const p = pattern({
@@ -44,39 +75,68 @@ describe("contours", () => {
     expect(p.tile).toEqual({ width: 100, height: 100 });
   });
 
-  it("nests the rings of one centre without crossing, `spacing` apart (derived from the output)", () => {
-    // Ring k has radius k * spacing within +-0.4 * spacing, so ring k's
-    // bounding box is strictly inside ring k + 1's, for every seed.
-    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
-      const spacing = 20;
-      const rings = 8;
-      const b = boxes(
+  it("never crosses adjacent rings of one centre, whatever the seed (segment tests on the output)", () => {
+    for (let seed = 1; seed <= 12; seed++) {
+      const polys = polygons(
         pattern({
           kind: "contours",
           density: 1,
-          rings,
-          spacing,
+          rings: 10,
+          spacing: 12,
           seed,
-          size: { width: 400, height: 400 },
+          size: { width: 600, height: 600 },
         }).defs,
       );
-      expect(b).toHaveLength(rings);
-      b.forEach((ring, i) => {
-        const k = i + 1;
-        expect(ring.points).toBe(48);
-        for (const width of [ring.maxX - ring.minX, ring.maxY - ring.minY]) {
-          expect(width).toBeGreaterThanOrEqual(2 * (k - 0.4) * spacing * 0.99);
-          expect(width).toBeLessThanOrEqual(2 * (k + 0.4) * spacing + 0.01);
-        }
-        const outer = b[i + 1];
-        if (outer) {
-          expect(outer.minX).toBeLessThan(ring.minX);
-          expect(outer.maxX).toBeGreaterThan(ring.maxX);
-          expect(outer.minY).toBeLessThan(ring.minY);
-          expect(outer.maxY).toBeGreaterThan(ring.maxY);
-        }
-      });
+      expect(polys).toHaveLength(10);
+      for (let k = 0; k + 1 < polys.length; k++) {
+        const inner = polys[k] ?? [];
+        const outer = polys[k + 1] ?? [];
+        expect(inner).toHaveLength(48);
+        expect(
+          crossings(inner, outer),
+          `seed ${seed} rings ${k}/${k + 1}`,
+        ).toBe(0);
+      }
     }
+  });
+
+  it("detects a crossing when there is one (the checker itself)", () => {
+    const square = (r: number): [number, number][] => [
+      [-r, -r],
+      [r, -r],
+      [r, r],
+      [-r, r],
+    ];
+    expect(crossings(square(1), square(2))).toBe(0);
+    expect(
+      crossings(
+        square(1),
+        square(2).map(([x, y]) => [x + 1.5, y]),
+      ),
+    ).toBe(2);
+  });
+
+  it("spaces ring k about k * spacing out, wobble growing with k (derived from the output)", () => {
+    // Radius k * spacing * (1 +- 0.13), so a ring's width is 2k * spacing * (0.87..1.13).
+    const spacing = 20;
+    const b = boxes(
+      pattern({
+        kind: "contours",
+        density: 1,
+        rings: 8,
+        spacing,
+        seed: 3,
+        size: { width: 600, height: 600 },
+      }).defs,
+    );
+    expect(b).toHaveLength(8);
+    b.forEach((ring, i) => {
+      const k = i + 1;
+      for (const width of [ring.maxX - ring.minX, ring.maxY - ring.minY]) {
+        expect(width).toBeGreaterThanOrEqual(2 * k * spacing * 0.87 * 0.99);
+        expect(width).toBeLessThanOrEqual(2 * k * spacing * 1.13 + 0.01);
+      }
+    });
   });
 
   it("puts the centres inside the tile (20%..80%)", () => {
@@ -131,6 +191,8 @@ describe("contours", () => {
 
   it("validates density and rings", () => {
     const bad: [string, Record<string, unknown>][] = [
+      ["rings", { rings: null }],
+      ["density", { density: null }],
       ["rings", { rings: 0 }],
       ["rings", { rings: 33 }],
       ["rings", { rings: 2.5 }],

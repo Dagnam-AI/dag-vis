@@ -25,11 +25,19 @@ describe("lines", () => {
     expect(rotation(360)).toBeUndefined();
     expect(rotation(-360)).toBeUndefined();
     expect(rotation(720)).toBeUndefined();
+    // What is written, not the raw value: within 0.0005 of a turn is no turn.
+    expect(rotation(360.0004)).toBeUndefined();
+    expect(rotation(359.9996)).toBeUndefined();
+    expect(rotation(-359.9996)).toBeUndefined();
+    expect(rotation(0.0004)).toBeUndefined();
+    expect(rotation(-0.0004)).toBeUndefined();
+    expect(rotation(0.0006)).toBe("0.001");
+    expect(rotation(359.999)).toBe("359.999");
     expect(rotation(1e20)).toBe("280");
   });
 
   it("rejects an angle that is not a finite number, naming `angle`", () => {
-    for (const angle of [Number.NaN, Infinity, -Infinity, "45", {}]) {
+    for (const angle of [Number.NaN, Infinity, -Infinity, "45", {}, null]) {
       expect(() => pattern({ kind: "lines", angle } as never)).toThrow(
         VisError,
       );

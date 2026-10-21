@@ -21,6 +21,16 @@ describe("noise", () => {
     expect(p.tile).toEqual({ width: 256, height: 256 });
   });
 
+  it("writes opacity only when it is below 1", () => {
+    expect(pattern({ kind: "noise" }).defs).not.toContain("opacity");
+    expect(pattern({ kind: "noise", opacity: 1 }).defs).not.toContain(
+      "opacity",
+    );
+    expect(pattern({ kind: "noise", opacity: 0 }).defs).toContain(
+      'opacity="0"',
+    );
+  });
+
   it("namespaces the filter id with the prefix", () => {
     const p = pattern({ kind: "noise", idPrefix: "n" });
     expect(p.defs).toContain('<filter id="n-noise"');
@@ -67,6 +77,8 @@ describe("noise", () => {
 
   it("validates frequency and octaves", () => {
     const bad: [string, Record<string, unknown>][] = [
+      ["frequency", { frequency: null }],
+      ["octaves", { octaves: null }],
       ["frequency", { frequency: 0 }],
       ["frequency", { frequency: -1 }],
       ["frequency", { frequency: 0.0001 }],

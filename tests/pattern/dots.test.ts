@@ -48,7 +48,16 @@ describe("dots", () => {
   });
 
   it("rejects a radius that is not a positive finite number", () => {
-    for (const radius of [0, -1, Number.NaN, Infinity, "3", 1e9, 0.0001]) {
+    for (const radius of [
+      0,
+      -1,
+      Number.NaN,
+      Infinity,
+      "3",
+      1e9,
+      0.0001,
+      null,
+    ]) {
       expect(() => pattern({ kind: "dots", radius } as never)).toThrow(
         VisError,
       );

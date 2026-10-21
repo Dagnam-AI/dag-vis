@@ -8,6 +8,7 @@ import {
   fade,
   finite,
   integerIn,
+  orDefault,
   parseId,
   parsePaint,
 } from "../../src/pattern/types.js";
@@ -177,6 +178,15 @@ describe("parseId", () => {
         `idPrefix must be a valid id`,
       );
     }
+  });
+});
+
+describe("orDefault", () => {
+  it("defaults on undefined only, so null reaches the validator", () => {
+    expect(orDefault(undefined, 5)).toBe(5);
+    expect(orDefault(0, 5)).toBe(0);
+    expect(orDefault("", "x")).toBe("");
+    expect(orDefault(null as never, 5)).toBeNull();
   });
 });
 
