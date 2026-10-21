@@ -24,8 +24,16 @@ export const FONT_FILES: readonly string[] = [
 export const MAX_SVG_LENGTH = 5_000_000;
 /** Most pixels (width x height) one PNG may have: 64 MP is about 256 MB of RGBA. */
 export const MAX_OUTPUT_PIXELS = 64_000_000;
-/** Most `<clipPath>` plus `<mask>` elements: resvg crashes the process on chains of about 20,000. */
-export const MAX_CLIP_MASKS = 2000;
+/**
+ * Most `<clipPath>` plus `<mask>` elements. A coarse guard against the one
+ * crash seen: a CHAIN of 20,000 clip-path-referencing clipPaths segfaulted
+ * resvg 2.6.2 on one machine (10,000 rendered; other platforms not checked).
+ * It counts elements, not depth. The generators emit clipPaths only for
+ * `fluted`, one per reed (256 at most, siblings, nesting bounded by fluted's
+ * own cost cap), and `layers` adds them up, so more than 19 fluted-256 layers
+ * (5000 / 256) reaches this cap.
+ */
+export const MAX_CLIP_MASKS = 5000;
 /** Most entries in `fontFiles`. */
 export const MAX_FONT_FILES = 16;
 
@@ -121,10 +129,7 @@ function checkMarkup(svg: string): void {
   let clipMasks = 0;
   svg.replace(START_TAG, (tag: string, name: string, attrs: string) => {
     const element = name.slice(name.lastIndexOf(":") + 1).toLowerCase();
-    if (CLIP_OR_MASK.has(element) && ++clipMasks > MAX_CLIP_MASKS)
-      throw new VisError(
-        `svg must have at most ${MAX_CLIP_MASKS} <clipPath> and <mask> elements`,
-      );
+    if (CLIP_OR_MASK.has(element)) clipMasks++;
     attrs.replace(ATTRIBUTE, (attr: string, key: string, quoted: string) => {
       if (!HREF_NAME.test(key)) return attr;
       const value = quoted.slice(1, -1);
@@ -139,6 +144,10 @@ function checkMarkup(svg: string): void {
     });
     return tag;
   });
+  if (clipMasks > MAX_CLIP_MASKS)
+    throw new VisError(
+      `svg must have at most ${MAX_CLIP_MASKS} <clipPath> and <mask> elements, got ${clipMasks}`,
+    );
 }
 
 function isFile(path: string): boolean {
@@ -186,23 +195,31 @@ function stringError(error: unknown): string {
  * Rasterise an SVG string to a PNG with the bundled Inter (plus any
  * `fontFiles`) and no system fonts, so output is identical on every machine.
  *
- * This is for SVG produced by this package's own generators from validated
- * options; the dag-vis CLI and export path render nothing else. It is
- * defence in depth, NOT a sandbox for arbitrary untrusted SVG:
+ * The intent is that only SVG produced by this package's own generators, from
+ * validated options, reaches this function. It is defence in depth, NOT a
+ * sandbox for arbitrary untrusted SVG:
  *
- * - It blocks what a generator never emits and a reader could be hurt by:
- *   file reads through `href` (see `checkMarkup`), DTD entities, an SVG over
- *   `MAX_SVG_LENGTH`, more than `MAX_CLIP_MASKS` `<clipPath>`/`<mask>`
- *   elements, and a canvas over 16384 px a side or `MAX_OUTPUT_PIXELS`
- *   (checked before rendering, because resvg aborts the process on a huge
- *   canvas).
+ * - It refuses things a reader of the PNG could be hurt by and the generators
+ *   do not emit: file reads through `href` (see `checkMarkup`), DTD entity
+ *   declarations, SVG text over `MAX_SVG_LENGTH`, more than `MAX_CLIP_MASKS`
+ *   `<clipPath>`/`<mask>` elements, and a canvas over 16384 px a side or
+ *   `MAX_OUTPUT_PIXELS` (checked before rendering, because resvg aborts the
+ *   process on a huge canvas).
+ * - The generators DO emit `<clipPath>` (`fluted`, one per reed) and
+ *   `<image href>` (`gradient({ overlay: { image } })`). An overlay image must
+ *   therefore be a `data:` URI with a comma to render to PNG; a URL or path is
+ *   rejected here (it is fine in the CSS output).
+ * - The href check is a text scan of the start tags, not an XML parser. It can
+ *   only err towards rejecting, but it can in principle disagree with resvg's
+ *   parser: it is a layer of defence, not a proof.
  * - It cannot stop resvg from crashing or exhausting memory on other input
- *   inside those limits. Known cases: clipPath/mask chains (tens of thousands
- *   deep, below the cap they are fine), a huge `patternTransform` scale (a
- *   268-character SVG can need over 6 GB), raster bombs inside `data:` PNGs (a
- *   few hundred bytes declaring 100000 x 100000 px), and expensive filters
- *   (`feTurbulence` with a huge `numOctaves`, long blur chains, a very long
- *   `<text>`), which run for tens of seconds.
+ *   inside those limits. Cases seen on one machine (resvg-js 2.6.2, macOS
+ *   arm64; other platforms not checked): a chain of 20,000 clip-path-referencing
+ *   clipPaths or masks crashed the process (10,000 rendered); a huge
+ *   `patternTransform` scale (a 268-character SVG needed over 6 GB); raster
+ *   bombs inside `data:` PNGs (a few hundred bytes declaring 100000 x 100000
+ *   px); expensive filters (`feTurbulence` with a huge `numOctaves`, long blur
+ *   chains) and a very long `<text>` ran for tens of seconds.
  * - The call is async but the rendering is synchronous native work on the
  *   calling thread: it blocks the event loop until it returns, and a crash
  *   takes the whole process down.

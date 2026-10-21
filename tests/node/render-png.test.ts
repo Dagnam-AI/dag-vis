@@ -376,6 +376,16 @@ describe("renderPng without or with a replaced @resvg/resvg-js", () => {
       notFound("some-other-package"),
       /could not be loaded: Cannot find package 'some-other-package'/,
     ],
+    [
+      "the right code but a message that does not quote the package",
+      Object.assign(
+        new Error(
+          "Cannot find package @resvg/resvg-js imported from /app/x.js",
+        ),
+        { code: "ERR_MODULE_NOT_FOUND" },
+      ),
+      /could not be loaded: Cannot find package @resvg\/resvg-js imported from/,
+    ],
     ["a string is thrown", "boom", /could not be loaded: boom/],
     ["null is thrown", null, /could not be loaded: null/],
   ])(

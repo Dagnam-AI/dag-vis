@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Resvg } from "@resvg/resvg-js";
 import { afterAll, vi } from "vitest";
 
 import { measureText } from "../../src/scene/text.js";
@@ -95,3 +96,25 @@ export const fake = (
     }
     render = render;
   };
+
+export const XL = 'xmlns:xlink="http://www.w3.org/1999/xlink"';
+
+/** A 10x10 red PNG, and the same as a data: URI (with its comma). */
+export const redPng = Buffer.from(
+  new Resvg(sized(10, 10, '<rect width="10" height="10" fill="#f00"/>'))
+    .render()
+    .asPng(),
+);
+export const dataPng = `data:image/png;base64,${redPng.toString("base64")}`;
+
+/** A 10x10 SVG with one element carrying `attr="href"`; xlink is declared as `xlink`. */
+export const image = (href: string, tag = "image", attr = "href"): string =>
+  `<svg ${NS} ${XL} width="10" height="10"><${tag} ${attr}="${href}" width="10" height="10"/></svg>`;
+
+/** The same through a filter's <feImage>. */
+export const feImage = (href: string, attr = "href"): string =>
+  sized(
+    10,
+    10,
+    `<filter id="f"><feImage ${attr}="${href}"/></filter><rect width="10" height="10" filter="url(#f)"/>`,
+  ).replace(NS, `${NS} ${XL}`);
