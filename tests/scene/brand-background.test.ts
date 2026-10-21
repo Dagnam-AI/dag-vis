@@ -14,9 +14,14 @@ describe("brandBackground", () => {
     expect(svg).toContain('width="1672" height="941"');
     expect(svg).toContain('<rect width="1672" height="941" fill="#08080a"/>'); // 1 base
     expect(svg).toContain('fill="url(#vis1-band)"'); // 2 band
-    expect(
-      (svg.match(/vector-effect="non-scaling-stroke"/g) ?? []).length,
-    ).toBe(4); // 3 hairlines
+    // 3 hairlines: four stroked copies, none using vector-effect (resvg ignores it).
+    expect(svg.match(/stroke="url\(#vis1-hair\)"/g)).toHaveLength(4);
+    expect(svg).not.toContain("vector-effect");
+    // Stroke width is the requested 1.5 output px divided by the motif scale
+    // k = 1.5 * 941 / 628, so it renders 1.5 px wide.
+    expect(svg).toContain(
+      `stroke-width="${String(Number((1.5 / ((1.5 * 941) / 628)).toFixed(3)))}"`,
+    );
     expect(svg).toContain('stroke="url(#vis1-hair)"'); // 3 hairlines fade in
     expect(svg).toContain('fill="url(#vis1-glow)"'); // 4 glow
     expect(svg).not.toContain("-p)"); // 5 no pattern by default
@@ -61,7 +66,8 @@ describe("brandBackground", () => {
     expect(svg).toContain('fill="url(#vis1-base-g)"');
     expect(svg).toContain('fill="url(#vis1-pat-p)"');
     expect(svg).toContain('stop-color="#10abba"');
-    expect(svg).not.toContain("non-scaling-stroke");
+    expect(svg).not.toContain("stroke-width");
+    expect(svg).not.toContain("-hair");
     expect(svg).not.toContain("-glow");
     expect(svg).not.toContain("-vig");
   });
@@ -85,6 +91,54 @@ describe("brandBackground", () => {
     expect(gr).toBeGreaterThan(gb * 2);
     const [cr, cg, cb] = pixelAt(r, 0, 0);
     expect(cr + cg + cb).toBeLessThan(30);
+  });
+
+  it("renders hairlines as wide as requested in output px, at any size", () => {
+    // Hairlines only: black base, white accent, no band/glow/vignette, copy 1 on top of
+    // the outline. The middle bar's top edge is a horizontal run; sum the coverage down a
+    // column through it and divide by the peak to get the stroke's thickness in px.
+    const thickness = (width: number, height: number, w: number): number => {
+      const r = rasterize(
+        brandBackground({
+          width,
+          height,
+          base: "#000000",
+          palette: ["#ffffff"],
+          band: 0,
+          glow: 0,
+          vignette: 0,
+          hairlines: 1,
+          hairlineGap: 0,
+          hairlineWidth: w,
+        }),
+      );
+      const x = Math.round((1000 / 1672) * width);
+      const column = Array.from(
+        { length: height },
+        (_, y) => pixelAt(r, x, y)[0],
+      );
+      const first = column.findIndex((v) => v > 0);
+      const rest = column.slice(first);
+      // The first run of lit rows is the bar's top edge.
+      const lit = rest.slice(
+        0,
+        rest.findIndex((v) => v === 0),
+      );
+      return lit.reduce((a, v) => a + v, 0) / Math.max(...lit);
+    };
+    for (const [width, height] of [
+      [1672, 941],
+      [836, 470],
+    ] as const) {
+      for (const w of [3, 5]) {
+        // Edge rows are antialiased in quarters, so allow 0.75 px. Before the fix
+        // this measured about 2.25 x w at 1672x941.
+        expect(
+          Math.abs(thickness(width, height, w) - w),
+          `${width}x${height} @ ${w}px`,
+        ).toBeLessThan(0.75);
+      }
+    }
   });
 
   it("fades the motif in from its left edge, which never shows as a hard edge", () => {
@@ -268,6 +322,42 @@ describe("brandBackground validation", () => {
     );
     bad("options null", null, /options/);
     bad("options number", 3, /options/);
+  });
+
+  it("prefixes an error from a nested base or pattern with its parameter", () => {
+    const grab = (opts: unknown): Error => {
+      try {
+        brandBackground(opts as Parameters<typeof brandBackground>[0]);
+      } catch (e) {
+        return e as Error;
+      }
+      throw new Error("did not throw");
+    };
+    const empty = grab({ ...ok, base: [] });
+    expect(empty).toBeInstanceOf(VisError);
+    expect(empty.message).toMatch(/^base: unknown gradient kind/);
+    expect(empty.cause).toBeInstanceOf(VisError);
+    const colour = grab({
+      ...ok,
+      base: { kind: "linear", stops: ["#000", "bad"] },
+    });
+    expect(colour.message).toMatch(/^base: .*bad/);
+    const spacing = grab({ ...ok, pattern: { kind: "dots", spacing: 0 } });
+    expect(spacing).toBeInstanceOf(VisError);
+    expect(spacing.message).toMatch(/^pattern: spacing must be/);
+    expect(spacing.cause).toBeInstanceOf(VisError);
+  });
+
+  it("lets a non-VisError from a nested generator through unchanged", () => {
+    // A self-referencing layers spec overflows the stack inside gradient().
+    const loop: { kind: "layers"; layers: unknown[] } = {
+      kind: "layers",
+      layers: [],
+    };
+    loop.layers.push(loop);
+    expect(() => brandBackground({ ...ok, base: loop as never })).toThrow(
+      RangeError,
+    );
   });
 
   it("does not echo markup from a rejected value", () => {

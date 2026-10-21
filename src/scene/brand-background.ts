@@ -29,7 +29,7 @@ export interface BrandBackgroundOptions {
   band?: number;
   /** Offset stroke copies of the curves (faded leftwards like the band), integer 0..16. Default 4. */
   hairlines?: number;
-  /** Stroke width in px (non-scaling), 0.001..64. Default 1.5. */
+  /** Stroke width in output px (the motif's scale is divided out), 0.001..64. Default 1.5. */
   hairlineWidth?: number;
   /** Offset between copies as a fraction of the motif size, 0..1. Default 0.04. */
   hairlineGap?: number;
@@ -115,6 +115,18 @@ function paint(name: string, v: unknown): { hex: string; alpha: number } {
     return { hex: toHex(withAlpha(c, 1)), alpha: c.a };
   } catch (e) {
     throw new VisError(`${name}: ${(e as VisError).message}`);
+  }
+}
+
+/** Runs a nested generator; a VisError it throws gets `name: ` in front, with the original as `cause`. */
+function within<T>(name: string, run: () => T): T {
+  try {
+    return run();
+  } catch (e) {
+    if (!(e instanceof VisError)) throw e;
+    const wrapped = new VisError(`${name}: ${e.message}`);
+    wrapped.cause = e;
+    throw wrapped;
   }
 }
 
@@ -216,12 +228,14 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
     );
   } else if (typeof base === "object" && base !== null) {
     const spec = base as GradientSpec;
-    const g = gradient({
-      ...spec,
-      seed: orDefault(spec.seed, seed),
-      size: { width, height },
-      idPrefix: `${id}-base`,
-    });
+    const g = within("base", () =>
+      gradient({
+        ...spec,
+        seed: orDefault(spec.seed, seed),
+        size: { width, height },
+        idPrefix: `${id}-base`,
+      }),
+    );
     defs += g.defs;
     body.push(g.svg);
   } else {
@@ -249,15 +263,24 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
   );
   // Hairlines fade in with the band, so the motif's left edge never shows.
   const hairId = `${id}-hair`;
-  defs += el(
-    "linearGradient",
-    { id: hairId, x1: 0, y1: 0, x2: 1, y2: 0 },
-    el("stop", { offset: 0, "stop-color": accent.hex, "stop-opacity": 0 }),
-    el("stop", { offset: 0.55, "stop-color": accent.hex, "stop-opacity": 0.3 }),
-    el("stop", { offset: 1, "stop-color": accent.hex, "stop-opacity": 1 }),
-  );
+  if (hairlines > 0)
+    defs += el(
+      "linearGradient",
+      { id: hairId, x1: 0, y1: 0, x2: 1, y2: 0 },
+      el("stop", { offset: 0, "stop-color": accent.hex, "stop-opacity": 0 }),
+      el("stop", {
+        offset: 0.55,
+        "stop-color": accent.hex,
+        "stop-opacity": 0.3,
+      }),
+      el("stop", { offset: 1, "stop-color": accent.hex, "stop-opacity": 1 }),
+    );
   const motif = { width: LOGO.width, height: LOGO.height };
   const transform = `${focalTransform({ width, height, focus, scale, motif })} translate(${fmt(-LOGO.x)} ${fmt(-LOGO.y)})`;
+  // The motif's scale, as focalTransform computes it. resvg ignores
+  // vector-effect="non-scaling-stroke", so the stroke is divided by it here to
+  // come out `hairlineWidth` px wide in every renderer.
+  const k = (scale * minSide) / Math.max(motif.width, motif.height);
   const curves: string[] = [
     el("path", { d: LOGO.path, fill: `url(#${bandId})` }),
   ];
@@ -268,8 +291,7 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
         d: LOGO.path,
         fill: "none",
         stroke: `url(#${hairId})`,
-        "stroke-width": hairlineWidth,
-        "vector-effect": "non-scaling-stroke",
+        "stroke-width": hairlineWidth / k,
         opacity: 0.5 * 0.6 ** (i - 1) * accent.alpha,
         transform: `translate(${fmt(dx)} ${fmt(-dx * 0.3)})`,
       }),
@@ -307,12 +329,14 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
         `pattern must be a pattern spec object, got ${show(spec)}`,
       );
     const given = opts.pattern;
-    const p = pattern({
-      ...given,
-      seed: orDefault(given.seed, seed),
-      size: { width, height },
-      idPrefix: `${id}-pat`,
-    });
+    const p = within("pattern", () =>
+      pattern({
+        ...given,
+        seed: orDefault(given.seed, seed),
+        size: { width, height },
+        idPrefix: `${id}-pat`,
+      }),
+    );
     defs += p.defs;
     body.push(el("rect", { width, height, fill: p.fill }));
   }
