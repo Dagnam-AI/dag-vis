@@ -62,6 +62,18 @@ describe("parseColor", () => {
     "oklch(50% 0.1 30 / -1)",
     "rgb(a, 0, 0)",
     "oklch(x 0.1 30)",
+    "rgb(% % %)",
+    "oklch(% 0 0)",
+    "rgb(0 0 0 / %)",
+    "rgb(0 0 0 /)",
+    "oklch(50% 0.1 deg)",
+    "rgb(0x10 0 0)",
+    "rgb(1e999 0 0)",
+    "oklch(50% 5% 30)",
+    "rgb(0 0 0 / 0.5 / 0.2)",
+    "rgb(1,,2,3)",
+    "rgb(,1,2,3)",
+    "rgb()",
   ])("rejects malformed channel or alpha in %j", (bad) => {
     expect(() => parseColor(bad)).toThrow(VisError);
     expect(() => parseColor(bad)).toThrow(bad);
@@ -130,6 +142,26 @@ describe("mix / ramp (OKLab)", () => {
     expect(toHex(mid)).not.toBe("#800080");
     expect(mid.r).toBeGreaterThan(0.4);
     expect(mid.b).toBeGreaterThan(0.4);
+  });
+
+  it("matches Ottosson's published OKLab red/blue midpoint", () => {
+    // Reference: published OKLab red (0.627955, 0.224863, 0.125846) and blue
+    // (0.452014, -0.032457, -0.311528); the midpoint in Lab is
+    // (0.5399845, 0.096203, -0.092841) = oklch(0.53998 0.13370 316.02),
+    // which converts to sRGB (0.55044, 0.32562, 0.63650).
+    const mid = mix(red, blue, 0.5);
+    expect(mid.r).toBeCloseTo(0.55044, 4);
+    expect(mid.g).toBeCloseTo(0.32562, 4);
+    expect(mid.b).toBeCloseTo(0.6365, 4);
+    const viaOklch = parseColor("oklch(0.53998 0.1337 316.02)");
+    expect(mid.r).toBeCloseTo(viaOklch.r, 3);
+    expect(mid.g).toBeCloseTo(viaOklch.g, 3);
+    expect(mid.b).toBeCloseTo(viaOklch.b, 3);
+  });
+
+  it("treats NaN as 0 instead of emitting #NaNNaNNaN", () => {
+    expect(toHex(mix(red, blue, Number.NaN))).toBe("#ff0000");
+    expect(withAlpha(red, Number.NaN).a).toBe(0);
   });
 
   it("interpolates alpha linearly", () => {

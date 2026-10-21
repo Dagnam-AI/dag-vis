@@ -8,10 +8,13 @@ export interface Rgba {
   a: number;
 }
 
-const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
+/** Clamp to 0..1; NaN counts as 0 so it can never reach a serialised colour. */
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v || 0));
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const RGB = /^rgba?\(\s*[^)]*\)$/i;
 const OKLCH = /^oklch\(\s*[^)]*\)$/i;
+/** Plain decimal numbers only: no empty string, no 0x/0b literals, no Infinity. */
+const DECIMAL = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
 /** Text between the first "(" and the final ")". */
 const body = (s: string): string => s.slice(s.indexOf("(") + 1, -1);
 
@@ -21,21 +24,37 @@ function parseHex(hex: string): Rgba {
   return { r: n(0), g: n(2), b: n(4), a: h.length === 8 ? n(6) : 1 };
 }
 
+/**
+ * One numeric token. A trailing "%" (only when `pctOf` is given) means that
+ * fraction of `pctOf`. Anything that is not a finite decimal throws, so an
+ * empty or malformed token can never silently become 0.
+ */
+function num(raw: string, input: string, pctOf?: number): number {
+  const scale = raw.endsWith("%") ? pctOf : undefined;
+  const text = scale === undefined ? raw : raw.slice(0, -1);
+  const v = Number(text);
+  if (!DECIMAL.test(text) || !Number.isFinite(v))
+    throw new VisError(`invalid number "${raw}" in colour: ${input}`);
+  return scale === undefined ? v : (v / 100) * scale;
+}
+
 function parseAlpha(raw: string | undefined, input: string): number {
   if (raw === undefined) return 1;
-  const v = raw.endsWith("%") ? Number(raw.slice(0, -1)) / 100 : Number(raw);
-  if (!Number.isFinite(v) || v < 0 || v > 1)
-    throw new VisError(`invalid alpha in colour: ${input}`);
+  const v = num(raw, input, 1);
+  if (v < 0 || v > 1) throw new VisError(`invalid alpha in colour: ${input}`);
   return v;
 }
 
 /** "a, b, c" | "a b c" | "a b c / alpha" | "a, b, c, alpha" → [a, b, c, alpha?] */
-function splitArgs(body: string): {
-  parts: string[];
-  alpha: string | undefined;
-} {
-  const [main = "", slashAlpha] = body.split("/").map((s) => s.trim());
-  const parts = main.split(/[\s,]+/).filter(Boolean);
+function splitArgs(
+  body: string,
+  input: string,
+): { parts: string[]; alpha: string | undefined } {
+  const segments = body.split("/").map((s) => s.trim());
+  if (segments.length > 2) throw new VisError(`invalid colour: ${input}`);
+  const [main = "", slashAlpha] = segments;
+  // Empty tokens (`1,,2`) are kept so num() rejects them.
+  const parts = main.split(/\s*,\s*|\s+/);
   if (slashAlpha !== undefined) return { parts, alpha: slashAlpha };
   return parts.length === 4
     ? { parts: parts.slice(0, 3), alpha: parts[3] }
@@ -43,13 +62,11 @@ function splitArgs(body: string): {
 }
 
 function parseRgb(body: string, input: string): Rgba {
-  const { parts, alpha } = splitArgs(body);
+  const { parts, alpha } = splitArgs(body, input);
   if (parts.length !== 3) throw new VisError(`invalid rgb() colour: ${input}`);
   const [r, g, b] = parts.map((p) => {
-    const v = p.endsWith("%")
-      ? (Number(p.slice(0, -1)) / 100) * 255
-      : Number(p);
-    if (!Number.isFinite(v) || v < 0 || v > 255)
+    const v = num(p, input, 255);
+    if (v < 0 || v > 255)
       throw new VisError(`invalid rgb() channel in colour: ${input}`);
     return v / 255;
   }) as [number, number, number];
@@ -98,15 +115,13 @@ function oklabToRgb([L, A, B]: Lab, a: number): Rgba {
 }
 
 function parseOklch(body: string, input: string): Rgba {
-  const { parts, alpha } = splitArgs(body);
+  const { parts, alpha } = splitArgs(body, input);
   if (parts.length !== 3)
     throw new VisError(`invalid oklch() colour: ${input}`);
   const [lRaw, cRaw, hRaw] = parts as [string, string, string];
-  const L = lRaw.endsWith("%") ? Number(lRaw.slice(0, -1)) / 100 : Number(lRaw);
-  const C = Number(cRaw);
-  const H = Number(hRaw.replace(/deg$/i, ""));
-  if (![L, C, H].every(Number.isFinite))
-    throw new VisError(`invalid oklch() colour: ${input}`);
+  const L = num(lRaw, input, 1);
+  const C = num(cRaw, input);
+  const H = num(hRaw.replace(/deg$/i, ""), input);
   const rad = (H * Math.PI) / 180;
   return oklabToRgb(
     [L, C * Math.cos(rad), C * Math.sin(rad)],
