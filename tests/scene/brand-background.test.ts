@@ -1,0 +1,280 @@
+import { describe, expect, it } from "vitest";
+
+import { VisError } from "../../src/core/errors.js";
+import {
+  brandBackground,
+  brandBackgroundLayers,
+} from "../../src/scene/brand-background.js";
+import { expectGolden } from "../helpers/golden.js";
+import { pixelAt, rasterize } from "../helpers/render.js";
+
+describe("brandBackground", () => {
+  it("renders the six layers with defaults at the og-default size", () => {
+    const svg = brandBackground({ width: 1672, height: 941 });
+    expect(svg).toContain('width="1672" height="941"');
+    expect(svg).toContain('<rect width="1672" height="941" fill="#08080a"/>'); // 1 base
+    expect(svg).toContain('fill="url(#vis1-band)"'); // 2 band
+    expect(
+      (svg.match(/vector-effect="non-scaling-stroke"/g) ?? []).length,
+    ).toBe(4); // 3 hairlines
+    expect(svg).toContain('stroke="url(#vis1-hair)"'); // 3 hairlines fade in
+    expect(svg).toContain('fill="url(#vis1-glow)"'); // 4 glow
+    expect(svg).not.toContain("-p)"); // 5 no pattern by default
+    expect(svg).toContain('fill="url(#vis1-vig)"'); // 6 vignette
+    // motif centre lands at focus (0.82, 0.5): translate is the top-left corner,
+    // so centre = tx + (628/2)·k, with k = 1.5·941/628.
+    const m = /translate\((-?[\d.]+) (-?[\d.]+)\) scale\(([\d.]+)\)/.exec(svg);
+    const tx = Number(m?.[1]);
+    const k = Number(m?.[3]);
+    expect(k).toBeCloseTo((1.5 * 941) / 628, 2);
+    expect(tx + 314 * k).toBeCloseTo(0.82 * 1672, 0);
+  });
+
+  it("is deterministic and matches goldens at the required aspect ratios", () => {
+    for (const [w, h] of [
+      [1672, 941],
+      [1200, 630],
+      [1080, 1080],
+      [1080, 1920],
+      [1500, 500],
+    ] as const) {
+      const svg = brandBackground({ width: w, height: h });
+      expect(svg).toBe(brandBackground({ width: w, height: h }));
+      expect(svg).toContain(`viewBox="0 0 ${w} ${h}"`);
+      expectGolden(`scene/brand-background-${w}x${h}.svg`, svg);
+    }
+  });
+
+  it("takes a gradient base, a pattern overlay, custom palette/focus/scale and zero hairlines", () => {
+    const svg = brandBackground({
+      width: 400,
+      height: 200,
+      base: { kind: "linear", angle: 90, stops: ["#000", "#222"] },
+      pattern: { kind: "dots", spacing: 20, opacity: 0.2 },
+      palette: ["#10abba"],
+      focus: [0.5, 0.5],
+      scale: 1,
+      hairlines: 0,
+      glow: 0,
+      vignette: 0,
+    });
+    expect(svg).toContain('fill="url(#vis1-base-g)"');
+    expect(svg).toContain('fill="url(#vis1-pat-p)"');
+    expect(svg).toContain('stop-color="#10abba"');
+    expect(svg).not.toContain("non-scaling-stroke");
+    expect(svg).not.toContain("-glow");
+    expect(svg).not.toContain("-vig");
+  });
+
+  it("exposes defs/body for composition", () => {
+    const { defs, body } = brandBackgroundLayers({ width: 100, height: 50 });
+    expect(defs).toContain('id="vis1-band"');
+    expect(body.startsWith("<rect")).toBe(true);
+  });
+
+  it("rasterises to a dark base with the glow right of centre and darker corners", () => {
+    const r = rasterize(brandBackground({ width: 800, height: 450 }));
+    const [lr, lg, lb] = pixelAt(r, 40, 225);
+    const [gr, gg, gb] = pixelAt(r, 656, 225);
+    expect(lr).toBeLessThan(40);
+    expect(lg).toBeLessThan(30);
+    expect(lb).toBeLessThan(30);
+    // The glow is red: strong red, far less green/blue.
+    expect(gr).toBeGreaterThan(120);
+    expect(gr).toBeGreaterThan(gg * 2);
+    expect(gr).toBeGreaterThan(gb * 2);
+    const [cr, cg, cb] = pixelAt(r, 0, 0);
+    expect(cr + cg + cb).toBeLessThan(30);
+  });
+
+  it("fades the motif in from its left edge, which never shows as a hard edge", () => {
+    const r = rasterize(brandBackground({ width: 1672, height: 941 }));
+    // The motif's top-left corner sits at about x=681, y=27; just inside it the band is clear.
+    const [er, eg, eb] = pixelAt(r, 690, 70);
+    const [br, bg, bb] = pixelAt(r, 40, 70);
+    expect(
+      Math.abs(er - br) + Math.abs(eg - bg) + Math.abs(eb - bb),
+    ).toBeLessThan(6);
+    // Near the crossing it is plainly red.
+    const [cr, cg] = pixelAt(r, 1400, 470);
+    expect(cr).toBeGreaterThan(cg * 3);
+  });
+
+  it("changes with the seed only where the base or pattern is seeded", () => {
+    const plain = (seed: number): string =>
+      brandBackground({ width: 300, height: 200, seed });
+    // Ids follow the seed, the rest does not.
+    expect(plain(2)).toBe(plain(1).replaceAll("vis1", "vis2"));
+    const meshed = (seed: number): string =>
+      brandBackground({
+        width: 300,
+        height: 200,
+        seed,
+        base: { kind: "aurora", palette: ["#ef4444", "#10abba"] },
+      });
+    expect(meshed(3)).not.toBe(meshed(4).replaceAll("vis4", "vis3"));
+    // A base with its own seed keeps it, whatever the scene seed is.
+    const pinned = (seed: number): string =>
+      brandBackground({
+        width: 300,
+        height: 200,
+        seed,
+        base: { kind: "aurora", palette: ["#ef4444", "#10abba"], seed: 9 },
+      });
+    expect(pinned(3)).toBe(pinned(4).replaceAll("vis4", "vis3"));
+    const dotted = (seed: number): string =>
+      brandBackground({
+        width: 300,
+        height: 200,
+        seed,
+        pattern: { kind: "dagMesh" },
+      });
+    expect(dotted(3)).not.toBe(dotted(4).replaceAll("vis4", "vis3"));
+    const dottedPinned = (seed: number): string =>
+      brandBackground({
+        width: 300,
+        height: 200,
+        seed,
+        pattern: { kind: "dagMesh", seed: 5 },
+      });
+    expect(dottedPinned(3)).toBe(dottedPinned(4).replaceAll("vis4", "vis3"));
+  });
+
+  it("honours colour alpha on the base, accent and glow colour", () => {
+    const svg = brandBackground({
+      width: 200,
+      height: 100,
+      base: "rgba(0, 0, 0, 0.5)",
+      palette: ["rgba(239, 68, 68, 0.5)"],
+      glowColor: "#10abba80",
+      hairlines: 1,
+    });
+    expect(svg).toContain('fill="#000000" fill-opacity="0.5"');
+    // band 0.35 x 0.5, hairline 0.5 x 0.5, glow 0.55 x 0.502
+    expect(svg).toContain('stop-opacity="0.175"');
+    expect(svg).toContain('opacity="0.25"');
+    expect(svg).toContain('stop-color="#10abba" stop-opacity="0.276"');
+  });
+
+  it("places the glow at glowAt with glowRadius of the short side", () => {
+    const svg = brandBackground({
+      width: 400,
+      height: 200,
+      glowAt: [0.25, 0.5],
+      glowRadius: 0.5,
+    });
+    expect(svg).toContain('cx="100" cy="100" r="100"');
+  });
+
+  it("keeps derived ids unique and within the pattern's 64-character cap", () => {
+    const id = `a${"b".repeat(59)}`;
+    const svg = brandBackground({
+      width: 100,
+      height: 100,
+      idPrefix: id,
+      pattern: { kind: "grid" },
+      base: { kind: "radial", stops: ["#000", "#111"] },
+    });
+    expect(svg).toContain(`id="${id}-pat-p"`);
+    expect(svg).toContain(`id="${id}-base-g"`);
+    const ids = [...svg.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("brandBackground validation", () => {
+  const ok = { width: 100, height: 50 };
+  const bad = (name: string, opts: unknown, message: RegExp): void => {
+    expect(
+      () => brandBackground(opts as Parameters<typeof brandBackground>[0]),
+      name,
+    ).toThrow(VisError);
+    expect(
+      () => brandBackground(opts as Parameters<typeof brandBackground>[0]),
+      name,
+    ).toThrow(message);
+  };
+
+  it("names the parameter and value of a bad number", () => {
+    bad("width", { ...ok, width: 0 }, /width.*0/);
+    bad("height", { ...ok, height: -3 }, /height.*-3/);
+    bad("width NaN", { ...ok, width: NaN }, /width.*NaN/);
+    bad("width huge", { ...ok, width: 1e9 }, /width.*1000000000/);
+    bad("width string", { ...ok, width: "9" }, /width.*"9"/);
+    bad("height null", { ...ok, height: null }, /height.*null/);
+    bad("band", { ...ok, band: 2 }, /band.*2/);
+    bad("glow", { ...ok, glow: -0.1 }, /glow.*-0.1/);
+    bad("vignette", { ...ok, vignette: 1.5 }, /vignette.*1.5/);
+    bad("vignette null", { ...ok, vignette: null }, /vignette.*null/);
+    bad("hairlines neg", { ...ok, hairlines: -1 }, /hairlines.*-1/);
+    bad("hairlines frac", { ...ok, hairlines: 1.5 }, /hairlines.*1.5/);
+    bad("hairlines big", { ...ok, hairlines: 99 }, /hairlines.*99/);
+    bad("hairlineWidth", { ...ok, hairlineWidth: 0 }, /hairlineWidth.*0/);
+    bad("hairlineGap", { ...ok, hairlineGap: 2 }, /hairlineGap.*2/);
+    bad("scale 0", { ...ok, scale: 0 }, /scale.*0/);
+    bad("scale inf", { ...ok, scale: Infinity }, /scale.*Infinity/);
+    bad("scale big", { ...ok, scale: 1e6 }, /scale.*1000000/);
+    bad("glowRadius", { ...ok, glowRadius: 0 }, /glowRadius.*0/);
+    bad("seed frac", { ...ok, seed: 1.5 }, /seed.*1.5/);
+    bad("seed big", { ...ok, seed: 2 ** 60 }, /seed/);
+    bad("seed null", { ...ok, seed: null }, /seed.*null/);
+  });
+
+  it("rejects bad points", () => {
+    bad("focus range", { ...ok, focus: [2, 0] }, /focus\[0\].*2/);
+    bad("focus y", { ...ok, focus: [0, NaN] }, /focus\[1\].*NaN/);
+    bad("focus short", { ...ok, focus: [0.5] }, /focus/);
+    bad("focus long", { ...ok, focus: [0, 0, 0] }, /focus/);
+    bad("focus type", { ...ok, focus: "ab" }, /focus.*"ab"/);
+    bad("focus entry", { ...ok, focus: ["0", 0] }, /focus\[0\].*"0"/);
+    bad("glowAt", { ...ok, glowAt: [0, -1] }, /glowAt\[1\].*-1/);
+  });
+
+  it("rejects bad colours, naming the parameter", () => {
+    bad("palette empty", { ...ok, palette: [] }, /palette/);
+    bad("palette type", { ...ok, palette: "#fff" }, /palette.*"#fff"/);
+    bad("palette entry", { ...ok, palette: ["#fff", "nope"] }, /palette\[1\]/);
+    bad("palette number", { ...ok, palette: [5] }, /palette\[0\].*5/);
+    bad(
+      "palette long",
+      { ...ok, palette: Array.from({ length: 65 }, () => "#fff") },
+      /palette.*65/,
+    );
+    bad("base colour", { ...ok, base: "not-a-colour" }, /base/);
+    bad("base type", { ...ok, base: 7 }, /base.*7/);
+    bad("base null", { ...ok, base: null }, /base.*null/);
+    bad("base long", { ...ok, base: `#${"f".repeat(500)}` }, /base/);
+    bad("glowColor", { ...ok, glowColor: "red-ish" }, /glowColor/);
+    bad("glowColor type", { ...ok, glowColor: 1 }, /glowColor.*1/);
+    bad("base gradient", { ...ok, base: { kind: "nope" } }, /nope/);
+  });
+
+  it("rejects a bad idPrefix, naming it", () => {
+    bad("id chars", { ...ok, idPrefix: 'a"b' }, /idPrefix/);
+    bad("id digit", { ...ok, idPrefix: "1a" }, /idPrefix.*"1a"/);
+    bad("id type", { ...ok, idPrefix: 5 }, /idPrefix.*5/);
+    bad("id null", { ...ok, idPrefix: null }, /idPrefix.*null/);
+    bad("id long", { ...ok, idPrefix: `a${"b".repeat(60)}` }, /idPrefix/);
+  });
+
+  it("rejects a bad pattern, options object and size holder", () => {
+    bad("pattern null", { ...ok, pattern: null }, /pattern.*null/);
+    bad("pattern string", { ...ok, pattern: "dots" }, /pattern.*"dots"/);
+    bad("pattern kind", { ...ok, pattern: { kind: "x" } }, /pattern kind/);
+    bad(
+      "pattern opt",
+      { ...ok, pattern: { kind: "dots", spacing: 0 } },
+      /spacing/,
+    );
+    bad("options null", null, /options/);
+    bad("options number", 3, /options/);
+  });
+
+  it("does not echo markup from a rejected value", () => {
+    expect(() =>
+      brandBackground({ ...ok, palette: ['"><script>x</script>'] }),
+    ).toThrow(VisError);
+    const svg = brandBackground({ ...ok, palette: ["#10abba"] });
+    expect(svg).not.toContain("<script");
+  });
+});
