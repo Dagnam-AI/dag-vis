@@ -1,5 +1,6 @@
 import { el } from "../core/svg.js";
-import { bounded, fade, integerIn, orDefault } from "./types.js";
+import { bounded, integerIn, orDefault } from "../core/validate.js";
+import { fade } from "./types.js";
 import type { NoiseSpec, PatternCtx, TileOutput } from "./types.js";
 
 const MAX_OCTAVES = 10;

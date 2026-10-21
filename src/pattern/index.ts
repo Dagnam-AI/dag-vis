@@ -2,6 +2,15 @@ import { VisError } from "../core/errors.js";
 import type { Size } from "../core/geometry.js";
 import { createRng } from "../core/rng.js";
 import { el, svgDoc } from "../core/svg.js";
+import {
+  MAX_DIMENSION,
+  bounded,
+  describeValue,
+  orDefault,
+  parseId,
+  parsePaint,
+  parseSeed,
+} from "../core/validate.js";
 import { renderContours } from "./contours.js";
 import { renderDagMesh } from "./dag-mesh.js";
 import { renderDots } from "./dots.js";
@@ -9,16 +18,7 @@ import { renderGrid } from "./grid.js";
 import { renderLines } from "./lines.js";
 import { renderNoise } from "./noise.js";
 import { renderStripes } from "./stripes.js";
-import {
-  MAX_DIMENSION,
-  MIN_RESOLUTION,
-  bounded,
-  describeValue,
-  fade,
-  orDefault,
-  parseId,
-  parsePaint,
-} from "./types.js";
+import { MIN_RESOLUTION, fade } from "./types.js";
 import type {
   PatternCtx,
   PatternResult,
@@ -107,14 +107,11 @@ export function pattern(spec: PatternSpec): PatternResult {
     MIN_RESOLUTION,
     MAX_DIMENSION,
   );
-  const seed = orDefault(spec.seed, 1);
-  if (!Number.isSafeInteger(seed))
-    throw new VisError(
-      `seed must be a safe integer, got ${describeValue(seed)}`,
-    );
+  const seed = parseSeed(spec.seed);
   const id = parseId(
     "idPrefix",
     orDefault<unknown>(spec.idPrefix, `vis${seed}`),
+    64,
   );
   const color = parsePaint("color", orDefault<unknown>(spec.color, "#ef4444"));
   const background =

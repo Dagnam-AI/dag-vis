@@ -1,5 +1,3 @@
-import { parseColor, toHex, withAlpha } from "../core/color.js";
-import { VisError } from "../core/errors.js";
 import type { Size } from "../core/geometry.js";
 import type { Rng } from "../core/rng.js";
 
@@ -107,12 +105,6 @@ export interface PatternResult {
   tile: Size;
 }
 
-/** A parsed colour: opaque hex plus its alpha, so output never needs 8-digit hex. */
-export interface Paint {
-  hex: string;
-  alpha: number;
-}
-
 export interface PatternCtx {
   id: string;
   rng: Rng;
@@ -134,104 +126,8 @@ export interface TileOutput {
   patternTransform?: string;
 }
 
-/** Largest size, spacing or tile side: keeps every number far from exponent notation. */
-export const MAX_DIMENSION = 16384;
 /** Smallest non-zero value `fmt` (3 decimals) can still write. */
 export const MIN_RESOLUTION = 0.001;
-
-/** Longest string an error message quotes, and the longest colour accepted. */
-const QUOTE_LIMIT = 80;
-
-/** A value for an error message. Never throws and never runs long, whatever the caller passed. */
-export function describeValue(v: unknown): string {
-  switch (typeof v) {
-    case "string":
-      return JSON.stringify(
-        v.length > QUOTE_LIMIT ? `${v.slice(0, QUOTE_LIMIT)}...` : v,
-      );
-    case "number":
-    case "bigint":
-    case "boolean":
-      return String(v);
-    default:
-      return v === null ? "null" : typeof v;
-  }
-}
-
-/** Finite number in [min, max]. JS callers can pass anything, so the type is checked too. */
-export function bounded(
-  name: string,
-  v: unknown,
-  min: number,
-  max: number,
-): number {
-  if (typeof v !== "number" || !Number.isFinite(v) || v < min || v > max)
-    throw new VisError(
-      `${name} must be a number in ${min}..${max}, got ${describeValue(v)}`,
-    );
-  return v;
-}
-
-export function finite(name: string, v: unknown): number {
-  if (typeof v !== "number" || !Number.isFinite(v))
-    throw new VisError(
-      `${name} must be a finite number, got ${describeValue(v)}`,
-    );
-  return v;
-}
-
-/** Integer in [min, max]. */
-export function integerIn(
-  name: string,
-  v: unknown,
-  min: number,
-  max: number,
-): number {
-  if (typeof v !== "number" || !Number.isInteger(v) || v < min || v > max)
-    throw new VisError(
-      `${name} must be an integer in ${min}..${max}, got ${describeValue(v)}`,
-    );
-  return v;
-}
-
-/** A colour string → opaque hex + alpha. Errors name the parameter. */
-export function parsePaint(name: string, v: unknown): Paint {
-  if (typeof v !== "string")
-    throw new VisError(
-      `${name} must be a colour string, got ${describeValue(v)}`,
-    );
-  // No colour is this long; do not hand a megabyte string to the parser or an error.
-  if (v.length > QUOTE_LIMIT)
-    throw new VisError(
-      `${name} must be a colour of at most ${QUOTE_LIMIT} characters, got ${describeValue(v)}`,
-    );
-  try {
-    const c = parseColor(v);
-    return { hex: toHex(withAlpha(c, 1)), alpha: c.a };
-  } catch (e) {
-    throw new VisError(`${name}: ${(e as VisError).message}`);
-  }
-}
-
-const ID = /^[A-Za-z_][\w-]{0,63}$/;
-
-/** An id that is a valid XML name and safe inside `url(#…)`. */
-export function parseId(name: string, v: unknown): string {
-  if (typeof v !== "string" || !ID.test(v))
-    throw new VisError(
-      `${name} must be a valid id (a letter or "_", then up to 63 letters, digits, "_" or "-"), got ${describeValue(v)}`,
-    );
-  return v;
-}
-
-/**
- * `v`, or `fallback` ONLY when `v` is undefined. Unlike `??` it leaves `null`
- * (from a JS caller) for the validator to reject, naming the parameter.
- */
-export function orDefault<T>(v: T | undefined, fallback: T): T {
-  if (v === undefined) return fallback;
-  return v;
-}
 
 /** An opacity attribute value: omitted when fully opaque. */
 export function fade(alpha: number): number | undefined {

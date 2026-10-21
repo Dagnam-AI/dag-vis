@@ -35,6 +35,22 @@ export function fitAspect(
 }
 
 /**
+ * The scale `focalTransform` applies: `scale` x the canvas's short side over
+ * the motif's larger side.
+ */
+export function focalScale(opts: {
+  width: number;
+  height: number;
+  scale: number;
+  motif: Size;
+}): number {
+  return (
+    (opts.scale * Math.min(opts.width, opts.height)) /
+    Math.max(opts.motif.width, opts.motif.height)
+  );
+}
+
+/**
  * SVG `transform` placing a motif's centre at `focus` (unit coords of the
  * canvas). `scale` 1 = the motif's larger side equals the canvas's SHORT
  * side, so the motif keeps its shape on any aspect ratio and only the crop
@@ -48,9 +64,7 @@ export function focalTransform(opts: {
   motif: Size;
 }): string {
   assertSize({ width: opts.width, height: opts.height });
-  const k =
-    (opts.scale * Math.min(opts.width, opts.height)) /
-    Math.max(opts.motif.width, opts.motif.height);
+  const k = focalScale(opts);
   const tx = opts.focus[0] * opts.width - (opts.motif.width / 2) * k;
   const ty = opts.focus[1] * opts.height - (opts.motif.height / 2) * k;
   return `translate(${fmt(tx)} ${fmt(ty)}) scale(${fmt(k)})`;

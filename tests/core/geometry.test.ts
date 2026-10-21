@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { VisError } from "../../src/core/errors.js";
+import { fmt } from "../../src/core/format.js";
 import {
   assertSize,
   fitAspect,
+  focalScale,
   focalTransform,
 } from "../../src/core/geometry.js";
 
@@ -84,5 +86,39 @@ describe("focalTransform", () => {
         motif: { width: 1, height: 1 },
       }),
     ).toThrow(VisError);
+  });
+});
+
+describe("focalScale", () => {
+  it("is scale x the short canvas side over the motif's larger side", () => {
+    expect(
+      focalScale({
+        width: 200,
+        height: 100,
+        scale: 1.5,
+        motif: { width: 50, height: 100 },
+      }),
+    ).toBe(1.5);
+    expect(
+      focalScale({
+        width: 100,
+        height: 400,
+        scale: 2,
+        motif: { width: 400, height: 100 },
+      }),
+    ).toBe(0.5);
+  });
+
+  it("is the scale focalTransform applies", () => {
+    const o = {
+      width: 640,
+      height: 480,
+      scale: 1.25,
+      motif: { width: 30, height: 70 },
+    };
+    const k = focalScale(o);
+    expect(focalTransform({ ...o, focus: [0.5, 0.5] })).toContain(
+      `scale(${fmt(k)})`,
+    );
   });
 });

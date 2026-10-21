@@ -5,11 +5,11 @@ import {
   MAX_DIMENSION,
   bounded,
   describeValue,
-  fade,
   integerIn,
   orDefault,
   parsePaint,
-} from "./types.js";
+} from "../core/validate.js";
+import { fade } from "./types.js";
 import type { PatternCtx, StripesSpec, TileOutput } from "./types.js";
 
 /** One `<rect>` per colour; this keeps the tile and the output small. */

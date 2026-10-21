@@ -1,11 +1,6 @@
 import { el } from "../core/svg.js";
-import {
-  MAX_DIMENSION,
-  MIN_RESOLUTION,
-  bounded,
-  fade,
-  orDefault,
-} from "./types.js";
+import { MAX_DIMENSION, bounded, orDefault } from "../core/validate.js";
+import { MIN_RESOLUTION, fade } from "./types.js";
 import type { DotsSpec, PatternCtx, TileOutput } from "./types.js";
 
 /** One dot per square tile. CSS form: `cssBackground` (the same SVG as a data URI). */

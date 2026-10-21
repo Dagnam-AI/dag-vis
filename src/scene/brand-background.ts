@@ -1,10 +1,21 @@
 import { LOGO } from "../brand/logo.js";
 import { PALETTES } from "../brand/tokens.js";
-import { parseColor, toHex, withAlpha } from "../core/color.js";
 import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
-import { focalTransform } from "../core/geometry.js";
+import { focalScale, focalTransform } from "../core/geometry.js";
 import { el, svgDoc } from "../core/svg.js";
+import {
+  MAX_DIMENSION,
+  bounded,
+  describeValue,
+  integerIn,
+  orDefault,
+  parseId,
+  parsePaint,
+  parseSeed,
+  within,
+} from "../core/validate.js";
+import type { Paint } from "../core/validate.js";
 import { gradient } from "../gradient/index.js";
 import type { GradientSpec } from "../gradient/index.js";
 import { pattern } from "../pattern/index.js";
@@ -58,92 +69,35 @@ export interface BrandBackgroundOptions {
   idPrefix?: string;
 }
 
-const MAX_DIMENSION = 16384;
 const MAX_HAIRLINES = 16;
 const MAX_PALETTE = 64;
 const MAX_SCALE = 50;
-/** No colour is longer; keeps a megabyte string away from the parser and the error. */
-const COLOR_LIMIT = 80;
-const ID = /^[A-Za-z_][\w-]{0,59}$/;
-
-/** A value for an error message: never throws, never runs long. */
-function show(v: unknown): string {
-  if (typeof v === "string")
-    return JSON.stringify(
-      v.length > COLOR_LIMIT ? `${v.slice(0, COLOR_LIMIT)}...` : v,
-    );
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  return v === null ? "null" : typeof v;
-}
-
-/** `v`, or `fallback` ONLY when `v` is undefined, so null from a JS caller is validated. */
-function orDefault<T>(v: T | undefined, fallback: T): T {
-  if (v === undefined) return fallback;
-  return v;
-}
-
-/** Finite number in [min, max]. JS callers can pass anything, so the type is checked too. */
-function num(name: string, v: unknown, min: number, max: number): number {
-  if (typeof v !== "number" || !Number.isFinite(v) || v < min || v > max)
-    throw new VisError(
-      `${name} must be a number in ${min}..${max}, got ${show(v)}`,
-    );
-  return v;
-}
 
 function unit(name: string, v: unknown): number {
-  return num(name, v, 0, 1);
+  return bounded(name, v, 0, 1);
 }
 
 function point(name: string, v: unknown): readonly [number, number] {
   if (!Array.isArray(v) || v.length !== 2)
-    throw new VisError(`${name} must be [x, y], got ${show(v)}`);
+    throw new VisError(`${name} must be [x, y], got ${describeValue(v)}`);
   const [x, y] = v as unknown[];
   return [unit(`${name}[0]`, x), unit(`${name}[1]`, y)];
 }
 
-/** A colour string → opaque hex + its own alpha, so output never needs 8-digit hex. */
-function paint(name: string, v: unknown): { hex: string; alpha: number } {
-  if (typeof v !== "string")
-    throw new VisError(`${name} must be a colour string, got ${show(v)}`);
-  if (v.length > COLOR_LIMIT)
-    throw new VisError(
-      `${name} must be a colour of at most ${COLOR_LIMIT} characters, got ${show(v)}`,
-    );
-  try {
-    const c = parseColor(v);
-    return { hex: toHex(withAlpha(c, 1)), alpha: c.a };
-  } catch (e) {
-    throw new VisError(`${name}: ${(e as VisError).message}`);
-  }
-}
-
-/** Runs a nested generator; a VisError it throws gets `name: ` in front, with the original as `cause`. */
-function within<T>(name: string, run: () => T): T {
-  try {
-    return run();
-  } catch (e) {
-    if (!(e instanceof VisError)) throw e;
-    const wrapped = new VisError(`${name}: ${e.message}`);
-    wrapped.cause = e;
-    throw wrapped;
-  }
-}
-
 /** The accent (first colour), with every other colour validated too. */
-function parsePalette(v: unknown): { hex: string; alpha: number } {
+function parsePalette(v: unknown): Paint {
   if (!Array.isArray(v))
     throw new VisError(
-      `palette must be an array of 1..${MAX_PALETTE} colours, got ${show(v)}`,
+      `palette must be an array of 1..${MAX_PALETTE} colours, got ${describeValue(v)}`,
     );
   if (v.length < 1 || v.length > MAX_PALETTE)
     throw new VisError(
       `palette must hold 1..${MAX_PALETTE} colours, got ${v.length}`,
     );
   const colours = v as unknown[];
-  const first = paint("palette[0]", colours[0]);
+  const first = parsePaint("palette[0]", colours[0]);
   colours.slice(1).forEach((c, i) => {
-    paint(`palette[${i + 1}]`, c);
+    parsePaint(`palette[${i + 1}]`, c);
   });
   return first;
 }
@@ -156,39 +110,33 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
   // JS callers can pass anything.
   const input: unknown = opts;
   if (typeof input !== "object" || input === null)
-    throw new VisError(`options must be an object, got ${show(input)}`);
-  const width = num("width", opts.width, 1, MAX_DIMENSION);
-  const height = num("height", opts.height, 1, MAX_DIMENSION);
-  const seedOption = orDefault<unknown>(opts.seed, 1);
-  if (typeof seedOption !== "number" || !Number.isSafeInteger(seedOption))
-    throw new VisError(`seed must be a safe integer, got ${show(seedOption)}`);
-  const seed = seedOption;
-  const idOption = orDefault<unknown>(opts.idPrefix, `vis${seed}`);
-  if (typeof idOption !== "string" || !ID.test(idOption))
     throw new VisError(
-      `idPrefix must be a valid id (a letter or "_", then up to 59 letters, digits, "_" or "-"), got ${show(idOption)}`,
+      `options must be an object, got ${describeValue(input)}`,
     );
-  const id = idOption;
+  const width = bounded("width", opts.width, 1, MAX_DIMENSION);
+  const height = bounded("height", opts.height, 1, MAX_DIMENSION);
+  const seed = parseSeed(opts.seed);
+  const id = parseId(
+    "idPrefix",
+    orDefault<unknown>(opts.idPrefix, `vis${seed}`),
+    60,
+  );
   const accent = parsePalette(orDefault<unknown>(opts.palette, PALETTES.red));
   const focus = point("focus", orDefault<unknown>(opts.focus, [0.82, 0.5]));
-  const scale = num(
+  const scale = bounded(
     "scale",
     orDefault<unknown>(opts.scale, 1.5),
     0.01,
     MAX_SCALE,
   );
   const band = unit("band", orDefault<unknown>(opts.band, 0.35));
-  const hairlines = orDefault<unknown>(opts.hairlines, 4);
-  if (
-    typeof hairlines !== "number" ||
-    !Number.isInteger(hairlines) ||
-    hairlines < 0 ||
-    hairlines > MAX_HAIRLINES
-  )
-    throw new VisError(
-      `hairlines must be an integer in 0..${MAX_HAIRLINES}, got ${show(hairlines)}`,
-    );
-  const hairlineWidth = num(
+  const hairlines = integerIn(
+    "hairlines",
+    orDefault<unknown>(opts.hairlines, 4),
+    0,
+    MAX_HAIRLINES,
+  );
+  const hairlineWidth = bounded(
     "hairlineWidth",
     orDefault<unknown>(opts.hairlineWidth, 1.5),
     0.001,
@@ -201,8 +149,10 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
   const glow = unit("glow", orDefault<unknown>(opts.glow, 0.55));
   const glowAt = point("glowAt", orDefault<unknown>(opts.glowAt, focus));
   const glowPaint =
-    opts.glowColor === undefined ? accent : paint("glowColor", opts.glowColor);
-  const glowRadius = num(
+    opts.glowColor === undefined
+      ? accent
+      : parsePaint("glowColor", opts.glowColor);
+  const glowRadius = bounded(
     "glowRadius",
     orDefault<unknown>(opts.glowRadius, 0.6),
     0.01,
@@ -217,7 +167,7 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
   // 1. base
   const base = orDefault<unknown>(opts.base, "#08080a");
   if (typeof base === "string") {
-    const p = paint("base", base);
+    const p = parsePaint("base", base);
     body.push(
       el("rect", {
         width,
@@ -240,7 +190,7 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
     body.push(g.svg);
   } else {
     throw new VisError(
-      `base must be a colour string or a gradient spec, got ${show(base)}`,
+      `base must be a colour string or a gradient spec, got ${describeValue(base)}`,
     );
   }
 
@@ -280,7 +230,7 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
   // The motif's scale, as focalTransform computes it. resvg ignores
   // vector-effect="non-scaling-stroke", so the stroke is divided by it here to
   // come out `hairlineWidth` px wide in every renderer.
-  const k = (scale * minSide) / Math.max(motif.width, motif.height);
+  const k = focalScale({ width, height, scale, motif });
   const curves: string[] = [
     el("path", { d: LOGO.path, fill: `url(#${bandId})` }),
   ];
@@ -326,7 +276,7 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
     const spec: unknown = opts.pattern;
     if (typeof spec !== "object" || spec === null)
       throw new VisError(
-        `pattern must be a pattern spec object, got ${show(spec)}`,
+        `pattern must be a pattern spec object, got ${describeValue(spec)}`,
       );
     const given = opts.pattern;
     const p = within("pattern", () =>

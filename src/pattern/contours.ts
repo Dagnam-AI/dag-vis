@@ -1,6 +1,7 @@
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
-import { fade, integerIn, orDefault } from "./types.js";
+import { integerIn, orDefault } from "../core/validate.js";
+import { fade } from "./types.js";
 import type { ContoursSpec, PatternCtx, TileOutput } from "./types.js";
 
 /** 32 x 32 rings of 48 points is about 1 MB of SVG. */

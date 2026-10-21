@@ -1,12 +1,11 @@
 import { el } from "../core/svg.js";
 import {
   MAX_DIMENSION,
-  MIN_RESOLUTION,
   bounded,
-  fade,
   integerIn,
   orDefault,
-} from "./types.js";
+} from "../core/validate.js";
+import { MIN_RESOLUTION, fade } from "./types.js";
 import type { DagMeshSpec, PatternCtx, TileOutput } from "./types.js";
 
 /** 400 nodes x 8 links is at most 3200 links: about 190 KB of SVG (measured). */

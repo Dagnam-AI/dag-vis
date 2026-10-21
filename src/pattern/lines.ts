@@ -1,6 +1,7 @@
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
-import { fade, finite, orDefault } from "./types.js";
+import { finite, orDefault } from "../core/validate.js";
+import { fade } from "./types.js";
 import type { LinesSpec, PatternCtx, TileOutput } from "./types.js";
 
 /**
