@@ -3,7 +3,7 @@ import type { Rgba } from "../core/color.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
 import { assertUnit } from "./radial.js";
-import { cssStops, normalizeStops, sampleStops } from "./stops.js";
+import { cssStops, normalizeStops, repeatSpan, sampleStops } from "./stops.js";
 import type { ConicSpec, Ctx, KindOutput } from "./types.js";
 
 /** SVG has no conic gradient; 360 one-degree wedges in a pattern stand in. */
@@ -28,6 +28,8 @@ export function renderConic(spec: ConicSpec, ctx: Ctx): KindOutput {
   const at = spec.at ?? [0.5, 0.5];
   assertUnit("conic `at`", at);
   const stops = normalizeStops(spec.stops, spec.reverse);
+  // Same rule as linear/radial: zero-width repeating stops have no CSS equivalent.
+  if (spec.repeat) repeatSpan(stops);
   const { width, height } = ctx.size;
   const cx = at[0] * width;
   const cy = at[1] * height;

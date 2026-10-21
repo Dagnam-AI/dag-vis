@@ -35,7 +35,7 @@ export function renderRadial(spec: RadialSpec, ctx: Ctx): KindOutput {
   // what CSS shows there (CSS also repeats inward of the first stop).
   const win = spec.repeat ? repeatSpan(stops) : undefined;
   const period = win ? win.to - win.from : 1;
-  const svgList = win ? phaseShift(win.unit, win.from / period) : stops;
+  const svgList = win ? phaseShift(win.unit, -win.from / period) : stops;
   const { width, height } = ctx.size;
   const id = `${ctx.id}-g`;
   const fn = spec.repeat ? "repeating-radial-gradient" : "radial-gradient";

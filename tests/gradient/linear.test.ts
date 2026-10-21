@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { VisError } from "../../src/core/errors.js";
 import { gradient, gradientSvg } from "../../src/gradient/index.js";
 import { expectGolden } from "../helpers/golden.js";
-import { pixelAt, rasterize } from "./render.js";
+import { pixelAt, rasterize } from "../helpers/render.js";
 
 /** Red channel of a black→white gradient rendered by resvg at integer pixel (x, y). */
 function grey(spec: Parameters<typeof gradientSvg>[0], x: number, y: number) {

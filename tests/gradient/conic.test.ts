@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import { VisError } from "../../src/core/errors.js";
 import { gradient, gradientSvg } from "../../src/gradient/index.js";
 import { expectGolden } from "../helpers/golden.js";
-import { pixelAt, rasterize } from "./render.js";
+import { pixelAt, rasterize } from "../helpers/render.js";
 
 describe("conic gradient", () => {
   it("renders CSS conic and an SVG wedge pattern", () => {
@@ -109,6 +110,19 @@ describe("conic gradient", () => {
     }
     expect(min).toBeGreaterThanOrEqual(126);
     expect(max).toBeLessThanOrEqual(129);
+  });
+
+  it("rejects repeating stops that span nothing, like linear and radial", () => {
+    expect(() =>
+      gradient({
+        kind: "conic",
+        repeat: true,
+        stops: [
+          { color: "#000", at: 0.5 },
+          { color: "#fff", at: 0.5 },
+        ],
+      }),
+    ).toThrow(VisError);
   });
 
   it("matches its golden", () => {
