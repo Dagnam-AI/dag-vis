@@ -23,8 +23,8 @@ import type { RibbonConfig, RibbonOptions } from "./ribbon-curves.js";
  */
 export interface RibbonSvgOptions extends RibbonOptions {
   /**
-   * 2..64 colours, spread evenly along the spine from its start to its end
-   * (alpha honoured). Default `["#ef4444", "#7c3aed", "#10abba"]`.
+   * 2..64 colours, spread evenly along the straight line from the spine's start to
+   * its end; a bent spine does not bend the gradient (alpha honoured). Default `["#ef4444", "#7c3aed", "#10abba"]`.
    */
   colors?: readonly string[];
   /** Solid colour or any gradient spec. Default none (transparent). */
@@ -185,7 +185,8 @@ export function ribbon(opts: RibbonSvgOptions): string {
 
   const curves = curvesAt(cfg, 0);
   const strokes = curves.map((c) => el("path", { d: pathData(c) }));
-  if (mesh)
+  // A cross-line joins one point per curve, so a single curve has none to draw.
+  if (mesh && lines > 1)
     for (let k = 0; k < meshLines; k++) {
       // Evenly spread over the samples; one cross-line is the first sample.
       const j = Math.round((k / Math.max(meshLines - 1, 1)) * (samples - 1));

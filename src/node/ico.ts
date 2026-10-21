@@ -62,7 +62,9 @@ export function icoFromPngs(pngs: readonly Buffer[]): Buffer {
   const entries: Buffer[] = [];
   const images: Buffer[] = [];
   let offset = HEADER_BYTES + ENTRY_BYTES * list.length;
-  list.forEach((png: unknown, i) => {
+  // Indexed, not forEach: a hole in a sparse array must reach the validator.
+  for (let i = 0; i < list.length; i++) {
+    const png: unknown = list[i];
     const side = pngSize(`pngs[${i}]`, png);
     const image = Buffer.from(png as Buffer); // copy: the result owns its bytes
     const entry = Buffer.alloc(ENTRY_BYTES);
@@ -77,6 +79,6 @@ export function icoFromPngs(pngs: readonly Buffer[]): Buffer {
     entries.push(entry);
     images.push(image);
     offset += image.length;
-  });
+  }
   return Buffer.concat([header, ...entries, ...images]);
 }

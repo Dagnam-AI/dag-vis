@@ -78,6 +78,17 @@ describe("icoFromPngs", () => {
     expect(() => icoFromPngs(null as never)).toThrow(/pngs must be an array/);
   });
 
+  it("rejects a sparse array: a hole reaches the validator, not a corrupt container", async () => {
+    const png = await square(16);
+    expect(() => icoFromPngs(new Array<Buffer>(2))).toThrow(VisError);
+    expect(() => icoFromPngs(new Array<Buffer>(2))).toThrow(
+      /pngs\[0\] must be a PNG/,
+    );
+    const holey = new Array<Buffer>(2);
+    holey[0] = png;
+    expect(() => icoFromPngs(holey)).toThrow(/pngs\[1\] must be a PNG/);
+  });
+
   it("rejects an input that is not a PNG, naming its index", async () => {
     const png = await square(16);
     const bads: [string, unknown][] = [

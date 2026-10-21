@@ -189,7 +189,8 @@ describe("favicons", () => {
   it("places the logo at the documented padding", async () => {
     await favicons({ outDir: dir, background: "#123456" });
     const bg = [0x12, 0x34, 0x56, 255];
-    // [file, size, padding]: the mark is as wide as its box (to within 2.5%).
+    // [file, size, padding]: the mark is as wide as its box (to within 5%:
+    // the 180 px icon measures 132 px against 135, which 2.5% left on its edge).
     for (const [file, size, padding] of [
       ["apple-touch-icon.png", 180, 0.125],
       ["icon-192.png", 192, 0.1],
@@ -202,7 +203,7 @@ describe("favicons", () => {
       expect(b.maxX, file).toBeLessThanOrEqual(size * (1 - padding) + 1);
       expect(b.minY, file).toBeGreaterThanOrEqual(size * padding - 1);
       expect(b.maxY, file).toBeLessThanOrEqual(size * (1 - padding) + 1);
-      expect(b.maxX - b.minX, file).toBeGreaterThan(box * 0.975);
+      expect(b.maxX - b.minX, file).toBeGreaterThan(box * 0.95);
     }
   });
 
@@ -244,18 +245,32 @@ describe("favicons", () => {
       "back\\slash \\",
       "</script><b>&amp;",
       "naïve 日本語 ünï",
-      "emoji 🚀👩‍💻",
+      "emoji 🚀👩💻",
       "lone \ud800 high",
       "lone \udc00 low",
       "   separators",
       "a".repeat(100),
     ];
     for (const name of names) {
-      await favicons({ outDir: dir, name, shortName: name.slice(0, 50) });
+      const shortName = Array.from(name).slice(0, 50).join("");
+      await favicons({ outDir: dir, name, shortName });
       const manifest = manifestOf(dir);
       expect(manifest.name).toBe(name);
-      expect(manifest.short_name).toBe(name.slice(0, 50));
+      expect(manifest.short_name).toBe(shortName);
     }
+  });
+
+  it("counts characters as code points, not UTF-16 units", async () => {
+    // 100 emoji are 200 UTF-16 units but 100 characters; 101 are too many.
+    await favicons({ outDir: dir, name: "😀".repeat(100) });
+    expect(manifestOf(dir).name).toBe("😀".repeat(100));
+    await favicons({ outDir: dir, shortName: "😀".repeat(50) });
+    await expect(
+      favicons({ outDir: dir, name: "😀".repeat(101) }),
+    ).rejects.toThrow(/name must be 1\.\.100 characters, got 101/);
+    await expect(
+      favicons({ outDir: dir, shortName: "😀".repeat(51) }),
+    ).rejects.toThrow(/shortName must be 1\.\.50 characters, got 51/);
   });
 
   it("uses defaults only for undefined, never for null", async () => {
@@ -308,6 +323,16 @@ describe("favicons", () => {
       ["shortName", "", /shortName must be 1\.\.50/],
       ["shortName", "x".repeat(51), /shortName must be 1\.\.50/],
       ["shortName", "tab\there", /shortName must not contain control/],
+      ["name", "   ", /name must not be only whitespace/],
+      ["name", "\u00a0\u3000", /name must not be only whitespace/],
+      ["shortName", " ", /shortName must not be only whitespace/],
+      ["name", "evil\u202egnp.exe", /name must not contain format.*U\+202E/],
+      ["name", "a\u2066b", /name must not contain format.*U\+2066/],
+      ["name", "a\u200bb", /name must not contain format.*U\+200B/],
+      ["name", "a\u200db", /name must not contain format.*U\+200D/],
+      ["name", "a\ufeffb", /name must not contain format.*U\+FEFF/],
+      ["shortName", "x\u200ey", /shortName must not contain format.*U\+200E/],
+      ["name", "tag\u{e0001}", /name must not contain format.*U\+E0001/],
     ];
     it.each(bad)("rejects %s = %j before touching disk", async (key, v, re) => {
       const out = join(dir, "out");

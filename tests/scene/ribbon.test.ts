@@ -207,6 +207,16 @@ describe("ribbon", () => {
       expect(pixelAt(r, 190, 90)).toEqual([0, 0, 0, 255]);
     });
 
+    it("a single line has no cross-lines to mesh: no degenerate one-point path", () => {
+      const one = ribbon({ ...small, lines: 1, mesh: true });
+      expect(paths(one)).toEqual(paths(ribbon({ ...small, lines: 1 })));
+      expect(one).not.toMatch(/d="M[^L"]*"/);
+      // Two lines still get their cross-lines.
+      expect(paths(ribbon({ ...small, lines: 2, mesh: true }))).toHaveLength(
+        2 + 16,
+      );
+    });
+
     it("draws strokes strokeWidth px thick, at any canvas size", () => {
       const thickness = (width: number, height: number): number => {
         const r = rasterize(

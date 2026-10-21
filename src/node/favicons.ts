@@ -61,15 +61,28 @@ function parseOpaque(name: string, v: unknown): string {
   return paint.hex;
 }
 
-/** A manifest label: 1..max characters, no control characters. Any other Unicode goes through JSON.stringify. */
+/**
+ * A manifest label: 1..max characters (code points, not UTF-16 units), not only
+ * whitespace, and no control characters or invisible format characters (bidi
+ * overrides, zero-width joiners, the BOM), which could make a name read differently
+ * from what it is. Any other Unicode goes through JSON.stringify.
+ */
 function parseLabel(name: string, v: unknown, max: number): string {
   if (typeof v !== "string")
     throw new VisError(`${name} must be a string, got ${describeValue(v)}`);
-  if (v.length < 1 || v.length > max)
-    throw new VisError(`${name} must be 1..${max} characters, got ${v.length}`);
+  const length = Array.from(v).length;
+  if (length < 1 || length > max)
+    throw new VisError(`${name} must be 1..${max} characters, got ${length}`);
+  if (v.trim() === "")
+    throw new VisError(`${name} must not be only whitespace`);
   if (/\p{Cc}/u.test(v))
     throw new VisError(
       `${name} must not contain control characters, got ${describeValue(v)}`,
+    );
+  const hidden = /\p{Cf}/u.exec(v);
+  if (hidden)
+    throw new VisError(
+      `${name} must not contain format or bidirectional control characters, found U+${Number(hidden[0].codePointAt(0)).toString(16).toUpperCase().padStart(4, "0")}`,
     );
   return v;
 }
@@ -109,8 +122,10 @@ async function writeAtomic(
  * Writes the full icon set and web manifest into `outDir` and returns the
  * absolute paths in FAVICON_FILES order. Every image is rendered before
  * anything touches the disk; each file is then written whole (temp file +
- * rename), so an I/O failure leaves earlier files complete and later ones
- * absent, never a partial one. Output is byte-identical for equal options.
+ * rename), so an I/O failure never leaves a partial file: earlier files are the
+ * new version and later ones are whatever was there before (absent in a fresh
+ * directory, the previous set's version when re-running over one, so old and new
+ * files can be mixed). Output is byte-identical for equal options.
  */
 export async function favicons(opts: FaviconsOptions): Promise<string[]> {
   const input: unknown = opts;
