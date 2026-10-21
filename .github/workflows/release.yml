@@ -3,6 +3,8 @@ name: Release @dagnam/vis
 # One tag publishes the package. The prefix mirrors dag-lib (`dagnam/v*`) and
 # dag-contracts (`contracts/v*`), so a glance at a tag says what it released.
 # Only a `vis/v*` tag triggers this: a push to a branch never publishes.
+# Recommended repository setting: a tag ruleset limiting who can create
+# `vis/v*` tags, since creating one starts a release.
 on:
   push:
     tags:
@@ -36,13 +38,38 @@ jobs:
       # publish credential, and the one the provenance attestation is signed with.
       id-token: write
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      # Only plain X.Y.Z tags are supported. A prerelease tag such as
+      # vis/v0.2.0-rc.1 would publish to the `latest` dist-tag (no `--tag` is
+      # passed), so it is refused before anything else happens.
+      - name: Assert the tag is exactly vis/v<digits>.<digits>.<digits>
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^vis/v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+            || { echo "::error::tag '$GITHUB_REF_NAME' is not vis/vX.Y.Z; prerelease and other suffixes are not supported by this workflow"; exit 1; }
 
+      # Full history, so the ancestry check below can answer. Credentials are
+      # not persisted: no later step pushes, and the fetch below reads a PUBLIC
+      # repository, which GitHub serves anonymously.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # A release is a tag on `main`. Anyone able to push a tag could otherwise
+      # publish any commit, including one from an unmerged branch. Refresh
+      # origin/main first (the checkout may be older than the tag push).
+      - name: Assert the tagged commit is on main
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          # HEAD is the tagged commit (GITHUB_SHA, peeled if the tag is annotated).
+          git merge-base --is-ancestor HEAD origin/main \
+            || { echo "::error::$(git rev-parse HEAD) (tag $GITHUB_REF_NAME) is not an ancestor of origin/main; release only commits that are on main"; exit 1; }
+
+      # No `cache: npm` here: this job publishes, and a restorable cache is an
+      # input an attacker who can write it could use to alter what ships.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22.12"
           registry-url: https://registry.npmjs.org
-          cache: npm
 
       # package.json is the single source of the version; the tag must agree
       # BEFORE anything is built, since npm never takes a version back.
@@ -53,41 +80,59 @@ jobs:
           echo "tag=$tag  package.json=$js"
           [ "$js" = "$tag" ] || { echo "::error::package.json says $js, tag says $tag"; exit 1; }
 
-      # OIDC trusted publishing needs npm >= 11.5.1; the runner's bundled npm
-      # predates it and would 403 looking for a token this job does not have.
-      - name: Upgrade npm for trusted publishing
-        run: npm install -g npm@latest
+      # OIDC trusted publishing needs npm >= 11.5.1; the npm bundled with the
+      # runner's Node predates it and would 403 looking for a token this job
+      # does not have. Pin the major (not @latest, which would move under a
+      # release) and assert the floor, so a future npm@11 line cannot silently
+      # fall below it.
+      - name: Install an npm that supports trusted publishing
+        run: |
+          npm install -g npm@11
+          v=$(npm --version)
+          echo "npm $v"
+          [ "$(printf '%s\n' 11.5.1 "$v" | sort -V | head -n1)" = "11.5.1" ] \
+            || { echo "::error::npm $v is older than 11.5.1, which trusted publishing needs"; exit 1; }
 
-      # `prepublishOnly` builds again, so this is the explicit, visible build.
-      - run: npm ci && npm run build
+      # --ignore-scripts: nothing in the dependency tree needs an install
+      # script to build, and a publish job holding an OIDC token should not run
+      # third-party lifecycle scripts.
+      - run: npm ci --ignore-scripts && npm run build
 
+      # Publish the exact tarball that was inspected: pack once, hold it to the
+      # same assertions CI's package job uses, then publish that file (npm
+      # publish <tarball> uploads it as is, so nothing is rebuilt in between).
+      #
       # Credential: trusted publishing (OIDC). Configure the trusted publisher
       # once on npmjs.com for @dagnam/vis (repository Dagnam-AI/dag-vis,
       # workflow release.yml); no secret is stored anywhere and the OIDC token
-      # lives for this job only. The first publish of a new package name cannot
+      # lives for this job only. The FIRST publish of a new package name cannot
       # use it (the package must exist before a trusted publisher can be
-      # attached), which is what the fallback is for.
+      # attached on npmjs.com), which is what the fallback is for.
       #
-      # Fallback: an `NPM_TOKEN` repository secret (an npm automation token
-      # that can publish @dagnam/vis). When it is set it is used as the
-      # credential; when it is absent the step is byte-for-byte the OIDC path.
-      # Delete the secret once trusted publishing is configured: a long-lived
-      # token is the hole OIDC exists to close.
+      # Fallback: an `NPM_TOKEN` repository secret holding a short-lived
+      # granular access token with publish rights on the @dagnam scope and
+      # 2FA bypass (classic and automation tokens are not the right thing any
+      # more). Use it only until trusted publishing is configured, then delete
+      # the secret: a long-lived token is the hole OIDC exists to close. When
+      # the secret is set it is the credential; when it is absent the step is
+      # the OIDC path.
       #
       # `--provenance` signs a build attestation (needs id-token: write above).
       # Idempotent on re-runs: a moved tag must skip a version npm already has
       # instead of failing on it.
-      - name: Publish (skips a version npm already has)
+      - name: Pack, assert and publish (skips a version npm already has)
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          tarball="$RUNNER_TEMP/$(npm pack --silent --pack-destination "$RUNNER_TEMP")"
+          bash .github/scripts/assert-tarball.sh "$tarball"
           version=$(node -p "require('./package.json').version")
           if npm view "@dagnam/vis@${version}" version >/dev/null 2>&1; then
             echo "@dagnam/vis@${version} is already on npm; skipping publish"
           elif [ -n "$NPM_TOKEN" ]; then
             echo "publishing with the NPM_TOKEN fallback"
-            NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish --provenance --access public
+            NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish "$tarball" --provenance --access public
           else
             echo "publishing with npm trusted publishing (OIDC)"
-            npm publish --provenance --access public
+            npm publish "$tarball" --provenance --access public
           fi

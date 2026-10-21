@@ -24,3 +24,5 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 - First release. `./react` is declared in `exports` but its entry point is not built yet; it lands with the animation engine.
 - `@resvg/resvg-js` is an optional peer dependency, needed only for PNG output (`@dagnam/vis/node`, the CLI).
 - Contributing needs Node 22.12 or newer; the package itself supports Node 20 or newer.
+- Releases support plain `vis/vX.Y.Z` tags only: a prerelease suffix would publish to the `latest` dist-tag, so the release workflow rejects any other tag format. It also requires the tagged commit to be on `main`.
+- Known limitation: `gradient()` does not yet type-check every field of a spec that comes from untyped JavaScript or JSON (it can throw a `TypeError` instead of a `VisError`), and `gradient`, `gradientSvg` and `logoSvg` accept any positive finite size. See the README.

@@ -24,6 +24,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       # The dev/CI toolchain needs Node >= 22.12 (vitest 5). The package's own
       # `engines.node >=20` is for consumers, who run the built dist/.
@@ -38,10 +40,19 @@ jobs:
       # 100/100/100/100, the same gate as `npm run check` locally.
       - run: npm run check
 
-      # Goldens are generated artifacts: a stale one must fail here, not get
-      # silently rewritten. UPDATE_GOLDENS is never set in CI.
-      - name: Assert no golden was rewritten by the run
-        run: git diff --exit-code -- tests/goldens
+      # Goldens are generated artifacts. tests/helpers/golden.ts WRITES a golden
+      # that does not exist yet and passes, so a PR that adds a golden test but
+      # forgets the file would be green; `git diff` cannot see an untracked
+      # file. `git status` sees both a rewritten (modified) golden and a
+      # created (untracked) one. UPDATE_GOLDENS is never set in CI.
+      - name: Assert the run neither rewrote nor created a golden
+        run: |
+          changed=$(git status --porcelain -- tests/goldens)
+          if [ -n "$changed" ]; then
+            echo "$changed"
+            echo "::error::the test run changed tests/goldens (listed above): commit the golden files with the change that needs them (UPDATE_GOLDENS=1 npx vitest run), or fix the output that drifted"
+            exit 1
+          fi
 
   package:
     name: Build, pack, install in isolation, run the CLI
@@ -49,6 +60,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -57,20 +70,14 @@ jobs:
 
       - run: npm ci && npm run build
 
-      # The fonts ARE the determinism: a tarball without them renders text in
-      # whatever the host has. Assert they are inside before anything else, and
-      # that no test, source or coverage output rides along (`files` is an
-      # allow-list, so this guards against someone widening it).
+      # What ships is asserted by a script shared with release.yml, so the
+      # tarball that gets published is held to the same list: the bundled
+      # fonts and bin are inside; no tests, sources, coverage output or source
+      # maps ride along.
       - name: Pack and assert what ships
         run: |
           tarball="$PWD/$(npm pack --silent)"
-          listing=$(tar -tzf "$tarball")
-          for f in dist/node/fonts/Inter-Regular.ttf dist/node/fonts/Inter-Bold.ttf dist/node/fonts/OFL.txt bin/dag-vis.mjs dist/index.js dist/index.d.ts dist/node/index.js dist/node/index.d.ts LICENSE README.md; do
-            echo "$listing" | grep -qx "package/$f" || { echo "::error::$f missing from the tarball"; exit 1; }
-          done
-          if echo "$listing" | grep -E '^package/(tests|src|coverage|\.github)/'; then
-            echo "::error::the tarball contains files that must not ship"; exit 1
-          fi
+          bash .github/scripts/assert-tarball.sh "$tarball"
           echo "tarball=$tarball" >> "$GITHUB_ENV"
 
       # A consumer gets the tarball plus (optionally) the native rasteriser.

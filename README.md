@@ -8,16 +8,16 @@ Deterministic, parameterised [Dagnam.AI](https://dagnam.ai) visuals: brand token
 | `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, the CLI (bundled Inter font)                       | `@resvg/resvg-js` (optional) |
 | `@dagnam/vis/react`                | **planned, not in 0.1.0**: the export path is reserved and does not resolve yet | `react` (peer)               |
 
-Every generator takes `seed` (default `1`); the same options and seed give byte-identical SVG and CSS.
+Seeded generators take `seed` (default `1`); all output is deterministic, so the same options and seed give byte-identical SVG and CSS (`logoSvg` and `animatedGradientCss` take no seed).
 
 ## Install
 
 ```sh
 npm i @dagnam/vis            # browser-safe: no native code, no dependencies
-npm i -D @resvg/resvg-js     # only to render PNGs: `@dagnam/vis/node`, the CLI, favicons
+npm i @resvg/resvg-js        # only to render PNGs: `@dagnam/vis/node`, the CLI, favicons (use -D if you only render at build time)
 ```
 
-`@resvg/resvg-js` is an optional peer dependency (tested with `2.6.2`). `renderPng` loads it lazily and throws a `VisError` naming the install command when it is absent, so `@dagnam/vis/node` itself still imports without it. The root entry never touches it and imports no `node:*` module, so it is safe in a browser bundle. Consumers need Node 20 or newer.
+`@resvg/resvg-js` is an optional peer dependency (tested with `2.6.2`); install it as a regular dependency if you render at runtime, because production installs omit devDependencies. `renderPng` loads it lazily and throws a `VisError` naming the install command when it is absent, so `@dagnam/vis/node` itself still imports without it. The root entry never touches it and imports no `node:*` module, so it is safe in a browser bundle. Consumers need Node 20 or newer.
 
 ## Use
 
@@ -94,9 +94,9 @@ PNGs add the rasteriser: with the bundled fonts and no system fonts they are rep
 
 ## Validation and limits
 
-Options are validated at the boundary. Anything invalid throws a `VisError` (`name === "VisError"`) whose message names the offending parameter and value; an unparseable colour never falls back to black. Limits you can hit:
+Typed options are validated at the boundary: an invalid value throws a `VisError` (`name === "VisError"`) whose message names the offending parameter and value, and an unparseable colour never falls back to black. Gradient specs that come from untyped JavaScript or JSON are not yet fully type-checked (see Known ceilings). Limits you can hit:
 
-- Canvas sizes are 1 to 16384 px per side (`ogCard` needs at least 16). `renderPng` takes an integer `width` of 1 to 16384 and also caps the output at 64 megapixels.
+- Canvas sizes of 1 to 16384 px per side are enforced by the scenes (`brandBackground`, `ogCard` which needs at least 16, `ribbon`), by `pattern` (`size`, `spacing`), by `renderPng` (integer `width`, and the output is also capped at 64 megapixels) and therefore by the CLI's PNG output and its `og`, `background` and `pattern` commands. `gradient`, `gradientSvg` and `logoSvg` only check that a size is a positive finite number, so a huge size is accepted there (a later release will cap it).
 - `ogCard` text is at most 10,000 characters per field; titles wrap to 3 lines (2 with a subtitle), then end in `…`.
 - `ribbon` has at most 400 `lines`, 1000 `samples` and 100,000 drawn points.
 - `fluted` render cost is capped (`reeds` x the source's weight must not exceed 256).
@@ -113,6 +113,8 @@ Options are validated at the boundary. Anything invalid throws a `VisError` (`na
 - Gradient overlay images must be `data:` URIs to rasterise (see Security); a URL or path works in the CSS and SVG output only.
 - `pattern(...).cssBackground` repeats seamlessly only for `dots`, `grid`, `stripes` and `lines` at multiples of 90 degrees, with the default sample size; see the `PatternResult` doc comment in `src/pattern/types.ts` for the rest.
 - `brandBackground` reconstructs the production og-default look from parameters; it is not a pixel match, and its defaults may be retuned after design review.
+
+- Malformed gradient specs from untyped input are not all caught by `gradient()`: a wrongly typed value (a mesh without `base` or with `base: 3`, an aurora `palette: [1]`, `layers: [null]`, `overlay: "x"`, `gradient(null)`) can throw a plain `TypeError` instead of a `VisError`, and `size: null` is silently treated as the default. Through the CLI such a spec reports `dag-vis: unexpected error: …` rather than naming the parameter. TypeScript callers are protected by the types; the generators will be hardened in a later release.
 
 ## Layering
 
@@ -133,7 +135,9 @@ UPDATE_GOLDENS=1 npx vitest run   # regenerate tests/goldens after an intended c
 
 ## Release
 
-Tag `vis/vX.Y.Z` on `main` (the version in `package.json` must match). `release.yml` re-runs CI on the tagged commit and publishes to npm with provenance through npm trusted publishing (OIDC), or an `NPM_TOKEN` repository secret as a documented fallback. A branch push never publishes. See [CHANGELOG.md](CHANGELOG.md).
+Tag `vis/vX.Y.Z` on `main` (the version in `package.json` must match). `release.yml` rejects a tag that is not exactly `vis/v<digits>.<digits>.<digits>` or whose commit is not on `main`, re-runs CI (including the packed-tarball smoke test) on the tagged commit, holds the tarball it then publishes to the same file-list assertions, and publishes that exact tarball to npm with provenance through npm trusted publishing (OIDC), or an `NPM_TOKEN` repository secret as a documented fallback. A branch push never publishes. See [CHANGELOG.md](CHANGELOG.md).
+
+Only plain `vis/vX.Y.Z` tags are supported: a prerelease suffix (`vis/v0.2.0-rc.1`) would publish to the `latest` dist-tag, so the workflow refuses it. Anyone who can push a `vis/v*` tag can start a release, so restrict who can create those tags with a GitHub tag ruleset (recommended).
 
 ## Licence
 
