@@ -1,87 +1,32 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Resvg } from "@resvg/resvg-js";
-import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { VisError } from "../../src/core/errors.js";
 import {
   FONT_FILES,
   MAX_FONT_FILES,
-  MAX_OUTPUT_PIXELS,
   MAX_SVG_LENGTH,
   renderPng,
 } from "../../src/node/render-png.js";
 import { ogCard } from "../../src/scene/og-card.js";
 import { measureText } from "../../src/scene/text.js";
-import { rasterize } from "../helpers/render.js";
-import type { Raster } from "../helpers/render.js";
-
-const NS = 'xmlns="http://www.w3.org/2000/svg"';
-const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-const dims = (png: Buffer): [number, number] => [
-  png.readUInt32BE(16),
-  png.readUInt32BE(20),
-];
-const sized = (w: number, h: number, body = ""): string =>
-  `<svg ${NS} width="${w}" height="${h}">${body}</svg>`;
-
-/** Decode a PNG back to premultiplied RGBA by drawing it, unscaled, through resvg. */
-function decode(png: Buffer): Raster {
-  const [w, h] = dims(png);
-  return rasterize(
-    sized(
-      w,
-      h,
-      `<image width="${w}" height="${h}" href="data:image/png;base64,${png.toString("base64")}"/>`,
-    ),
-  );
-}
-const pixel = (r: Raster, x: number, y: number): number[] =>
-  Array.from(
-    r.pixels.subarray((y * r.width + x) * 4, (y * r.width + x) * 4 + 4),
-  );
-
-/** Width in px between the leftmost and rightmost non-transparent columns. */
-function inkWidth(r: Raster): number {
-  let lo = r.width;
-  let hi = -1;
-  for (let y = 0; y < r.height; y++)
-    for (let x = 0; x < r.width; x++)
-      if (pixel(r, x, y)[3] !== 0) {
-        lo = Math.min(lo, x);
-        hi = Math.max(hi, x);
-      }
-  return hi - lo + 1;
-}
-
-const textSvg = (
-  text: string,
-  size: number,
-  weight: number,
-  family = "Inter",
-  width = Math.ceil(
-    measureText(text, { size, weight: weight === 700 ? "bold" : "regular" }),
-  ) + 60,
-): string =>
-  sized(
-    width,
-    Math.ceil(size * 1.6),
-    `<text x="20" y="${size * 1.2}" font-family="${family}" font-size="${size}" font-weight="${weight}" fill="#fff">${text}</text>`,
-  );
-
-const scratch = mkdtempSync(join(tmpdir(), "dag-vis-render-png-"));
-afterAll(() => {
-  rmSync(scratch, { recursive: true, force: true });
-});
+import {
+  NS,
+  PNG_SIG,
+  decode,
+  dims,
+  fake,
+  fresh,
+  inkWidth,
+  pixel,
+  scratch,
+  seen,
+  sized,
+  textSvg,
+} from "./png-helpers.js";
 
 describe("FONT_FILES", () => {
   it("point at the bundled Inter Regular and Bold next to the module, under the OFL", () => {
@@ -228,176 +173,6 @@ describe("renderPng validation", () => {
   });
 });
 
-describe("renderPng output bounds", () => {
-  it("rejects an SVG whose own size is too large, before rendering (resvg aborts the process on these)", async () => {
-    await expect(
-      renderPng(sized(1_000_000_000, 1_000_000_000)),
-    ).rejects.toThrow(/too large/);
-    await expect(renderPng(sized(20_000, 10))).rejects.toThrow(/too large/);
-    await expect(renderPng(sized(10, 20_000))).rejects.toThrow(/too large/);
-  });
-
-  it("rejects an output over MAX_OUTPUT_PIXELS even when each side is within 16384", async () => {
-    expect(MAX_OUTPUT_PIXELS).toBe(64_000_000);
-    await expect(renderPng(sized(8001, 8000))).rejects.toThrow(
-      /at most 64000000 pixels/,
-    );
-    await expect(
-      renderPng(sized(1000, 1000), { width: 16384 }),
-    ).rejects.toThrow(/too large/);
-  });
-
-  it("applies the aspect ratio of a tall SVG to `width`", async () => {
-    await expect(
-      renderPng(sized(1, 10_000_000), { width: 16384 }),
-    ).rejects.toThrow(/too large/);
-    await expect(renderPng(sized(1, 5), { width: 16384 })).rejects.toThrow(
-      /too large/,
-    );
-    expect(dims(await renderPng(sized(1, 5), { width: 100 }))).toEqual([
-      100, 500,
-    ]);
-  });
-});
-
-describe("renderPng external resources", () => {
-  const dir = mkdtempSync(join(scratch, "res-"));
-  const redPng = Buffer.from(
-    new Resvg(sized(10, 10, '<rect width="10" height="10" fill="#f00"/>'))
-      .render()
-      .asPng(),
-  );
-  writeFileSync(join(dir, "red.png"), redPng);
-  writeFileSync(
-    join(dir, "red.svg"),
-    sized(10, 10, '<rect id="x" width="10" height="10" fill="#f00"/>'),
-  );
-  writeFileSync(join(dir, "red.css"), "rect{fill:#f00}");
-
-  const image = (href: string, attr = "href"): string =>
-    sized(10, 10, `<image ${attr}="${href}" width="10" height="10"/>`);
-
-  it("the guard is load-bearing: a bare resvg reads local files named by an image href", () => {
-    expect(pixel(rasterize(image(join(dir, "red.png"))), 0, 0)).toEqual([
-      255, 0, 0, 255,
-    ]);
-  });
-
-  const hostile = (): Record<string, string> => ({
-    "absolute path": image(join(dir, "red.png")),
-    "xlink:href": image(join(dir, "red.png"), "xlink:href").replace(
-      NS,
-      `${NS} xmlns:xlink="http://www.w3.org/1999/xlink"`,
-    ),
-    "custom prefix on the xlink namespace": image(
-      join(dir, "red.png"),
-      "q:href",
-    ).replace(NS, `${NS} xmlns:q="http://www.w3.org/1999/xlink"`),
-    "file:// url": image(`file://${join(dir, "red.png")}`),
-    "relative path": image("red.png"),
-    "parent path": image("../red.png"),
-    "https url": image("https://example.com/a.png"),
-    "http url": image("http://127.0.0.1:9/a.png"),
-    "XML character reference hides the slash": image(
-      `&#47;${join(dir, "red.png").slice(1)}`,
-    ),
-    "leading space": image(` ${join(dir, "red.png")}`),
-    "upper-case DATA scheme": image("DATA:image/png;base64,AAAA"),
-    "single quotes": sized(10, 10, `<image href='${join(dir, "red.png")}'/>`),
-    "spaces around =": sized(
-      10,
-      10,
-      `<image href \n = \t "${join(dir, "red.png")}"/>`,
-    ),
-    "external svg through use": sized(
-      10,
-      10,
-      `<use href="${join(dir, "red.svg")}#x"/>`,
-    ),
-    "relative svg through use": sized(10, 10, '<use href="other.svg#x"/>'),
-    feImage: sized(
-      10,
-      10,
-      `<filter id="f"><feImage href="${join(dir, "red.png")}"/></filter><rect width="10" height="10" filter="url(#f)"/>`,
-    ),
-    "pattern image": sized(
-      10,
-      10,
-      `<pattern id="p" width="10" height="10" patternUnits="userSpaceOnUse"><image href="${join(dir, "red.png")}"/></pattern><rect width="10" height="10" fill="url(#p)"/>`,
-    ),
-    "empty href": image(""),
-  });
-
-  it.each(Object.keys(hostile()))(
-    "rejects a non-data href: %s",
-    async (name) => {
-      const svg = hostile()[name] ?? "";
-      await expect(renderPng(svg)).rejects.toThrow(VisError);
-      await expect(renderPng(svg)).rejects.toThrow(
-        /external reference .* only #fragment and data: URIs/,
-      );
-    },
-  );
-
-  it("renders data: URIs and #fragment references", async () => {
-    const png = decode(
-      await renderPng(
-        image(`data:image/png;base64,${redPng.toString("base64")}`),
-      ),
-    );
-    expect(pixel(png, 5, 5)).toEqual([255, 0, 0, 255]);
-    const use = sized(
-      10,
-      10,
-      '<defs><rect id="a" width="10" height="10" fill="#00f"/></defs><use href="#a"/>',
-    );
-    expect(pixel(decode(await renderPng(use)), 5, 5)).toEqual([0, 0, 255, 255]);
-    const xlink = use
-      .replace('href="#a"', 'xlink:href="#a"')
-      .replace(NS, `${NS} xmlns:xlink="http://www.w3.org/1999/xlink"`);
-    expect(pixel(decode(await renderPng(xlink)), 5, 5)).toEqual([
-      0, 0, 255, 255,
-    ]);
-  });
-
-  it("does not fetch stylesheets, fonts or nested files (probed on resvg-js 2.6.2; this fails if a resvg upgrade starts to)", async () => {
-    const black = [0, 0, 0, 255];
-    for (const style of [
-      `@import url("file://${join(dir, "red.css")}");`,
-      `@import "${join(dir, "red.css")}";`,
-      `@import "https://example.com/a.css";`,
-    ]) {
-      const svg = sized(
-        10,
-        10,
-        `<style>${style}</style><rect width="10" height="10"/>`,
-      );
-      expect(pixel(decode(await renderPng(svg)), 5, 5)).toEqual(black);
-    }
-    const pi = `<?xml-stylesheet href="${join(dir, "red.css")}" type="text/css"?>${sized(10, 10, '<rect width="10" height="10"/>')}`;
-    // Its href is caught by the guard, as is any other href-looking text.
-    await expect(renderPng(pi)).rejects.toThrow(/external reference/);
-    const piBare = pi.replace(/ href="[^"]*"/, "");
-    expect(pixel(decode(await renderPng(piBare)), 5, 5)).toEqual(black);
-    // An @font-face pointing at the bold file must not change how an unknown family falls back.
-    const face = `<style>@font-face{font-family:Foo;src:url(${FONT_FILES[1] ?? ""})}</style>`;
-    const withFace = textSvg("Hamburg", 40, 400, "Foo", 300).replace(
-      ">",
-      `>${face}`,
-    );
-    const without = textSvg("Hamburg", 40, 400, "Foo", 300);
-    expect(decode(await renderPng(withFace)).pixels).toEqual(
-      decode(await renderPng(without)).pixels,
-    );
-    // An SVG nested as a data: URI cannot load files either.
-    const nested = sized(10, 10, `<image href="${join(dir, "red.png")}"/>`);
-    const outer = image(
-      `data:image/svg+xml;base64,${Buffer.from(nested).toString("base64")}`,
-    );
-    expect(pixel(decode(await renderPng(outer)), 5, 5)).toEqual([0, 0, 0, 0]);
-  });
-});
-
 describe("renderPng fontFiles", () => {
   /** Inter Bold under another family name ("Xnter"), so only a font the caller adds can supply it. */
   function writeXnter(name = "Xnter.ttf"): string {
@@ -538,39 +313,82 @@ describe("renderPng without or with a replaced @resvg/resvg-js", () => {
     seen.length = 0;
   });
 
-  /** Constructor arguments of every fake Resvg built. */
-  const seen: unknown[] = [];
-
-  const fresh = async (factory: () => Record<string, unknown>) => {
-    vi.resetModules();
-    vi.doMock("@resvg/resvg-js", factory);
-    return import("../../src/node/render-png.js");
-  };
-
-  const fake = (
-    width: number,
-    height: number,
-    render: () => { asPng: () => Buffer } = () => ({
-      asPng: () => Buffer.from("png"),
-    }),
-  ) =>
-    class {
-      width = width;
-      height = height;
-      constructor(...args: unknown[]) {
-        seen.push(args);
-      }
-      render = render;
-    };
-
-  it("throws a VisError that tells the user how to install it", async () => {
-    const { renderPng: render } = await fresh(() => {
-      throw new Error("Cannot find module '@resvg/resvg-js'");
-    });
-    // A fresh module registry has its own VisError class, so match by name.
-    await expect(render("<svg/>")).rejects.toMatchObject({ name: "VisError" });
-    await expect(render("<svg/>")).rejects.toThrow("npm i -D @resvg/resvg-js");
+  /**
+   * A module whose `Resvg` export throws `error` as is. (Throwing from the mock
+   * factory itself is no use: vitest wraps that error, hiding its code.)
+   */
+  const failing = (error: unknown): Record<string, unknown> => ({
+    get Resvg(): never {
+      throw error;
+    },
   });
+
+  /** What Node throws for a package that is not installed. */
+  const notFound = (name: string, code = "ERR_MODULE_NOT_FOUND"): Error =>
+    Object.assign(
+      new Error(`Cannot find package '${name}' imported from /app/x.js`),
+      { code },
+    );
+
+  it.each([
+    ["an ES import", notFound("@resvg/resvg-js")],
+    ["a require", notFound("@resvg/resvg-js", "MODULE_NOT_FOUND")],
+    [
+      "double quotes",
+      Object.assign(new Error('Cannot find module "@resvg/resvg-js"'), {
+        code: "MODULE_NOT_FOUND",
+      }),
+    ],
+  ])(
+    "throws a VisError that tells the user how to install it when the package is absent (%s)",
+    async (_name, error) => {
+      const { renderPng: render } = await fresh(() => failing(error));
+      // A fresh module registry has its own VisError class, so match by name.
+      await expect(render("<svg/>")).rejects.toMatchObject({
+        name: "VisError",
+      });
+      await expect(render("<svg/>")).rejects.toThrow(
+        "renderPng needs @resvg/resvg-js: run `npm i -D @resvg/resvg-js`",
+      );
+    },
+  );
+
+  it.each([
+    [
+      "the platform binary is missing",
+      notFound("@resvg/resvg-js-darwin-arm64", "MODULE_NOT_FOUND"),
+      /could not be loaded: Cannot find package '@resvg\/resvg-js-darwin-arm64'/,
+    ],
+    [
+      "dlopen fails",
+      new Error("dlopen(/x/resvg.node): code signature invalid"),
+      /could not be loaded: dlopen\(\/x\/resvg\.node\): code signature invalid/,
+    ],
+    [
+      "the error has another code",
+      Object.assign(new Error("EACCES: permission denied, '@resvg/resvg-js'"), {
+        code: "EACCES",
+      }),
+      /could not be loaded: EACCES/,
+    ],
+    [
+      "a module not found error names something else",
+      notFound("some-other-package"),
+      /could not be loaded: Cannot find package 'some-other-package'/,
+    ],
+    ["a string is thrown", "boom", /could not be loaded: boom/],
+    ["null is thrown", null, /could not be loaded: null/],
+  ])(
+    "keeps the original message and cause when the package is installed but fails to load (%s)",
+    async (_name, error, message) => {
+      const { renderPng: render } = await fresh(() => failing(error));
+      const failure: unknown = await render("<svg/>").catch((e: unknown) => e);
+      expect(failure).toMatchObject({ name: "VisError" });
+      expect((failure as Error).message).toMatch(message);
+      expect((failure as Error).message).not.toContain("npm i -D");
+      expect((failure as Error).cause).toBe(error);
+    },
+  );
 
   it("validates before it tries to load the package", async () => {
     const { renderPng: render } = await fresh(() => {
@@ -626,22 +444,6 @@ describe("renderPng without or with a replaced @resvg/resvg-js", () => {
         },
       },
     ]);
-  });
-
-  it("accepts exactly the pixel cap and rejects one pixel row more", async () => {
-    const { renderPng: render } = await fresh(() => ({
-      Resvg: fake(8000, 8000),
-    }));
-    expect((await render(sized(8000, 8000))).toString()).toBe("png");
-    const over = await fresh(() => ({ Resvg: fake(8000, 8001) }));
-    await expect(over.renderPng(sized(8000, 8001))).rejects.toThrow(/pixels/);
-  });
-
-  it("rejects a size resvg reports as zero or not a number instead of rendering it", async () => {
-    const { renderPng: render } = await fresh(() => ({ Resvg: fake(0, 0) }));
-    await expect(render(sized(1, 1), { width: 100 })).rejects.toThrow(
-      /too large/,
-    );
   });
 
   it("wraps a non-Error thrown by resvg, at parse time and at render time", async () => {

@@ -24,6 +24,8 @@ export const FONT_FILES: readonly string[] = [
 export const MAX_SVG_LENGTH = 5_000_000;
 /** Most pixels (width x height) one PNG may have: 64 MP is about 256 MB of RGBA. */
 export const MAX_OUTPUT_PIXELS = 64_000_000;
+/** Most `<clipPath>` plus `<mask>` elements: resvg crashes the process on chains of about 20,000. */
+export const MAX_CLIP_MASKS = 2000;
 /** Most entries in `fontFiles`. */
 export const MAX_FONT_FILES = 16;
 
@@ -53,32 +55,90 @@ interface ResvgModule {
 // system caches the module, so later calls reuse it.
 async function loadResvg(): Promise<ResvgModule> {
   try {
-    return await import("@resvg/resvg-js");
-  } catch {
-    throw new VisError(
-      "renderPng needs @resvg/resvg-js: run `npm i -D @resvg/resvg-js`",
+    // Read the export inside the try: a module that half-loads fails here too.
+    const { Resvg } = await import("@resvg/resvg-js");
+    return { Resvg };
+  } catch (error) {
+    if (isMissingResvg(error))
+      throw new VisError(
+        "renderPng needs @resvg/resvg-js: run `npm i -D @resvg/resvg-js`",
+      );
+    // Installed but broken (no native binary for this platform, a failed dlopen,
+    // ...): installing it again would not help, so say what actually happened.
+    const wrapped = new VisError(
+      `@resvg/resvg-js could not be loaded: ${stringError(error)}`,
     );
+    wrapped.cause = error;
+    throw wrapped;
   }
 }
 
 /**
- * An `href` / `xlink:href` (any prefix) whose value does not start with `#` or
- * `data:`. resvg reads local files (absolute and relative paths) named by
- * `<image>`, `<feImage>` and the like and would draw them into the PNG, so an
- * SVG the caller did not write must not get to name one. Allowlist, not
- * denylist: only `#fragment` (an element in the same document) and `data:`
- * pass; anything else, including a value that hides a slash behind an XML
- * character reference, is found. A match inside a comment or text node is
- * rejected too; that is the cheap side to err on.
+ * Node reports an absent package as ERR_MODULE_NOT_FOUND (import) or
+ * MODULE_NOT_FOUND (require) naming the package in quotes. The platform binary
+ * resvg-js loads (`@resvg/resvg-js-darwin-arm64`, ...) fails with the same
+ * code but a different quoted name, and that one is a broken install.
  */
-const EXTERNAL_HREF = /href\s*=\s*["'](?!#|data:)/;
+function isMissingResvg(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error.code === "ERR_MODULE_NOT_FOUND" ||
+      error.code === "MODULE_NOT_FOUND") &&
+    /['"]@resvg\/resvg-js['"]/.test(stringError(error))
+  );
+}
 
-function rejectExternalReferences(svg: string): void {
-  const found = EXTERNAL_HREF.exec(svg);
-  if (found !== null)
+// resvg draws files it is told about. For `<image>` and `<feImage>` an href
+// that is not a valid data URL (needs a comma) is a PATH relative to the
+// process's working directory, and neither element ever resolves `#id`, so
+// `#x.png`, `data:x.png` and a directory called `#` all read files. So the
+// rule is element-aware and deny-by-default, applied to the raw text:
+//   - <image>, <feImage> (any namespace prefix): href / xlink:href must be
+//     `data:` + anything but a comma + `,`. Nothing else.
+//   - every other element: href / xlink:href must be `#` + an NCName without
+//     `.`, `/` or `:`, so it can never read as a path.
+// Elements are found by a quote-aware scan of the start tags (not parsed XML)
+// and tags inside comments or CDATA are checked as if live, which only errs on
+// the rejecting side. DTD entities could expand into markup this scan never
+// sees, so they are refused outright (no generator emits one).
+const START_TAG = /<([^\s/>!?<]+)((?:[^<>"']|"[^"]*"|'[^']*')*)/g;
+const ATTRIBUTE = /([^\s=/>"']+)\s*=\s*("[^"]*"|'[^']*')/g;
+const HREF_NAME = /(?:^|:)href$/i;
+const DATA_URI = /^data:[^,]*,/;
+const FRAGMENT = /^#[A-Za-z_][A-Za-z0-9_-]*$/;
+const FILE_READERS = new Set(["image", "feimage"]);
+const CLIP_OR_MASK = new Set(["clippath", "mask"]);
+
+// `replace` with a callback is the one regex loop whose groups are typed as
+// strings, so no unreachable `undefined` branch; the callbacks only inspect.
+function checkMarkup(svg: string): void {
+  if (svg.includes("<!ENTITY"))
     throw new VisError(
-      `svg has an external reference (${describeValue(svg.slice(found.index, found.index + 60))}): only #fragment and data: URIs are rendered`,
+      "svg must not contain DTD entity declarations (<!ENTITY ...>)",
     );
+  let clipMasks = 0;
+  svg.replace(START_TAG, (tag: string, name: string, attrs: string) => {
+    const element = name.slice(name.lastIndexOf(":") + 1).toLowerCase();
+    if (CLIP_OR_MASK.has(element) && ++clipMasks > MAX_CLIP_MASKS)
+      throw new VisError(
+        `svg must have at most ${MAX_CLIP_MASKS} <clipPath> and <mask> elements`,
+      );
+    attrs.replace(ATTRIBUTE, (attr: string, key: string, quoted: string) => {
+      if (!HREF_NAME.test(key)) return attr;
+      const value = quoted.slice(1, -1);
+      const allowed = FILE_READERS.has(element)
+        ? DATA_URI.test(value)
+        : FRAGMENT.test(value);
+      if (!allowed)
+        throw new VisError(
+          `svg has an external reference (${describeValue(`<${name} ${key}=${quoted}`)}): <image> and <feImage> may only use data: URIs with a comma, every other element only #id references`,
+        );
+      return attr;
+    });
+    return tag;
+  });
 }
 
 function isFile(path: string): boolean {
@@ -126,12 +186,30 @@ function stringError(error: unknown): string {
  * Rasterise an SVG string to a PNG with the bundled Inter (plus any
  * `fontFiles`) and no system fonts, so output is identical on every machine.
  *
- * Safe on an SVG the caller did not write: `svg` is capped at
- * `MAX_SVG_LENGTH`; references other than `#fragment` and `data:` are
- * rejected (resvg would read local files); the output is capped at 16384 px a
- * side and `MAX_OUTPUT_PIXELS` before anything is allocated (resvg aborts the
- * whole process on a huge canvas). It does not bound CPU time: a hostile
- * filter can still be slow.
+ * This is for SVG produced by this package's own generators from validated
+ * options; the dag-vis CLI and export path render nothing else. It is
+ * defence in depth, NOT a sandbox for arbitrary untrusted SVG:
+ *
+ * - It blocks what a generator never emits and a reader could be hurt by:
+ *   file reads through `href` (see `checkMarkup`), DTD entities, an SVG over
+ *   `MAX_SVG_LENGTH`, more than `MAX_CLIP_MASKS` `<clipPath>`/`<mask>`
+ *   elements, and a canvas over 16384 px a side or `MAX_OUTPUT_PIXELS`
+ *   (checked before rendering, because resvg aborts the process on a huge
+ *   canvas).
+ * - It cannot stop resvg from crashing or exhausting memory on other input
+ *   inside those limits. Known cases: clipPath/mask chains (tens of thousands
+ *   deep, below the cap they are fine), a huge `patternTransform` scale (a
+ *   268-character SVG can need over 6 GB), raster bombs inside `data:` PNGs (a
+ *   few hundred bytes declaring 100000 x 100000 px), and expensive filters
+ *   (`feTurbulence` with a huge `numOctaves`, long blur chains, a very long
+ *   `<text>`), which run for tens of seconds.
+ * - The call is async but the rendering is synchronous native work on the
+ *   calling thread: it blocks the event loop until it returns, and a crash
+ *   takes the whole process down.
+ *
+ * To render SVG you did not generate, do it in a separate process with memory
+ * and CPU-time limits (a child process, container or worker with a resource
+ * ceiling), and treat its failure as normal.
  */
 export async function renderPng(
   svg: string,
@@ -158,7 +236,7 @@ export async function renderPng(
       ? undefined
       : parsePaint("background", opts.background);
   const fontFiles = parseFontFiles(opts.fontFiles);
-  rejectExternalReferences(markup);
+  checkMarkup(markup);
 
   const { Resvg } = await loadResvg();
   let resvg: Resvg;
