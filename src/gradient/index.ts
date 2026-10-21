@@ -6,6 +6,8 @@ import { el, svgDoc } from "../core/svg.js";
 import { renderAurora } from "./aurora.js";
 import { renderBanded } from "./banded.js";
 import { renderConic } from "./conic.js";
+import { renderFluted } from "./fluted.js";
+import { renderFreeform } from "./freeform.js";
 import { grainLayer } from "./grain.js";
 import { renderLayers } from "./layers.js";
 import { renderLinear } from "./linear.js";
@@ -25,6 +27,13 @@ export {
   svgStops,
 } from "./stops.js";
 export type { NormalizedStop } from "./stops.js";
+export { animatedGradientCss } from "./animated.js";
+export type { AnimatedOptions } from "./animated.js";
+export {
+  FREEFORM_PALETTES,
+  freeformPalette,
+  freeformRandom,
+} from "./freeform.js";
 
 const DEFAULT_SIZE: Size = { width: 1200, height: 630 };
 
@@ -49,6 +58,10 @@ function renderKind(spec: GradientSpec, ctx: Ctx): KindOutput {
       return renderBanded(spec, ctx);
     case "layers":
       return renderLayers(spec, ctx);
+    case "freeform":
+      return renderFreeform(spec, ctx);
+    case "fluted":
+      return renderFluted(spec, ctx);
     default:
       throw new VisError(
         `unknown gradient kind: ${String((spec as { kind?: unknown }).kind)}`,
