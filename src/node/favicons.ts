@@ -1,5 +1,4 @@
-import { randomBytes } from "node:crypto";
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import { logoSvg } from "../brand/logo.js";
@@ -8,6 +7,7 @@ import { VisError } from "../core/errors.js";
 import { describeValue, orDefault, parsePaint } from "../core/validate.js";
 import { icoFromPngs } from "./ico.js";
 import { renderPng } from "./render-png.js";
+import { messageOf, writeAtomic } from "./util.js";
 
 export interface FaviconsOptions {
   /** Directory to write into; created (with parents) if missing. Required. */
@@ -89,33 +89,10 @@ function parseLabel(name: string, v: unknown, max: number): string {
 
 function failure(action: string, error: unknown): VisError {
   const wrapped = new VisError(
-    `favicons could not ${action}: ${error instanceof Error ? error.message : String(error)}`,
+    `favicons could not ${action}: ${messageOf(error)}`,
   );
   wrapped.cause = error;
   return wrapped;
-}
-
-/**
- * Writes `data` to `dir/name` through a temp file in the same directory and a
- * rename, so a failure never leaves a half-written icon under its real name.
- * The rename replaces whatever is at the target (a symlink is replaced, never
- * written through). `name` is always a FAVICON_FILES constant.
- */
-async function writeAtomic(
-  dir: string,
-  name: string,
-  data: Buffer | string,
-): Promise<string> {
-  const path = join(dir, name);
-  const temp = join(dir, `.${name}.${randomBytes(6).toString("hex")}.tmp`);
-  try {
-    await writeFile(temp, data, { flag: "wx" });
-    await rename(temp, path);
-  } catch (error) {
-    await rm(temp, { force: true });
-    throw failure(`write ${name}`, error);
-  }
-  return path;
 }
 
 /**
@@ -196,7 +173,12 @@ export async function favicons(opts: FaviconsOptions): Promise<string[]> {
     throw failure(`create outDir (${out})`, error);
   }
   const written: string[] = [];
-  for (const file of FAVICON_FILES)
-    written.push(await writeAtomic(out, file, files[file]));
+  for (const file of FAVICON_FILES) {
+    const path = join(out, file);
+    await writeAtomic(path, files[file], (error) =>
+      failure(`write ${file}`, error),
+    );
+    written.push(path);
+  }
   return written;
 }

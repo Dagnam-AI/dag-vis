@@ -15,7 +15,16 @@ describe("dag-vis CLI", () => {
   const tmp = useTempDir();
 
   it("prints usage on help (0) and on no command (1)", async () => {
-    for (const argv of [["--help"], ["-h"], ["help"], ["og", "--help"]]) {
+    for (const argv of [
+      ["--help"],
+      ["-h"],
+      ["help"],
+      ["og", "--help"],
+      // anywhere among a command's arguments, not only right after its name
+      ["og", "--title", "T", "--out", "x.svg", "--help"],
+      ["gradient", "--spec", "s.json", "-h"],
+      ["favicons", `--out=${tmp()}`, "--help", "--color", "#fff"],
+    ]) {
       const h = capture();
       expect(await run(argv, h.io)).toBe(0);
       expect(h.out.join("")).toBe(USAGE);
@@ -27,10 +36,27 @@ describe("dag-vis CLI", () => {
     expect(none.out).toEqual([]);
   });
 
+  it("treats -h as a value, not help, when an option consumes it", async () => {
+    const out = join(tmp(), "dash.svg");
+    const t = capture();
+    expect(await run(["og", "--title", "-h", "--out", out], t.io)).toBe(0);
+    expect(t.out.join("")).toBe(`wrote ${out}\n`);
+    expect(readFileSync(out, "utf8")).toContain(">-h<");
+  });
+
+  it("opens the usage text with a title, not with the error prefix", () => {
+    expect(USAGE.startsWith("dag-vis:")).toBe(false);
+    expect(USAGE.split("\n")[0]).toMatch(
+      /^Dagnam visuals from the command line/,
+    );
+  });
+
   it("documents the PNG rules in the usage text", () => {
     expect(USAGE).toContain("data: URI");
     expect(USAGE).toContain("@resvg/resvg-js");
     expect(USAGE).toContain("--name=value");
+    // The atomic write replaces a read-only target (new mode: the default).
+    expect(USAGE).toMatch(/replaced.*read-only/s);
   });
 
   it("og writes SVG or PNG by extension and reports the path", async () => {

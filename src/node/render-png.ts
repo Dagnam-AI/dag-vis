@@ -13,6 +13,7 @@ import {
   orDefault,
   parsePaint,
 } from "../core/validate.js";
+import { messageOf } from "./util.js";
 
 /** The bundled Inter faces (SIL OFL 1.1, see ./fonts/OFL.txt), resolved beside this module in src/ and dist/. */
 export const FONT_FILES: readonly string[] = [
@@ -74,7 +75,7 @@ async function loadResvg(): Promise<ResvgModule> {
     // Installed but broken (no native binary for this platform, a failed dlopen,
     // ...): installing it again would not help, so say what actually happened.
     const wrapped = new VisError(
-      `@resvg/resvg-js could not be loaded: ${stringError(error)}`,
+      `@resvg/resvg-js could not be loaded: ${messageOf(error)}`,
     );
     wrapped.cause = error;
     throw wrapped;
@@ -94,7 +95,7 @@ function isMissingResvg(error: unknown): boolean {
     "code" in error &&
     (error.code === "ERR_MODULE_NOT_FOUND" ||
       error.code === "MODULE_NOT_FOUND") &&
-    /['"]@resvg\/resvg-js['"]/.test(stringError(error))
+    /['"]@resvg\/resvg-js['"]/.test(messageOf(error))
   );
 }
 
@@ -187,10 +188,6 @@ function parseFontFiles(v: unknown): string[] {
   });
 }
 
-function stringError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
  * Rasterise an SVG string to a PNG with the bundled Inter (plus any
  * `fontFiles`) and no system fonts, so output is identical on every machine.
@@ -273,7 +270,7 @@ export async function renderPng(
       },
     });
   } catch (error) {
-    throw new VisError(`SVG could not be parsed: ${stringError(error)}`);
+    throw new VisError(`SVG could not be parsed: ${messageOf(error)}`);
   }
 
   // Parsing is safe at any size; rendering is not, so check the canvas first.
@@ -295,6 +292,6 @@ export async function renderPng(
   try {
     return resvg.render().asPng();
   } catch (error) {
-    throw new VisError(`SVG could not be rendered: ${stringError(error)}`);
+    throw new VisError(`SVG could not be rendered: ${messageOf(error)}`);
   }
 }

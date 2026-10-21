@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   defined,
-  messageOf,
   oneLine,
   parseFocus,
   parseNumber,
   parseOptions,
+  wantsHelp,
 } from "../../src/node/cli-args.js";
 
 const ALLOWED = ["title", "out", "w"];
@@ -109,14 +109,35 @@ describe("helpers", () => {
     expect(Object.keys(defined({ a: undefined }))).toEqual([]);
   });
 
-  it("messageOf reads Errors and stringifies anything else", () => {
-    expect(messageOf(new Error("boom"))).toBe("boom");
-    expect(messageOf("plain")).toBe("plain");
-    expect(messageOf(42)).toBe("42");
-  });
-
   it("oneLine collapses line breaks and trims", () => {
     expect(oneLine(" a\nb\r\n  c \n")).toBe("a b c");
     expect(oneLine("already one line")).toBe("already one line");
+  });
+});
+
+describe("wantsHelp", () => {
+  it.each([
+    [["--help"]],
+    [["-h"]],
+    [["--title", "T", "--help"]],
+    [["--title", "T", "--out", "x.svg", "-h"]],
+    [["--title=T", "--help", "--out", "x.svg"]],
+    // `--title --help` is a missing value to the parser; the user wants help.
+    [["--title", "--help"]],
+  ])("is true for %j", (args) => {
+    expect(wantsHelp(args)).toBe(true);
+  });
+
+  it.each([
+    [[]],
+    [["--title", "T", "--out", "x.svg"]],
+    // `-h` is a plain value here, not a flag.
+    [["--title", "-h", "--out", "x.svg"]],
+    [["--out", "x.svg", "--title", "-h"]],
+    // an inline value is one argument, however it reads
+    [["--title=--help"]],
+    [["--title=-h"]],
+  ])("is false for %j", (args) => {
+    expect(wantsHelp(args)).toBe(false);
   });
 });

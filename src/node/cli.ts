@@ -1,6 +1,6 @@
-import { randomBytes } from "node:crypto";
-import { mkdir, open, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { constants } from "node:fs";
+import { mkdir, open, stat } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 import { palette } from "../brand/tokens.js";
 import { VisError } from "../core/errors.js";
@@ -13,21 +13,22 @@ import { brandBackground } from "../scene/brand-background.js";
 import { ogCard } from "../scene/og-card.js";
 import {
   defined,
-  messageOf,
   oneLine,
   parseFocus,
   parseNumber,
   parseOptions,
+  wantsHelp,
 } from "./cli-args.js";
 import { favicons } from "./favicons.js";
 import { renderPng } from "./render-png.js";
+import { messageOf, writeAtomic } from "./util.js";
 
 export interface CliIo {
   stdout(s: string): void;
   stderr(s: string): void;
 }
 
-export const USAGE = `dag-vis: Dagnam visuals from the command line
+export const USAGE = `Dagnam visuals from the command line (dag-vis <command> [options])
 
   dag-vis og --title T [--subtitle S --eyebrow E --footer F --theme dark|light --w 1200 --h 630] --out f.(svg|png)
   dag-vis background --w W --h H [--focus x,y --scale N --palette red|mono|stripes|ocean|ember] --out f.(svg|png)
@@ -37,8 +38,9 @@ export const USAGE = `dag-vis: Dagnam visuals from the command line
 
 An --out ending in .png (any case) is rasterised with the bundled Inter fonts
 (needs @resvg/resvg-js); any other --out is written as SVG. Files are written
-atomically and missing parent directories are created. favicons --out is a
-directory. Numbers are plain decimals (600, 0.5); --focus is x,y in 0..1.
+atomically (a temp file renamed over the target, so an existing file is
+replaced even if read-only, and the new one gets the default mode) and missing
+parent directories are created. favicons --out is a directory. Numbers are plain decimals (600, 0.5); --focus is x,y in 0..1.
 Options take "--name value" or "--name=value" (use the second form for a value
 that starts with "--"). A spec is a JSON object in a file of at most 1 MiB. To
 rasterise a gradient spec whose overlay has an image, give the image as a
@@ -85,21 +87,33 @@ const MAX_SPEC_BYTES = 1024 * 1024;
  * Reads a spec file as JSON (`JSON.parse` only, never evaluated). The path is
  * user input: it must be a regular file (a directory, device or FIFO would
  * fail or block) of at most MAX_SPEC_BYTES, and hold a JSON object. The
- * generators validate the object's contents.
+ * generators validate the object's contents. The file is opened first, without
+ * blocking (a FIFO with no writer would otherwise hang the open), and the
+ * OPENED file is checked, so it cannot be swapped between the check and the read.
  */
 async function readSpec(path: string): Promise<object> {
   const fail = failWith(`could not read ${path}`);
-  const info = await stat(path).catch(fail);
-  if (!info.isFile()) throw new VisError(`${path} is not a regular file`);
-  const handle = await open(path, "r").catch(fail);
+  const handle = await open(
+    path,
+    constants.O_RDONLY | constants.O_NONBLOCK,
+  ).catch(fail);
   const buffer = Buffer.alloc(MAX_SPEC_BYTES + 1);
-  const { bytesRead } = await handle
-    .read(buffer, 0, buffer.length, 0)
-    .catch(fail)
-    .finally(() => handle.close());
-  if (bytesRead > MAX_SPEC_BYTES)
-    throw new VisError(`${path} is larger than 1 MiB`);
-  const text = buffer.toString("utf8", 0, bytesRead);
+  try {
+    const info = await handle.stat().catch(fail);
+    if (!info.isFile()) throw new VisError(`${path} is not a regular file`);
+    const { bytesRead } = await handle
+      .read(buffer, 0, buffer.length, 0)
+      .catch(fail);
+    if (bytesRead > MAX_SPEC_BYTES)
+      throw new VisError(`${path} is larger than 1 MiB`);
+    return parseSpec(path, buffer.toString("utf8", 0, bytesRead));
+  } finally {
+    await handle.close();
+  }
+}
+
+/** `text` as a JSON object, or a VisError naming `path`. */
+function parseSpec(path: string, text: string): object {
   let spec: unknown;
   try {
     spec = JSON.parse(text.startsWith("﻿") ? text.slice(1) : text);
@@ -108,7 +122,7 @@ async function readSpec(path: string): Promise<object> {
   }
   if (typeof spec !== "object" || spec === null || Array.isArray(spec))
     throw new VisError(
-      `${path} must contain a JSON object, got ${describeValue(spec)}`,
+      `${path} must contain a JSON object, got ${Array.isArray(spec) ? "an array" : describeValue(spec)}`,
     );
   return spec;
 }
@@ -120,19 +134,14 @@ async function readSpec(path: string): Promise<object> {
  * symlink is replaced, never written through); a directory there is refused.
  */
 async function writeOut(path: string, data: Buffer | string): Promise<void> {
-  const fail = failWith(`could not write ${path}`);
+  const wrap = (error: unknown): VisError =>
+    new VisError(`could not write ${path}: ${messageOf(error)}`);
   if ((await stat(path).catch(() => undefined))?.isDirectory())
     throw new VisError(`could not write ${path}: it is a directory`);
-  const dir = dirname(path);
-  await mkdir(dir, { recursive: true }).catch(fail);
-  const temp = join(dir, `.dag-vis-${randomBytes(6).toString("hex")}.tmp`);
-  try {
-    await writeFile(temp, data, { flag: "wx" });
-    await rename(temp, path);
-  } catch (error) {
-    await rm(temp, { force: true });
-    fail(error);
-  }
+  await mkdir(dirname(path), { recursive: true }).catch((error: unknown) => {
+    throw wrap(error);
+  });
+  await writeAtomic(path, data, wrap);
 }
 
 /** Rasterises SVG that one of this package's generators produced (never a user's file). */
@@ -263,9 +272,6 @@ const COMMANDS = new Map<string, Command>([
   ],
 ]);
 
-const isHelpFlag = (arg: string | undefined): boolean =>
-  arg === "--help" || arg === "-h";
-
 /**
  * Entry point behind bin/dag-vis.mjs. Returns the exit code (0, or 1 after one
  * line on stderr) and never throws or exits the process. Every argument and
@@ -279,7 +285,7 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
     io.stderr(USAGE);
     return 1;
   }
-  if (name === "help" || isHelpFlag(name) || isHelpFlag(rest[0])) {
+  if (name === "help" || wantsHelp(argv)) {
     io.stdout(USAGE);
     return 0;
   }

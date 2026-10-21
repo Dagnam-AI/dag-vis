@@ -30,6 +30,25 @@ export function parseOptions(
   return values;
 }
 
+/**
+ * Whether the user asked for help: `--help` or `-h` anywhere among the arguments,
+ * except as the value of an option before it (`--title -h` sets a title). A
+ * `--help` right after an option name still counts, since the parser would call
+ * that a missing value.
+ */
+export function wantsHelp(args: readonly string[]): boolean {
+  let isValue = false;
+  for (const arg of args) {
+    if (isValue) {
+      isValue = false;
+      if (!arg.startsWith("--")) continue;
+    }
+    if (arg === "--help" || arg === "-h") return true;
+    isValue = arg.startsWith("--") && !arg.includes("=");
+  }
+  return false;
+}
+
 const DECIMAL = /^\d+(?:\.\d+)?$/;
 
 /**
@@ -74,10 +93,6 @@ export function defined<T extends Record<string, unknown>>(
   return Object.fromEntries(
     Object.entries(object).filter(([, v]) => v !== undefined),
   ) as { [K in keyof T]?: Exclude<T[K], undefined> };
-}
-
-export function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 /** One line, whatever the message held (CLI errors are exactly one line). */

@@ -1,8 +1,10 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -62,6 +64,14 @@ describe("dag-vis CLI files", () => {
       expect(await run(og(link), capture().io)).toBe(0);
       expect(readFileSync(target, "utf8")).toBe("keep");
       expect(readFileSync(link, "utf8")).toContain("<svg");
+    });
+
+    it("replaces a read-only file (the new file gets the default mode)", async () => {
+      const path = join(tmp(), "ro.svg");
+      writeFileSync(path, "old", { mode: 0o444 });
+      expect(await run(og(path), capture().io)).toBe(0);
+      expect(readFileSync(path, "utf8")).toContain("<svg");
+      expect(statSync(path).mode & 0o200).toBe(0o200);
     });
 
     it("refuses to write over a directory", async () => {
@@ -148,6 +158,23 @@ describe("dag-vis CLI files", () => {
       writeFileSync(spec(), "");
       await fails(gradient(), "invalid JSON");
     });
+
+    it("says an array is an array, not an object", async () => {
+      writeFileSync(spec(), "[]");
+      await fails(gradient(), "got an array");
+      writeFileSync(spec(), "null");
+      await fails(gradient(), "got null");
+      writeFileSync(spec(), "5");
+      await fails(gradient(), "got 5");
+    });
+
+    it.runIf(process.platform !== "win32")(
+      "rejects a FIFO without blocking on it",
+      async () => {
+        execFileSync("mkfifo", [spec()]);
+        await fails(gradient(), `${spec()} is not a regular file`);
+      },
+    );
 
     it.each(["null", "[]", "5", '"text"', "true"])(
       "rejects a top-level %s: the spec must be a JSON object",

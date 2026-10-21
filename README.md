@@ -82,9 +82,9 @@ npx dag-vis pattern --spec pattern.json --out tile.svg
 npx dag-vis favicons --out public
 ```
 
-A spec is a JSON object in a file of at most 1 MiB, for example `{ "kind": "linear", "angle": 90, "stops": ["#ef4444", "#10abba"] }` for `gradient` and `{ "kind": "dots", "spacing": 24 }` for `pattern`. Numbers are plain decimals (`600`, `0.5`). Options take `--name value` or `--name=value`. `dag-vis --help` prints every option.
+A spec is a JSON object in a file of at most 1 MiB, for example `{ "kind": "linear", "angle": 90, "stops": ["#ef4444", "#10abba"] }` for `gradient` and `{ "kind": "dots", "spacing": 24 }` for `pattern`. Numbers are plain decimals (`600`, `0.5`). Options take `--name value` or `--name=value`. `dag-vis --help` (or `-h`, anywhere among the arguments) prints every option.
 
-An `--out` ending in `.png` is rasterised with the bundled Inter (it needs `@resvg/resvg-js`); **any other extension writes SVG text**, so `--out card.jpg` produces an SVG file named `card.jpg`. Files are written atomically and missing parent directories are created. Exit status is `0` on success and `1` with a single `dag-vis: …` line on stderr for any invalid option or spec.
+An `--out` ending in `.png` is rasterised with the bundled Inter (it needs `@resvg/resvg-js`); **any other extension writes SVG text**, so `--out card.jpg` produces an SVG file named `card.jpg`. Files are written atomically (a temp file renamed over the target, so an existing file is replaced even if read-only and the new one gets the default mode) and missing parent directories are created. Exit status is `0` on success and `1` with a single `dag-vis: …` line on stderr for any invalid option or spec.
 
 ## Determinism
 
