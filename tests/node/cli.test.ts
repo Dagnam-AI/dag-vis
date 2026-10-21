@@ -72,6 +72,11 @@ describe("dag-vis CLI", () => {
     );
   });
 
+  it("documents the accepted --out extensions in the usage text", () => {
+    expect(USAGE).toContain("must end in .svg or .png");
+    expect(USAGE).not.toContain("written as SVG");
+  });
+
   it("documents the PNG rules in the usage text", () => {
     expect(USAGE).toContain("data: URI");
     expect(USAGE).toContain("@resvg/resvg-js");
@@ -274,6 +279,10 @@ describe("dag-vis CLI", () => {
     [["og", "--out", "x.svg"], "--title is required"],
     [["og", "--title", "", "--out", "x.svg"], "--title must not be empty"],
     [["og", "--title", "t"], "--out is required"],
+    [
+      ["og", "--title", "t", "--out", "x.jpg"],
+      '--out must end in .svg or .png, got "',
+    ],
     [["og", "--title", "t", "--out", ""], "--out must not be empty"],
     [
       ["og", "--title", "t", "--bogus", "1", "--out", "x.svg"],
@@ -413,7 +422,7 @@ describe("dag-vis CLI", () => {
       // Table paths are placeholders resolved under the temp dir, so even a case
       // that wrongly succeeded could not write into the repo or the cwd.
       const real = argv.map((a) =>
-        ["x.svg", "s.json", "d"].includes(a) ? join(tmp(), a) : a,
+        ["x.svg", "x.jpg", "s.json", "d"].includes(a) ? join(tmp(), a) : a,
       );
       expect(await run(real, t.io)).toBe(1);
       const text = t.err.join("");

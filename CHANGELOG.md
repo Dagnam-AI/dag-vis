@@ -7,6 +7,10 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+### Changed
+
+- CLI: `--out` of `og`, `background`, `gradient` and `pattern` must now end in `.svg` or `.png` (any case). Any other value (`card.jpg`, `.webp`, no extension, a trailing dot, `-`) exits 1 with one line naming the value and the accepted extensions, and writes nothing; before, it wrote SVG text into the file whatever its name. `favicons --out` (a directory) is unaffected.
+
 ## [0.1.0] - 2026-10-21
 
 ### Added

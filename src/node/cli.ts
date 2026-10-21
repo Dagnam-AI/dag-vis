@@ -36,8 +36,9 @@ export const USAGE = `Dagnam visuals from the command line (dag-vis <command> [o
   dag-vis pattern --spec spec.json --out f.(svg|png)
   dag-vis favicons --out DIR [--background C --color C]
 
-An --out ending in .png (any case) is rasterised with the bundled Inter fonts
-(needs @resvg/resvg-js); any other --out is written as SVG. Files are written
+An --out must end in .svg or .png (any case), or the command exits 1 and writes
+nothing; .png is rasterised with the bundled Inter fonts (needs
+@resvg/resvg-js), .svg is written as is. Files are written
 atomically (a temp file renamed over the target, so an existing file is
 replaced even if read-only, and the new one gets the default mode) and missing
 parent directories are created. favicons --out is a directory. Numbers are plain decimals (600, 0.5); --focus is x,y in 0..1.
@@ -56,6 +57,16 @@ function required(opts: Options, name: string): string {
   if (v === undefined) throw new VisError(`--${name} is required`);
   if (v === "") throw new VisError(`--${name} must not be empty`);
   return v;
+}
+
+/** The file `--out` of a command that writes one: required, and .svg or .png in any case. */
+function outFile(opts: Options): string {
+  const out = required(opts, "out");
+  if (!/\.(?:svg|png)$/i.test(out))
+    throw new VisError(
+      `--out must end in .svg or .png, got ${describeValue(out)}`,
+    );
+  return out;
 }
 
 function numeric(opts: Options, name: string): number | undefined {
@@ -153,7 +164,7 @@ async function toPng(svg: string): Promise<Buffer> {
   }
 }
 
-/** Renders (PNG when `out` ends in .png, any case; else the SVG as is) and writes. */
+/** Renders (PNG when `out` ends in .png, any case; else the SVG as is) and writes. `out` is already checked by `outFile`. */
 async function emit(svg: string, out: string, io: CliIo): Promise<void> {
   const path = resolve(out);
   await writeOut(
@@ -185,7 +196,7 @@ const COMMANDS = new Map<string, Command>([
       ],
       async run(opts, io) {
         const theme = themeOption(opts);
-        const out = required(opts, "out");
+        const out = outFile(opts);
         const svg = ogCard({
           title: required(opts, "title"),
           ...defined({
@@ -206,7 +217,7 @@ const COMMANDS = new Map<string, Command>([
     {
       options: ["w", "h", "focus", "scale", "palette", "out"],
       async run(opts, io) {
-        const out = required(opts, "out");
+        const out = outFile(opts);
         const focus = opts.get("focus");
         const paletteName = opts.get("palette");
         const svg = brandBackground({
@@ -228,7 +239,7 @@ const COMMANDS = new Map<string, Command>([
     {
       options: ["spec", "w", "h", "out"],
       async run(opts, io) {
-        const out = required(opts, "out");
+        const out = outFile(opts);
         const specPath = required(opts, "spec");
         const w = numeric(opts, "w");
         const h = numeric(opts, "h");
@@ -248,7 +259,7 @@ const COMMANDS = new Map<string, Command>([
     {
       options: ["spec", "out"],
       async run(opts, io) {
-        const out = required(opts, "out");
+        const out = outFile(opts);
         const spec = (await readSpec(required(opts, "spec"))) as PatternSpec;
         await emit(pattern(spec).svg, out, io);
       },

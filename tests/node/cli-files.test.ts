@@ -12,6 +12,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { describeValue } from "../../src/core/validate.js";
 import { run } from "../../src/node/cli.js";
 import { PNG_SIG } from "./png-helpers.js";
 import { capture, useTempDir } from "./cli-helpers.js";
@@ -24,15 +25,13 @@ describe("dag-vis CLI files", () => {
   const og = (out: string): string[] => ["og", "--title", "Hi", "--out", out];
 
   describe("--out", () => {
-    it("decides svg vs png by extension, case-insensitively; anything else is SVG", async () => {
+    it("decides svg vs png by extension, case-insensitively", async () => {
       for (const [name, png] of [
         ["a.png", true],
         ["b.PNG", true],
         ["c.Png", true],
         ["d.svg", false],
         ["e.SVG", false],
-        ["f.txt", false],
-        ["g", false],
       ] as const) {
         const path = join(tmp(), name);
         expect(await run(og(path), capture().io)).toBe(0);
@@ -40,6 +39,49 @@ describe("dag-vis CLI files", () => {
         if (png) expect(head).toEqual(PNG_SIG);
         else expect(head.toString("utf8", 0, 4)).toBe("<svg");
       }
+    });
+
+    it("refuses any other extension with one line naming it, writes nothing, for every file command", async () => {
+      const spec = join(tmp(), "spec.json");
+      writeFileSync(spec, '{"kind":"dots"}');
+      const commands = (out: string): string[][] => [
+        og(out),
+        ["background", "--w", "10", "--h", "10", "--out", out],
+        ["gradient", "--spec", spec, "--out", out],
+        ["pattern", "--spec", spec, "--out", out],
+      ];
+      for (const name of [
+        "card.jpg",
+        "card.JPEG",
+        "card.webp",
+        "card.txt",
+        "card",
+        "card.",
+        ".svg.bak",
+        "-",
+        "dir/",
+        "a.svg/",
+        "svg",
+        "png",
+        ".png ",
+      ]) {
+        const out = name === "-" ? name : join(tmp(), name);
+        for (const argv of commands(out)) {
+          const t = capture();
+          expect(await run(argv, t.io)).toBe(1);
+          expect(t.out).toEqual([]);
+          expect(t.err).toEqual([
+            `dag-vis: --out must end in .svg or .png, got ${describeValue(out)}\n`,
+          ]);
+        }
+      }
+      expect(readdirSync(tmp())).toEqual(["spec.json"]);
+    });
+
+    it("favicons --out is a directory and is not subject to the extension rule", async () => {
+      const dir = join(tmp(), "icons.jpg");
+      expect(await run(["favicons", "--out", dir], capture().io)).toBe(0);
+      expect(readdirSync(dir)).toContain("favicon.ico");
     });
 
     it("creates missing parent directories", async () => {
