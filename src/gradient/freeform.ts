@@ -15,36 +15,44 @@ const PROFILE_STOPS = 40;
 /** A blurred point reaches this many feather deviations past its radius. */
 const FEATHER_REACH = 3;
 
+/** One frozen point: presets are shared by every caller, so nobody may edit them. */
+const point = (
+  x: number,
+  y: number,
+  color: string,
+  spread: number,
+): FreeformPoint =>
+  Object.freeze({ at: Object.freeze([x, y] as const), color, spread });
+
 /** Presets. `dawn` is the reference: white top-left, violet top, coral bottom-left, pink right, blue bottom-right. */
-export const FREEFORM_PALETTES: Record<
-  "dawn" | "aurora" | "ember" | "brand",
-  readonly FreeformPoint[]
-> = {
-  dawn: [
-    { at: [0.1, 0.1], color: "#ffffff", spread: 0.7 },
-    { at: [0.5, 0.05], color: "#7c3aed", spread: 0.6 },
-    { at: [0.15, 0.85], color: "#ff7f6e", spread: 0.6 },
-    { at: [0.95, 0.5], color: "#f472b6", spread: 0.7 },
-    { at: [0.85, 0.9], color: "#3b82f6", spread: 0.6 },
-  ],
-  aurora: [
-    { at: [0.1, 0.9], color: "#0a0a0a", spread: 0.9 },
-    { at: [0.3, 0.3], color: "#1bd766", spread: 0.6 },
-    { at: [0.7, 0.2], color: "#10abba", spread: 0.6 },
-    { at: [0.9, 0.7], color: "#7c3aed", spread: 0.6 },
-  ],
-  ember: [
-    { at: [0.1, 0.1], color: "#0a0a0a", spread: 0.9 },
-    { at: [0.8, 0.3], color: "#7f1d1d", spread: 0.7 },
-    { at: [0.9, 0.8], color: "#ef4444", spread: 0.6 },
-    { at: [0.4, 0.9], color: "#edc41c", spread: 0.5 },
-  ],
-  brand: [
-    { at: [0.2, 0.2], color: "#0a0a0a", spread: 0.9 },
-    { at: [0.85, 0.5], color: "#ef4444", spread: 0.7 },
-    { at: [0.6, 0.95], color: "#7f1d1d", spread: 0.6 },
-  ],
-};
+export const FREEFORM_PALETTES: Readonly<
+  Record<"dawn" | "aurora" | "ember" | "brand", readonly FreeformPoint[]>
+> = Object.freeze({
+  dawn: Object.freeze([
+    point(0.1, 0.1, "#ffffff", 0.7),
+    point(0.5, 0.05, "#7c3aed", 0.6),
+    point(0.15, 0.85, "#ff7f6e", 0.6),
+    point(0.95, 0.5, "#f472b6", 0.7),
+    point(0.85, 0.9, "#3b82f6", 0.6),
+  ]),
+  aurora: Object.freeze([
+    point(0.1, 0.9, "#0a0a0a", 0.9),
+    point(0.3, 0.3, "#1bd766", 0.6),
+    point(0.7, 0.2, "#10abba", 0.6),
+    point(0.9, 0.7, "#7c3aed", 0.6),
+  ]),
+  ember: Object.freeze([
+    point(0.1, 0.1, "#0a0a0a", 0.9),
+    point(0.8, 0.3, "#7f1d1d", 0.7),
+    point(0.9, 0.8, "#ef4444", 0.6),
+    point(0.4, 0.9, "#edc41c", 0.5),
+  ]),
+  brand: Object.freeze([
+    point(0.2, 0.2, "#0a0a0a", 0.9),
+    point(0.85, 0.5, "#ef4444", 0.7),
+    point(0.6, 0.95, "#7f1d1d", 0.6),
+  ]),
+});
 
 export function freeformPalette(name: string): readonly FreeformPoint[] {
   // hasOwn: "constructor" and "toString" must not resolve to inherited members.
@@ -70,6 +78,13 @@ export function freeformRandom(opts: {
       `freeformRandom count must be an integer in 1..${MAX_POINTS}, got ${String(opts.count)}`,
     );
   assertList("freeformRandom needs a non-empty palette", opts.palette);
+  opts.palette.forEach((c) => {
+    if (typeof c !== "string")
+      throw new VisError(
+        `freeformRandom palette entries must be colour strings, got ${JSON.stringify(c)}`,
+      );
+    parseColor(c); // throws a VisError naming the value
+  });
   const seed = opts.seed ?? 1;
   if (!Number.isSafeInteger(seed))
     throw new VisError(

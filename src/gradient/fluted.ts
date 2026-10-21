@@ -4,8 +4,21 @@ import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
 import type { Ctx, FlutedSpec, KindOutput } from "./types.js";
 
+const DEFAULT_REEDS = 24;
+
 const DIRECTIONS = ["vertical", "horizontal", "angle"] as const;
 const MAX_REEDS = 256;
+/**
+ * Render-cost budget. Every reed paints the source once, so a fluted over a fluted (or over
+ * `layers` holding one) multiplies: 64 x 64 reeds took 90 s in resvg. `renderCost` is the
+ * product of the reeds down the nesting times the leaf source's weight (a gradient that
+ * continues past its box, 1; a pattern-based one, 4: each paint re-renders a whole tile).
+ * Measured at 1200x630: 256 reeds over a linear source 1.0 to 1.8 s, 16 over 16 over
+ * linear 1.5 s, 64 over a conic 2.8 s, 8 over 8 over a conic 2.9 s, 64 over aurora 4.2 s;
+ * 16 over 16 over a conic (cost 1024) took 10 s.
+ */
+const MAX_COST = 256;
+const PATTERN_WEIGHT = 4;
 /** Edge shade of one reed: dark at its start, clear in the middle, light at its end. */
 const DARK = 0.6;
 const LIGHT = 0.5;
@@ -18,6 +31,41 @@ function assertSource(source: unknown): void {
     throw new VisError(
       `fluted needs a \`source\` gradient spec, got ${JSON.stringify(source)}`,
     );
+}
+
+/**
+ * A gradient that continues past the box it is drawn in (user-space linear or circular
+ * radial, which pad or repeat): a source copy can be drawn larger than the canvas without
+ * changing it. Patterns tile instead, and an elliptical radial is sized by its own box.
+ */
+function extendsPastBox(spec: { kind?: unknown; shape?: unknown }): boolean {
+  return (
+    spec.kind === "linear" ||
+    spec.kind === "banded" ||
+    (spec.kind === "radial" && spec.shape !== "ellipse")
+  );
+}
+
+/** Source paints needed to render `spec` once; tolerant of malformed input (validated later). */
+function renderCost(spec: unknown): number {
+  if (typeof spec !== "object" || spec === null) return 1;
+  const s = spec as {
+    kind?: unknown;
+    shape?: unknown;
+    reeds?: unknown;
+    source?: unknown;
+    layers?: unknown;
+  };
+  if (s.kind === "fluted")
+    return (
+      (typeof s.reeds === "number" ? s.reeds : DEFAULT_REEDS) *
+      renderCost(s.source)
+    );
+  if (s.kind === "layers")
+    return Array.isArray(s.layers)
+      ? (s.layers as unknown[]).reduce<number>((n, l) => n + renderCost(l), 0)
+      : 1;
+  return extendsPastBox(s) ? 1 : PATTERN_WEIGHT;
 }
 
 /**
@@ -34,7 +82,7 @@ function assertSource(source: unknown): void {
  * `refraction` 0 the two outputs are the same picture.
  */
 export function renderFluted(spec: FlutedSpec, ctx: Ctx): KindOutput {
-  const reeds = spec.reeds ?? 24;
+  const reeds = spec.reeds ?? DEFAULT_REEDS;
   if (!Number.isInteger(reeds) || reeds < 2 || reeds > MAX_REEDS)
     throw new VisError(
       `fluted reeds must be an integer in 2..${MAX_REEDS}, got ${String(reeds)}`,
@@ -59,6 +107,11 @@ export function renderFluted(spec: FlutedSpec, ctx: Ctx): KindOutput {
       `fluted angle must be a finite number, got ${String(angle)}`,
     );
   assertSource(spec.source);
+  const cost = reeds * renderCost(spec.source);
+  if (cost > MAX_COST)
+    throw new VisError(
+      `fluted render cost ${cost} (nested reeds x leaf source weight; a pattern source weighs ${PATTERN_WEIGHT}, a gradient 1) exceeds ${MAX_COST}: use fewer reeds or a simpler source`,
+    );
   const { width, height } = ctx.size;
   const source = ctx.render(spec.source, `${ctx.id}-src`);
   const id = `${ctx.id}-g`;
@@ -91,6 +144,17 @@ export function renderFluted(spec: FlutedSpec, ctx: Ctx): KindOutput {
     height: horizontal ? reedSize : across,
     transform: a === 0 ? undefined : turn(a),
   });
+  // A reed's own frame to the canvas frame (the canvas rotated by `a` about its centre).
+  const world = (u: number, v: number): [number, number] =>
+    horizontal
+      ? [v, u]
+      : [
+          width / 2 + (u - width / 2) * cos - (v - height / 2) * sin,
+          height / 2 + (u - width / 2) * sin + (v - height / 2) * cos,
+        ];
+  const padded = extendsPastBox(spec.source);
+  // Even a full refraction (k = 0) needs a finite box to draw the source in.
+  const kBox = Math.max(k, 0.001);
   const clips: string[] = [];
   const pieces: string[] = [];
   for (let i = 0; i < reeds; i++) {
@@ -103,13 +167,33 @@ export function renderFluted(spec: FlutedSpec, ctx: Ctx): KindOutput {
     const scaled = horizontal
       ? `translate(0 ${fmt(centre + jitter)}) scale(1 ${fmt(k)}) translate(0 ${fmt(-centre)})`
       : `translate(${fmt(centre + jitter)} 0) scale(${fmt(k)} 1) translate(${fmt(-centre)} 0)`;
+    // The source copy is a rect in the upright source's frame. A gradient that continues
+    // past the box gets just the part this reed shows (the reed's span divided by the
+    // scale, as a bounding box in that frame), so no slanted copy edge or short edge reed
+    // leaves the canvas uncovered. Patterns tile and ellipses are box-sized: they keep
+    // the canvas.
+    const lo = centre + (-reedSize / 2 - jitter) / kBox;
+    const hi = centre + (reedSize / 2 - jitter) / kBox;
+    const corners = [lo, hi].flatMap((u) => [
+      world(u, lateral),
+      world(u, lateral + across),
+    ]);
+    const xs = corners.map((c) => c[0]);
+    const ys = corners.map((c) => c[1]);
+    const rect = padded
+      ? {
+          x: Math.min(...xs),
+          y: Math.min(...ys),
+          width: Math.max(...xs) - Math.min(...xs),
+          height: Math.max(...ys) - Math.min(...ys),
+        }
+      : { width, height };
     pieces.push(
       el(
         "g",
         { "clip-path": `url(#${cid})` },
         el("rect", {
-          width,
-          height,
+          ...rect,
           fill: source.fill,
           transform: a === 0 ? scaled : `${turn(a)} ${scaled} ${turn(-a)}`,
         }),

@@ -17,8 +17,23 @@ export interface AnimatedOptions {
 
 /** An identifier a stylesheet can embed anywhere without opening a new rule. */
 const IDENT = /^[A-Za-z_][\w-]*$/;
-/** Characters that would end the rule or the `<style>` element the CSS is dropped into. */
-const SELECTOR_BREAKOUT = /[{};<]|\/\*/;
+/**
+ * A selector is allow-listed, not scrubbed: tag/class/id/attribute (unquoted)/pseudo
+ * names, combinators, commas, `*` and plain spaces. Quotes, backslash escapes, `@`,
+ * `/`, braces, `;`, `<` and newlines are out, and brackets and parentheses must balance
+ * (an unclosed one makes the browser read on into the rest of the stylesheet).
+ */
+const SELECTOR_CHARS = /^[\w\-.#*>+~,:[\]()=^$| ]+$/;
+
+function balanced(selector: string): boolean {
+  const closers: string[] = [];
+  for (const ch of selector) {
+    if (ch === "[") closers.push("]");
+    else if (ch === "(") closers.push(")");
+    else if ((ch === "]" || ch === ")") && closers.pop() !== ch) return false;
+  }
+  return closers.length === 0;
+}
 
 function finite(what: string, v: number): number {
   if (!Number.isFinite(v))
@@ -67,9 +82,13 @@ export function animatedGradientCss(
       `duration must be positive seconds, got ${String(duration)}`,
     );
   const selector = opts.selector ?? ".vis-gradient";
-  if (selector.trim() === "" || SELECTOR_BREAKOUT.test(selector))
+  if (
+    selector.trim() === "" ||
+    !SELECTOR_CHARS.test(selector) ||
+    !balanced(selector)
+  )
     throw new VisError(
-      `selector must be a non-empty CSS selector without { } ; < or comments, got ${JSON.stringify(selector)}`,
+      `selector must be a plain CSS selector (letters, digits, _ - . # * > + ~ , : = ^ $ |, spaces, balanced [] and (); no quotes, escapes or @), got ${JSON.stringify(selector)}`,
     );
   const name = opts.name ?? "vis";
   if (!IDENT.test(name))

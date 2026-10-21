@@ -350,6 +350,28 @@ describe("freeform gradient", () => {
     }
   });
 
+  it("freezes the shared presets so a caller cannot edit them", () => {
+    expect(Object.isFrozen(FREEFORM_PALETTES)).toBe(true);
+    for (const name of Object.keys(FREEFORM_PALETTES)) {
+      const palette = freeformPalette(name);
+      expect(Object.isFrozen(palette), name).toBe(true);
+      for (const p of palette) {
+        expect(Object.isFrozen(p)).toBe(true);
+        expect(Object.isFrozen(p.at)).toBe(true);
+      }
+    }
+    const dawn = freeformPalette("dawn");
+    const first = dawn[0];
+    expect(Reflect.set(dawn, 0, dawn[1])).toBe(false);
+    expect(() => Array.prototype.push.call(dawn, dawn[1])).toThrow(TypeError);
+    expect(Reflect.set(first ?? {}, "color", "#000000")).toBe(false);
+    expect(Reflect.set(first?.at ?? [], 0, 0.9)).toBe(false);
+    expect(freeformPalette("dawn")[0]?.color).toBe("#ffffff");
+    expect(freeformPalette("dawn")[0]?.at).toEqual([0.1, 0.1]);
+    // the frozen presets still render
+    expect(() => gradient({ ...spec, points: dawn })).not.toThrow();
+  });
+
   it("scatters points deterministically from a seed", () => {
     const palette = ["#f00", "#0f0"];
     const a = freeformRandom({ count: 4, palette, seed: 3 });
@@ -383,6 +405,19 @@ describe("freeform gradient", () => {
     expect(() => freeformRandom({ count: 2, palette: "x" as never })).toThrow(
       VisError,
     );
+    // entries are checked up front, naming the value, not when the points render
+    expect(() =>
+      freeformRandom({ count: 2, palette: ["#f00", "nope"] }),
+    ).toThrow("nope");
+    expect(() => freeformRandom({ count: 2, palette: ["#f00", ""] })).toThrow(
+      VisError,
+    );
+    expect(() =>
+      freeformRandom({ count: 2, palette: ["#f00", 7 as never] }),
+    ).toThrow("got 7");
+    expect(() =>
+      freeformRandom({ count: 2, palette: [null as never] }),
+    ).toThrow("got null");
     for (const seed of [Number.NaN, Infinity, 1.5, 2 ** 53]) {
       expect(() => freeformRandom({ count: 2, palette, seed })).toThrow(
         VisError,

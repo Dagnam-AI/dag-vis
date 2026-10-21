@@ -172,11 +172,37 @@ describe("animatedGradientCss", () => {
     const hue = { kind: "hue" } as const;
     for (const selector of [
       "",
+      "   ",
       "a { color: red",
       "a } b",
+      "a}",
       "a;b",
+      "a;",
       "</style><script>",
       "a /* x */ b",
+      "a/*",
+      "a[",
+      "a]",
+      ":is(a",
+      "a)",
+      "a[x=(]",
+      "a(])",
+      'a[x="',
+      "a[x='y']",
+      "a'",
+      'a"',
+      "a\\",
+      "a\\3b b",
+      "a\\{",
+      "@x",
+      "@media print",
+      "a\nb",
+      "a\rb",
+      "a\tb",
+      "\u00e9l",
+      "a\u2028b",
+      "a\u007b",
+      "a!important",
     ]) {
       expect(() => animatedGradientCss(conic, { ...hue, selector })).toThrow(
         VisError,
@@ -184,6 +210,22 @@ describe("animatedGradientCss", () => {
       expect(() => animatedGradientCss(conic, { ...hue, selector })).toThrow(
         "selector",
       );
+    }
+    for (const selector of [
+      ".hero",
+      "#bg > .layer:nth-child(2)",
+      "[data-x=y]",
+      ".a, .b",
+      "a:not(.b) + c ~ d",
+      "li:nth-child(2n+1)",
+      "[lang|=en]",
+      "[href^=http]:hover",
+      "*",
+      "div:is(.a, .b)::before",
+    ]) {
+      const { css } = animatedGradientCss(conic, { ...hue, selector });
+      expect(css.startsWith(`${selector} {`)).toBe(true);
+      expect(css).toContain(`{ ${selector} { animation: none; } }`);
     }
     for (const name of ["", "a b", "a}", "1abc", "a;b", "--x"]) {
       expect(() => animatedGradientCss(conic, { ...hue, name })).toThrow(
@@ -193,13 +235,9 @@ describe("animatedGradientCss", () => {
         "name",
       );
     }
-    expect(() =>
-      animatedGradientCss(conic, {
-        ...hue,
-        selector: ".a > .b, #c:hover",
-        name: "my_grad-1",
-      }),
-    ).not.toThrow();
+    expect(
+      animatedGradientCss(conic, { ...hue, name: "my_grad-1" }).keyframes,
+    ).toContain("@keyframes my_grad-1-hue");
   });
 
   it("is byte-identical for the same input", () => {

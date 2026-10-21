@@ -256,12 +256,9 @@ describe("fluted glass", () => {
         if (Math.min(px - i * reed, (i + 1) * reed - px) < 1.5) continue;
         const centre = (i + 0.5) * reed;
         const src = centre + (px - centre - Number(jitter[i])) / k;
-        // outside the scaled copy the reed shows the unscaled source underneath
-        const expected =
-          src >= 0 && src <= box.width
-            ? sourceAt(src, box.width)
-            : sourceAt(px, box.width);
-        if (src < 1 || src > box.width - 1) continue;
+        // a gradient source keeps going past the canvas, so even an end reed's
+        // sliver (src < 0 or > width) shows the refracted source, not the unscaled one
+        const expected = sourceAt(src, box.width);
         expectClose(pixelAt(raster, x, y), expected, 3);
         if (
           Math.abs(sourceAt(src, box.width)[0] - sourceAt(px, box.width)[0]) > 8
@@ -303,17 +300,95 @@ describe("fluted glass", () => {
         const centre = u0 + (i + 0.5) * reed;
         const su = centre + (u - centre - Number(jitter[i])) / k;
         // back out to the upright source
-        const [qx, qy] = [
-          cx + (su - cx) * cos - (v - cy) * sin,
-          cy + (su - cx) * sin + (v - cy) * cos,
-        ];
-        if (qx < 1 || qx > box.width - 1 || qy < 1 || qy > box.height - 1)
-          continue;
+        // (the linear source only varies along x, so y is not needed)
+        const qx = cx + (su - cx) * cos - (v - cy) * sin;
+        // the whole canvas, slanted top and bottom edges of the scaled copy included
         expectClose(pixelAt(raster, x, y), sourceAt(qx, box.width), 3);
         checked++;
       }
     }
-    expect(checked).toBeGreaterThan(300);
+    expect(checked).toBeGreaterThan(600);
+  });
+
+  it("draws a gradient source only where the reed shows it, and a pattern at canvas size", () => {
+    const pieceRects = (g: string): string[] =>
+      g.match(/<rect [^>]*fill="url\(#vis1-src-g\)"[^>]*\/>/g) ?? [];
+    const rects = (source: GradientSpec): string[] =>
+      pieceRects(gradient({ ...spec, source }).defs).slice(1); // [0] is the base
+    for (const gradientSource of [
+      source,
+      { kind: "radial", stops: ["#000", "#fff"] },
+      { kind: "banded", bands: 3, stops: ["#000", "#fff"] },
+    ] as const) {
+      expect(rects(gradientSource), gradientSource.kind).toHaveLength(4);
+      for (const r of rects(gradientSource)) expect(r).toContain(" x=");
+    }
+    for (const source of [
+      { kind: "conic", stops: ["#000", "#fff"] },
+      { kind: "radial", shape: "ellipse", stops: ["#000", "#fff"] },
+    ] as const) {
+      expect(rects(source)).toHaveLength(4);
+      for (const r of rects(source)) {
+        expect(r).toContain('width="80" height="40"');
+        expect(r).not.toContain(" x=");
+      }
+    }
+  });
+
+  it("caps render cost across nesting, naming the cost and the limit", () => {
+    const linear: GradientSpec = { kind: "linear", stops: ["#000", "#fff"] };
+    const conic: GradientSpec = { kind: "conic", stops: ["#000", "#fff"] };
+    const over = (source: GradientSpec, reeds?: number): FlutedSpec =>
+      reeds === undefined
+        ? { kind: "fluted", source, size: spec.size }
+        : { kind: "fluted", source, reeds, size: spec.size };
+    const refused = (s: FlutedSpec): void => {
+      expect(() => gradient(s)).toThrow(VisError);
+      expect(() => gradient(s)).toThrow("exceeds 256");
+    };
+    // one level: 256 reeds over a gradient is the legal worst case; patterns weigh 4
+    expect(() => gradient(over(linear, 256))).not.toThrow();
+    expect(() => gradient(over(conic, 64))).not.toThrow();
+    refused(over(conic, 65));
+    expect(() => gradient(over(conic, 256))).toThrow("cost 1024");
+    // nested directly: the reeds multiply, down to the leaf's weight
+    expect(() => gradient(over(over(linear, 16), 16))).not.toThrow();
+    expect(() => gradient(over(over(conic, 8), 8))).not.toThrow();
+    expect(() => gradient(over(over(over(linear, 4), 4), 4))).not.toThrow();
+    refused(over(over(linear, 16), 17));
+    refused(over(over(conic, 8), 9));
+    refused(over(over(conic, 16), 16));
+    refused(over(over(over(linear, 8), 8), 8));
+    expect(() => gradient(over(over(linear, 64), 64))).toThrow("cost 4096");
+    // default reeds (24) count too
+    refused(over(over(linear)));
+    // through layers: the layers add, the enclosing reeds multiply
+    const layered = (...layers: GradientSpec[]): GradientSpec => ({
+      kind: "layers",
+      layers,
+    });
+    expect(() => gradient(over(layered(linear, linear), 128))).not.toThrow();
+    refused(over(layered(linear, linear), 129));
+    expect(() =>
+      gradient(over(layered(linear, over(linear, 4)), 8)),
+    ).not.toThrow();
+    refused(over(layered(over(linear, 16), over(linear, 16)), 9));
+    refused(over(layered(layered(over(linear, 16), over(linear, 16))), 9));
+  });
+
+  it("leaves malformed nested specs to their own validation", () => {
+    const wrap = (source: unknown): FlutedSpec => ({
+      kind: "fluted",
+      source: source as never,
+      reeds: 2,
+      size: spec.size,
+    });
+    expect(() =>
+      gradient(wrap({ kind: "fluted", reeds: "x", source: 5 })),
+    ).toThrow(VisError);
+    expect(() => gradient(wrap({ kind: "layers", layers: "x" }))).toThrow(
+      VisError,
+    );
   });
 
   it("reeds a pattern-based source (conic) without moving it when nothing refracts", () => {

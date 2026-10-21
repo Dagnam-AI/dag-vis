@@ -107,14 +107,28 @@ export interface FreeformSpec extends GradientBase {
 export interface FlutedSpec extends GradientBase {
   kind: "fluted";
   source: GradientSpec;
-  /** Default 24. */
+  /**
+   * 2..256, default 24. Render cost is capped: the product of the reeds down any nesting
+   * (a fluted source, or one inside `layers`, multiplies; layers add) times the leaf
+   * source's weight (1 for a linear, banded or circular radial source, 4 for any other)
+   * must not exceed 256. So 256 reeds over a linear source, 64 over a conic, 16 over 16
+   * over a linear one.
+   */
   reeds?: number;
   direction?: "vertical" | "horizontal" | "angle";
   /** Only for direction "angle". Default 20. */
   angle?: number;
-  /** 0..1. Default 0.35. */
+  /**
+   * 0..1, how much each reed shrinks the source about its centre. Default 0.35.
+   * SVG only: the `css` output ignores it (CSS cannot rescale a source per reed), so
+   * CSS and SVG agree exactly only at 0. With a pattern-based source (conic, mesh,
+   * aurora, freeform, layers, fluted) or an elliptical radial, the shrunken copy of an
+   * end reed does not reach the canvas edge and, with angled reeds, its slanted edge
+   * shows as a faint seam over the unrefracted source; linear and circular radial
+   * sources (which continue past their box) have neither.
+   */
   refraction?: number;
-  /** 0..1 edge shading strength. Default 0.5. */
+  /** 0..1 edge shading strength, drawn in both SVG and CSS. Default 0.5. */
   shade?: number;
 }
 
@@ -132,7 +146,8 @@ export type GradientSpec =
 export interface GradientResult {
   /**
    * A CSS declaration list: `background: …;` (+ `background-blend-mode: …;`).
-   * CSS cannot express `grain`, and ignores `overlay.opacity` (SVG honours both).
+   * CSS cannot express `grain`, and ignores `overlay.opacity` and a fluted `refraction`
+   * (SVG honours all three).
    */
   css: string;
   /** Body markup (rects) sized to `size`; needs `defs` in the same document. */
