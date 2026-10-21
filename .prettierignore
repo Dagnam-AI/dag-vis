@@ -1,0 +1,7 @@
+dist/
+coverage/
+node_modules/
+package-lock.json
+tests/goldens/
+src/node/fonts/
+CHANGELOG.md
