@@ -10,3 +10,7 @@ export {
   wrapText,
 } from "./text.js";
 export type { Weight } from "./text.js";
+export { ribbonCurves } from "./ribbon-curves.js";
+export type { RibbonOptions } from "./ribbon-curves.js";
+export { ribbon } from "./ribbon.js";
+export type { RibbonSvgOptions } from "./ribbon.js";

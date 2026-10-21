@@ -7,6 +7,13 @@ describe("@dagnam/vis root barrel", () => {
     expect(typeof vis.VisError).toBe("function");
   });
 
+  it("exposes the ribbon pair and their option types from the root", () => {
+    const curveOpts: vis.RibbonOptions = { width: 10, height: 10, lines: 3 };
+    const svgOpts: vis.RibbonSvgOptions = { ...curveOpts, mesh: true };
+    expect(vis.ribbonCurves(curveOpts)).toHaveLength(3);
+    expect(vis.ribbon(svgOpts)).toContain("<svg");
+  });
+
   // API surface: every runtime export of the package root, sorted. Adding or
   // removing a public name must show up here. To change it deliberately, edit
   // this list in the same commit as the export and say why (validators in
@@ -50,6 +57,8 @@ describe("@dagnam/vis root barrel", () => {
       "parseColor",
       "pattern",
       "ramp",
+      "ribbon",
+      "ribbonCurves",
       "sampleStops",
       "svgDoc",
       "svgStops",
