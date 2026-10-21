@@ -1,5 +1,6 @@
 import { toHex } from "../core/color.js";
 import { VisError } from "../core/errors.js";
+import { finite, orDefault } from "../core/validate.js";
 import { renderLinear } from "./linear.js";
 import { normalizeStops, sampleStops } from "./stops.js";
 import type { BandedSpec, Ctx, KindOutput, Stop } from "./types.js";
@@ -13,11 +14,7 @@ export function renderBanded(spec: BandedSpec, ctx: Ctx): KindOutput {
     throw new VisError(
       `banded needs an integer bands in 2..${MAX_BANDS}, got ${String(spec.bands)}`,
     );
-  const angle = spec.angle ?? 180;
-  if (!Number.isFinite(angle))
-    throw new VisError(
-      `banded angle must be a finite number, got ${String(angle)}`,
-    );
+  const angle = finite("banded angle", orDefault<unknown>(spec.angle, 180));
   const stops = normalizeStops(spec.stops);
   const hard: Stop[] = [];
   for (let i = 0; i < spec.bands; i++) {

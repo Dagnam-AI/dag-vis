@@ -1,7 +1,8 @@
-import { parseColor, toCss, withAlpha } from "../core/color.js";
+import { toCss, withAlpha } from "../core/color.js";
 import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
+import { orDefault, parseRgba, positive } from "../core/validate.js";
 import { assertUnit } from "./radial.js";
 import { assertList, cssStops, svgStops } from "./stops.js";
 import type { Ctx, KindOutput, MeshSpec } from "./types.js";
@@ -32,7 +33,7 @@ export function renderMesh(spec: MeshSpec, ctx: Ctx): KindOutput {
   assertList("mesh needs at least one point", spec.points);
   const { width, height } = ctx.size;
   const minSide = Math.min(width, height);
-  const base = toCss(parseColor(spec.base));
+  const base = toCss(parseRgba("mesh base", spec.base));
   const id = `${ctx.id}-g`;
   const defs: string[] = [];
   const rects: string[] = [];
@@ -40,12 +41,11 @@ export function renderMesh(spec: MeshSpec, ctx: Ctx): KindOutput {
   spec.points.forEach((p, i) => {
     assertPoint(p, i);
     assertUnit("mesh point `at`", p.at);
-    const radius = p.radius ?? 0.5;
-    if (!Number.isFinite(radius) || radius <= 0)
-      throw new VisError(
-        `mesh point radius must be positive, got ${String(radius)}`,
-      );
-    const color = parseColor(p.color);
+    const radius = positive(
+      "mesh point radius",
+      orDefault<unknown>(p.radius, 0.5),
+    );
+    const color = parseRgba(`mesh point ${i} color`, p.color);
     const stops = [
       { color, at: 0 },
       { color: withAlpha(color, 0), at: 1 },

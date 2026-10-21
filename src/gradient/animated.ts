@@ -1,7 +1,14 @@
 import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
+import {
+  assertOptions,
+  finite,
+  orDefault,
+  parseFlag,
+} from "../core/validate.js";
 import { gradient } from "./index.js";
 import { assertUnit } from "./radial.js";
+import { assertSpec } from "./spec.js";
 import { cssStops, normalizeStops, repeatSpan } from "./stops.js";
 import type { GradientSpec } from "./types.js";
 
@@ -35,34 +42,30 @@ function balanced(selector: string): boolean {
   return closers.length === 0;
 }
 
-function finite(what: string, v: number): number {
-  if (!Number.isFinite(v))
-    throw new VisError(`${what} must be a finite number, got ${String(v)}`);
-  return v;
-}
-
 /**
  * `rotate`: the gradient with its angle replaced by `calc(<own angle> + var(--<name>-angle))`.
  * Linear and conic only: the other kinds have no angle to turn.
  */
 function rotating(spec: GradientSpec, prop: string): string {
+  assertSpec(spec);
   if (spec.kind !== "conic" && spec.kind !== "linear")
     throw new VisError(
       `rotate needs a conic or linear gradient, got ${spec.kind}`,
     );
   const stops = normalizeStops(spec.stops, spec.reverse);
+  const repeat = parseFlag("repeat", spec.repeat);
   // Same rule as the static renderers: zero-width repeating stops have no CSS equivalent.
-  if (spec.repeat) repeatSpan(stops);
+  if (repeat) repeatSpan(stops);
   const turned = (deg: number): string =>
     deg === 0 ? `var(${prop})` : `calc(${fmt(deg)}deg + var(${prop}))`;
   if (spec.kind === "linear") {
-    const fn = spec.repeat ? "repeating-linear-gradient" : "linear-gradient";
-    return `${fn}(${turned(finite("linear angle", spec.angle ?? 180))}, ${cssStops(stops)})`;
+    const fn = repeat ? "repeating-linear-gradient" : "linear-gradient";
+    return `${fn}(${turned(finite("linear angle", orDefault<unknown>(spec.angle, 180)))}, ${cssStops(stops)})`;
   }
-  const at = spec.at ?? [0.5, 0.5];
+  const at = orDefault<unknown>(spec.at, [0.5, 0.5]);
   assertUnit("conic `at`", at);
-  const fn = spec.repeat ? "repeating-conic-gradient" : "conic-gradient";
-  return `${fn}(from ${turned(finite("conic from", spec.from ?? 0))} at ${fmt(at[0] * 100)}% ${fmt(at[1] * 100)}%, ${cssStops(stops)})`;
+  const fn = repeat ? "repeating-conic-gradient" : "conic-gradient";
+  return `${fn}(from ${turned(finite("conic from", orDefault<unknown>(spec.from, 0)))} at ${fmt(at[0] * 100)}% ${fmt(at[1] * 100)}%, ${cssStops(stops)})`;
 }
 
 /**
@@ -76,6 +79,7 @@ export function animatedGradientCss(
   spec: GradientSpec,
   opts: AnimatedOptions,
 ): { css: string; keyframes: string } {
+  assertOptions(opts);
   const duration = opts.duration ?? 10;
   if (!Number.isFinite(duration) || duration <= 0)
     throw new VisError(

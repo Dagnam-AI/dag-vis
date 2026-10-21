@@ -1,7 +1,7 @@
-import { parseColor, toCss, toHex, withAlpha } from "../core/color.js";
-import { VisError } from "../core/errors.js";
+import { toCss, toHex, withAlpha } from "../core/color.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
+import { integerIn, orDefault, parseRgba } from "../core/validate.js";
 import { assertList, cssStops } from "./stops.js";
 import type { AuroraSpec, Ctx, KindOutput } from "./types.js";
 
@@ -33,15 +33,21 @@ const EDGE: readonly (readonly [number, number])[] = [
  */
 export function renderAurora(spec: AuroraSpec, ctx: Ctx): KindOutput {
   assertList("aurora needs a non-empty palette", spec.palette);
-  const blobs = spec.blobs ?? 5;
-  if (!Number.isInteger(blobs) || blobs < 1 || blobs > 64)
-    throw new VisError(
-      `aurora blobs must be an integer in 1..64, got ${String(blobs)}`,
-    );
+  const blobs = integerIn(
+    "aurora blobs",
+    orDefault<unknown>(spec.blobs, 5),
+    1,
+    64,
+  );
   const { width, height } = ctx.size;
   const minSide = Math.min(width, height);
-  const base = parseColor(spec.base ?? "#0a0a0a");
-  const colors = spec.palette.map(parseColor);
+  const base = parseRgba(
+    "aurora base",
+    orDefault<unknown>(spec.base, "#0a0a0a"),
+  );
+  const colors = spec.palette.map((c, i) =>
+    parseRgba(`aurora palette[${i}]`, c),
+  );
   const id = `${ctx.id}-g`;
   const blurId = `${ctx.id}-blur`;
   const reach = 1 + 2 * SOFTNESS; // the CSS ellipse ends where the feather does

@@ -381,6 +381,21 @@ describe("dag-vis CLI", () => {
     const spec = join(tmp(), "spec.json");
     for (const [json, message, command] of [
       [{ kind: "plaid" }, "unknown gradient kind: plaid", "gradient"],
+      [
+        { kind: "linear", stops: ["#000", "#fff"], overlay: {} },
+        "overlay.image must be a string",
+        "gradient",
+      ],
+      [
+        { kind: "mesh", points: [{ at: [0.5, 0.5], color: "#fff" }] },
+        "mesh base must be a colour string",
+        "gradient",
+      ],
+      [
+        { kind: "radial", stops: ["#000", "#fff"], at: {} },
+        "radial `at` must be [x, y]",
+        "gradient",
+      ],
       [{ kind: "dots", spacing: -1 }, "spacing must be", "pattern"],
       [{ kind: "nope" }, "kind", "pattern"],
     ] as const) {

@@ -94,9 +94,9 @@ PNGs add the rasteriser: with the bundled fonts and no system fonts they are rep
 
 ## Validation and limits
 
-Typed options are validated at the boundary: an invalid value throws a `VisError` (`name === "VisError"`) whose message names the offending parameter and value, and an unparseable colour never falls back to black. Gradient specs that come from untyped JavaScript or JSON are not yet fully type-checked (see Known ceilings). Limits you can hit:
+Typed options and gradient specs from untyped JavaScript or JSON are validated at the boundary: an invalid value throws a `VisError` (`name === "VisError"`) whose message names the offending parameter and value (a `null`, a wrong type or a missing required field included, never a plain `TypeError`), and an unparseable colour never falls back to black. Only an `undefined` field takes its default. Limits you can hit:
 
-- Canvas sizes of 1 to 16384 px per side are enforced by the scenes (`brandBackground`, `ogCard` which needs at least 16, `ribbon`), by `pattern` (`size`, `spacing`), by `renderPng` (integer `width`, and the output is also capped at 64 megapixels) and therefore by the CLI's PNG output and its `og`, `background` and `pattern` commands. `gradient`, `gradientSvg` and `logoSvg` only check that a size is a positive finite number, so a huge size is accepted there (a later release will cap it).
+- Canvas sizes of 1 to 16384 px per side are enforced everywhere: by `gradient`, `gradientSvg` and `logoSvg`, by the scenes (`brandBackground`, `ogCard` which needs at least 16, `ribbon`), by `pattern` (`size`, `spacing`), by `renderPng` (integer `width`, and the output is also capped at 64 megapixels) and therefore by the CLI.
 - `ogCard` text is at most 10,000 characters per field; titles wrap to 3 lines (2 with a subtitle), then end in `…`.
 - `ribbon` has at most 400 `lines`, 1000 `samples` and 100,000 drawn points.
 - `fluted` render cost is capped (`reeds` x the source's weight must not exceed 256).
@@ -113,8 +113,6 @@ Typed options are validated at the boundary: an invalid value throws a `VisError
 - Gradient overlay images must be `data:` URIs to rasterise (see Security); a URL or path works in the CSS and SVG output only.
 - `pattern(...).cssBackground` repeats seamlessly only for `dots`, `grid`, `stripes` and `lines` at multiples of 90 degrees, with the default sample size; see the `PatternResult` doc comment in `src/pattern/types.ts` for the rest.
 - `brandBackground` reconstructs the production og-default look from parameters; it is not a pixel match, and its defaults may be retuned after design review.
-
-- Malformed gradient specs from untyped input are not all caught by `gradient()`: a wrongly typed value (a mesh without `base` or with `base: 3`, an aurora `palette: [1]`, `layers: [null]`, `overlay: "x"`, `gradient(null)`) can throw a plain `TypeError` instead of a `VisError`, and `size: null` is silently treated as the default. Through the CLI such a spec reports `dag-vis: unexpected error: …` rather than naming the parameter. TypeScript callers are protected by the types; the generators will be hardened in a later release.
 
 ## Layering
 

@@ -9,7 +9,12 @@ import {
   integerIn,
   orDefault,
   parseId,
+  assertOptions,
+  parseFlag,
   parsePaint,
+  parseRgba,
+  parseSize,
+  positive,
   parseSeed,
   within,
 } from "../../src/core/validate.js";
@@ -232,5 +237,94 @@ describe("orDefault", () => {
 describe("limits", () => {
   it("exports the dimension cap the public docs quote", () => {
     expect(MAX_DIMENSION).toBe(16384);
+  });
+});
+
+describe("parseRgba", () => {
+  it("returns the parsed colour, alpha included", () => {
+    expect(parseRgba("c", "rgba(255, 0, 0, 0.5)")).toEqual({
+      r: 1,
+      g: 0,
+      b: 0,
+      a: 0.5,
+    });
+  });
+
+  it("names the parameter for a non-string, a long string and a bad colour", () => {
+    expect(() => parseRgba("c", 5)).toThrow("c must be a colour string, got 5");
+    expect(() => parseRgba("c", "x".repeat(200))).toThrow(
+      /^c must be a colour of at most 80 characters/,
+    );
+    expect(() => parseRgba("c", "nope")).toThrow(/^c: invalid colour: nope/);
+  });
+});
+
+describe("positive", () => {
+  it("returns numbers above zero", () => {
+    expect(positive("r", 0.001)).toBe(0.001);
+  });
+
+  it.each([0, -1, Number.NaN, Infinity, null, "1", {}])(
+    "rejects %j naming the parameter",
+    (bad) => {
+      expect(() => positive("r", bad)).toThrow(VisError);
+      expect(() => positive("r", bad)).toThrow(
+        `r must be positive, got ${describeValue(bad)}`,
+      );
+    },
+  );
+});
+
+describe("parseFlag", () => {
+  it("is false only when undefined, and passes booleans through", () => {
+    expect(parseFlag("f", undefined)).toBe(false);
+    expect(parseFlag("f", false)).toBe(false);
+    expect(parseFlag("f", true)).toBe(true);
+  });
+
+  it.each([null, 0, 1, "true", {}])("rejects %j", (bad) => {
+    expect(() => parseFlag("f", bad)).toThrow(
+      `f must be true or false, got ${describeValue(bad)}`,
+    );
+  });
+});
+
+describe("parseSize", () => {
+  it("returns a fresh { width, height } within 1..MAX_DIMENSION, bounds included", () => {
+    const input = { width: 1, height: MAX_DIMENSION, extra: true };
+    const size = parseSize("size", input);
+    expect(size).toEqual({ width: 1, height: MAX_DIMENSION });
+    expect(size).not.toBe(input);
+  });
+
+  it.each([null, undefined, 5, "x", [], true])(
+    "rejects %j, which is not an object",
+    (bad) => {
+      expect(() => parseSize("size", bad)).toThrow(
+        `size must be an object { width, height }, got ${describeValue(bad)}`,
+      );
+    },
+  );
+
+  it.each([
+    [{ height: 1 }, "size.width"],
+    [{ width: 1 }, "size.height"],
+    [{ width: 0.5, height: 1 }, "size.width"],
+    [{ width: 1, height: MAX_DIMENSION + 1 }, "size.height"],
+    [{ width: "1", height: 1 }, "size.width"],
+  ])("rejects %j naming %s", (bad, name) => {
+    expect(() => parseSize("size", bad)).toThrow(name);
+  });
+});
+
+describe("assertOptions", () => {
+  it("accepts objects and rejects everything else", () => {
+    expect(() => {
+      assertOptions({});
+    }).not.toThrow();
+    for (const bad of [null, undefined, 5, "x"])
+      expect(() => {
+        assertOptions(bad);
+      }).toThrow(`options must be an object, got ${describeValue(bad)}`);
   });
 });

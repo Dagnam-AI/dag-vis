@@ -2,6 +2,13 @@ import { toCss } from "../core/color.js";
 import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
+import {
+  bounded,
+  describeValue,
+  finite,
+  integerIn,
+  orDefault,
+} from "../core/validate.js";
 import type { Ctx, FlutedSpec, KindOutput } from "./types.js";
 
 const DEFAULT_REEDS = 24;
@@ -82,30 +89,30 @@ function renderCost(spec: unknown): number {
  * `refraction` 0 the two outputs are the same picture.
  */
 export function renderFluted(spec: FlutedSpec, ctx: Ctx): KindOutput {
-  const reeds = spec.reeds ?? DEFAULT_REEDS;
-  if (!Number.isInteger(reeds) || reeds < 2 || reeds > MAX_REEDS)
+  const reeds = integerIn(
+    "fluted reeds",
+    orDefault<unknown>(spec.reeds, DEFAULT_REEDS),
+    2,
+    MAX_REEDS,
+  );
+  const refraction = bounded(
+    "fluted refraction",
+    orDefault<unknown>(spec.refraction, 0.35),
+    0,
+    1,
+  );
+  const shade = bounded(
+    "fluted shade",
+    orDefault<unknown>(spec.shade, 0.5),
+    0,
+    1,
+  );
+  const direction = orDefault<unknown>(spec.direction, "vertical"); // JS callers can pass anything
+  if (!(DIRECTIONS as readonly unknown[]).includes(direction))
     throw new VisError(
-      `fluted reeds must be an integer in 2..${MAX_REEDS}, got ${String(reeds)}`,
+      `fluted direction must be one of ${DIRECTIONS.join(", ")}, got ${describeValue(direction)}`,
     );
-  const refraction = spec.refraction ?? 0.35;
-  const shade = spec.shade ?? 0.5;
-  for (const [k, v] of [
-    ["refraction", refraction],
-    ["shade", shade],
-  ] as const) {
-    if (!Number.isFinite(v) || v < 0 || v > 1)
-      throw new VisError(`fluted ${k} must be in 0..1, got ${String(v)}`);
-  }
-  const direction: string = spec.direction ?? "vertical"; // JS callers can pass anything
-  if (!(DIRECTIONS as readonly string[]).includes(direction))
-    throw new VisError(
-      `fluted direction must be one of ${DIRECTIONS.join(", ")}, got ${JSON.stringify(direction)}`,
-    );
-  const angle = spec.angle ?? 20;
-  if (!Number.isFinite(angle))
-    throw new VisError(
-      `fluted angle must be a finite number, got ${String(angle)}`,
-    );
+  const angle = finite("fluted angle", orDefault<unknown>(spec.angle, 20));
   assertSource(spec.source);
   const cost = reeds * renderCost(spec.source);
   if (cost > MAX_COST)

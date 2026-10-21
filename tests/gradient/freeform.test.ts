@@ -394,6 +394,13 @@ describe("freeform gradient", () => {
     expect(() => gradient({ ...spec, points: a })).not.toThrow();
   });
 
+  it("freeformRandom rejects options that are not an object", () => {
+    for (const opts of [null, 5, "x"])
+      expect(() => freeformRandom(opts as never)).toThrow(
+        /options must be an object/,
+      );
+  });
+
   it("validates the scatter options at the boundary", () => {
     const palette = ["#f00"];
     for (const count of [0, -1, 1.5, Number.NaN, 65]) {

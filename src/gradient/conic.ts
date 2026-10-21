@@ -2,6 +2,7 @@ import { toHex, withAlpha } from "../core/color.js";
 import type { Rgba } from "../core/color.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
+import { finite, orDefault, parseFlag } from "../core/validate.js";
 import { assertUnit } from "./radial.js";
 import { cssStops, normalizeStops, repeatSpan, sampleStops } from "./stops.js";
 import type { ConicSpec, Ctx, KindOutput } from "./types.js";
@@ -24,12 +25,13 @@ const REACH = 89;
 const PHASE = 0.001;
 
 export function renderConic(spec: ConicSpec, ctx: Ctx): KindOutput {
-  const from = spec.from ?? 0;
-  const at = spec.at ?? [0.5, 0.5];
+  const from = finite("conic from", orDefault<unknown>(spec.from, 0));
+  const at = orDefault<unknown>(spec.at, [0.5, 0.5]);
   assertUnit("conic `at`", at);
+  const repeat = parseFlag("repeat", spec.repeat);
   const stops = normalizeStops(spec.stops, spec.reverse);
   // Same rule as linear/radial: zero-width repeating stops have no CSS equivalent.
-  if (spec.repeat) repeatSpan(stops);
+  if (repeat) repeatSpan(stops);
   const { width, height } = ctx.size;
   const cx = at[0] * width;
   const cy = at[1] * height;
@@ -45,7 +47,7 @@ export function renderConic(spec: ConicSpec, ctx: Ctx): KindOutput {
     return `${fmt(cx + R * Math.cos(a))} ${fmt(cy + R * Math.sin(a))}`;
   };
   const colorAt = (i: number): Rgba =>
-    sampleStops(stops, (i + 0.5) / WEDGES, spec.repeat);
+    sampleStops(stops, (i + 0.5) / WEDGES, repeat);
   const wedges: string[] = [];
   for (let i = 0; i < WEDGES; i++) {
     // Painted in order, so each wedge's overlap is repainted by the next ones. The first
@@ -65,7 +67,7 @@ export function renderConic(spec: ConicSpec, ctx: Ctx): KindOutput {
   const apex = opaque
     ? [el("circle", { cx, cy, r: 2, fill: toHex(withAlpha(colorAt(0), 1)) })]
     : [];
-  const fn = spec.repeat ? "repeating-conic-gradient" : "conic-gradient";
+  const fn = repeat ? "repeating-conic-gradient" : "conic-gradient";
   return {
     defs: el(
       "pattern",

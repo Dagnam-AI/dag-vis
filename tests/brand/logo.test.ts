@@ -45,4 +45,15 @@ describe("logoSvg", () => {
     expect(() => logoSvg({ padding: 0.5 })).toThrow(VisError);
     expect(() => logoSvg({ padding: -0.1 })).toThrow(VisError);
   });
+
+  it("caps the size at 16384 and rejects null and non-numeric values by name", () => {
+    expect(logoSvg({ size: 16384 })).toContain('width="16384"');
+    expect(logoSvg({ size: 1 })).toContain('width="1"');
+    for (const size of [16385, 0.5, Number.NaN, null, "64", {}])
+      expect(() => logoSvg({ size } as never)).toThrow(/logo size/);
+    for (const padding of [null, "0.1", {}])
+      expect(() => logoSvg({ padding } as never)).toThrow(/logo padding/);
+    for (const opts of [null, 5, "x"])
+      expect(() => logoSvg(opts as never)).toThrow(/options must be an object/);
+  });
 });

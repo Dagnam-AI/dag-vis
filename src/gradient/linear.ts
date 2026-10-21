@@ -1,15 +1,12 @@
-import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
+import { finite, orDefault, parseFlag } from "../core/validate.js";
 import { cssStops, normalizeStops, repeatSpan, svgStops } from "./stops.js";
 import type { Ctx, KindOutput, LinearSpec } from "./types.js";
 
 export function renderLinear(spec: LinearSpec, ctx: Ctx): KindOutput {
-  const angle = spec.angle ?? 180;
-  if (!Number.isFinite(angle))
-    throw new VisError(
-      `linear angle must be a finite number, got ${String(angle)}`,
-    );
+  const angle = finite("linear angle", orDefault<unknown>(spec.angle, 180));
+  const repeat = parseFlag("repeat", spec.repeat);
   const stops = normalizeStops(spec.stops, spec.reverse);
   const { width, height } = ctx.size;
   const rad = (angle * Math.PI) / 180;
@@ -23,10 +20,10 @@ export function renderLinear(spec: LinearSpec, ctx: Ctx): KindOutput {
   const x1 = width / 2 + dx * half;
   const y1 = height / 2 + dy * half;
   // Repeating: map the vector onto the stop span so SVG's whole-vector repeat matches.
-  const win = spec.repeat ? repeatSpan(stops) : undefined;
+  const win = repeat ? repeatSpan(stops) : undefined;
   const [f, t] = win ? [win.from, win.to] : [0, 1];
   const id = `${ctx.id}-g`;
-  const fn = spec.repeat ? "repeating-linear-gradient" : "linear-gradient";
+  const fn = repeat ? "repeating-linear-gradient" : "linear-gradient";
   return {
     defs: el(
       "linearGradient",
@@ -37,7 +34,7 @@ export function renderLinear(spec: LinearSpec, ctx: Ctx): KindOutput {
         y1: y0 + (y1 - y0) * f,
         x2: x0 + (x1 - x0) * t,
         y2: y0 + (y1 - y0) * t,
-        spreadMethod: spec.repeat ? "repeat" : undefined,
+        spreadMethod: repeat ? "repeat" : undefined,
       },
       svgStops(win ? win.unit : stops),
     ),

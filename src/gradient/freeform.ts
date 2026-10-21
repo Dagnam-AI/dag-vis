@@ -3,6 +3,12 @@ import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { createRng } from "../core/rng.js";
 import { el } from "../core/svg.js";
+import {
+  assertOptions,
+  bounded,
+  orDefault,
+  parseRgba,
+} from "../core/validate.js";
 import { assertUnit } from "./radial.js";
 import { assertList, cssStops, svgStops } from "./stops.js";
 import type { NormalizedStop } from "./stops.js";
@@ -69,6 +75,7 @@ export function freeformRandom(opts: {
   palette: readonly string[];
   seed?: number;
 }): FreeformPoint[] {
+  assertOptions(opts);
   if (
     !Number.isInteger(opts.count) ||
     opts.count < 1 ||
@@ -209,17 +216,22 @@ export function renderFreeform(spec: FreeformSpec, ctx: Ctx): KindOutput {
     throw new VisError(
       `freeform takes at most ${MAX_POINTS} points, got ${spec.points.length}`,
     );
-  const softness = spec.softness ?? 0.12;
-  if (!Number.isFinite(softness) || softness < 0 || softness > 1)
-    throw new VisError(
-      `freeform softness must be in 0..1, got ${String(softness)}`,
-    );
+  const softness = bounded(
+    "freeform softness",
+    orDefault<unknown>(spec.softness, 0.12),
+    0,
+    1,
+  );
   const first: unknown = spec.points[0];
   assertPoint(first, 0);
   const { width, height } = ctx.size;
   const minSide = Math.min(width, height);
   const sigma = softness * minSide;
-  const base = toCss(parseColor(spec.base ?? first.color));
+  const base = toCss(
+    spec.base === undefined
+      ? parseRgba("freeform point 0 color", first.color)
+      : parseRgba("freeform base", spec.base),
+  );
   const id = `${ctx.id}-g`;
   const defs: string[] = [];
   const rects: string[] = [];
@@ -227,7 +239,7 @@ export function renderFreeform(spec: FreeformSpec, ctx: Ctx): KindOutput {
   spec.points.forEach((p: unknown, i) => {
     assertPoint(p, i);
     const { extent, stops } = profile(
-      parseColor(p.color),
+      parseRgba(`freeform point ${i} color`, p.color),
       (p.spread ?? 0.6) * minSide,
       sigma,
     );

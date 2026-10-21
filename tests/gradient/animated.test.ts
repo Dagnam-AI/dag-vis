@@ -101,6 +101,13 @@ describe("animatedGradientCss", () => {
     );
   });
 
+  it("rejects options that are not an object", () => {
+    for (const opts of [null, 5, "rotate"])
+      expect(() => animatedGradientCss(conic, opts as never)).toThrow(
+        /options must be an object/,
+      );
+  });
+
   it("rejects rotate on kinds without an angle and bad durations", () => {
     expect(() =>
       animatedGradientCss(

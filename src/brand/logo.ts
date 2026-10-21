@@ -3,6 +3,13 @@ import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { fitAspect } from "../core/geometry.js";
 import { el, svgDoc } from "../core/svg.js";
+import {
+  MAX_DIMENSION,
+  assertOptions,
+  bounded,
+  describeValue,
+  orDefault,
+} from "../core/validate.js";
 
 /**
  * The Dagnam mark. Path data and viewBox copied verbatim from the published
@@ -31,13 +38,22 @@ export interface LogoSvgOptions {
 
 /** The mark as a standalone square SVG. */
 export function logoSvg(opts: LogoSvgOptions = {}): string {
-  const size = opts.size ?? 256;
-  const padding = opts.padding ?? 0;
-  if (!Number.isFinite(size) || size <= 0)
-    throw new VisError(`logo size must be positive, got ${String(size)}`);
-  if (!Number.isFinite(padding) || padding < 0 || padding >= 0.5) {
+  assertOptions(opts);
+  const size = bounded(
+    "logo size",
+    orDefault<unknown>(opts.size, 256),
+    1,
+    MAX_DIMENSION,
+  );
+  const padding = orDefault<unknown>(opts.padding, 0);
+  if (
+    typeof padding !== "number" ||
+    !Number.isFinite(padding) ||
+    padding < 0 ||
+    padding >= 0.5
+  ) {
     throw new VisError(
-      `logo padding must be in [0, 0.5), got ${String(padding)}`,
+      `logo padding must be in [0, 0.5), got ${describeValue(padding)}`,
     );
   }
   const fill = toHex(parseColor(opts.color ?? "#ef4444"));

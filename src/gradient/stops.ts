@@ -1,8 +1,14 @@
-import { parseColor, toCss, toHex, withAlpha } from "../core/color.js";
+import { toCss, toHex, withAlpha } from "../core/color.js";
 import type { Rgba } from "../core/color.js";
 import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
+import {
+  describeValue,
+  orDefault,
+  parseFlag,
+  parseRgba,
+} from "../core/validate.js";
 import type { Blend, Stop } from "./types.js";
 
 export const BLENDS: readonly Blend[] = [
@@ -41,8 +47,9 @@ function isStopObject(s: unknown): s is { color: string } {
 
 export function normalizeStops(
   stops: readonly Stop[],
-  reverse = false,
+  reverse?: boolean,
 ): NormalizedStop[] {
+  const flipped = parseFlag("reverse", reverse);
   if (!Array.isArray(stops))
     throw new VisError(`gradient stops must be an array, got ${typeof stops}`);
   if (stops.length < 2)
@@ -65,13 +72,16 @@ export function normalizeStops(
   }
   let prev = 0;
   const out = objects.map((s, i) => {
-    const at = s.at ?? i / (objects.length - 1);
-    if (!Number.isFinite(at) || at < 0 || at > 1)
-      throw new VisError(`stop position must be in 0..1, got ${String(at)}`);
+    // orDefault, not `??`: a null `at` is a mistake, not "evenly spaced".
+    const at = orDefault<unknown>(s.at, i / (objects.length - 1));
+    if (typeof at !== "number" || !Number.isFinite(at) || at < 0 || at > 1)
+      throw new VisError(
+        `stop position must be in 0..1, got ${describeValue(at)}`,
+      );
     if (at < prev)
       throw new VisError("gradient stop positions must be non-decreasing");
     prev = at;
-    let color = parseColor(s.color);
+    let color = parseRgba(`stop ${i} color`, s.color);
     if (s.opacity !== undefined) {
       if (!Number.isFinite(s.opacity) || s.opacity < 0 || s.opacity > 1) {
         throw new VisError(
@@ -82,7 +92,7 @@ export function normalizeStops(
     }
     return { color, at };
   });
-  return reverse
+  return flipped
     ? out.map((s) => ({ color: s.color, at: snap(1 - s.at) })).reverse()
     : out;
 }
