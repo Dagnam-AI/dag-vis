@@ -6,3 +6,13 @@ export { el, escapeAttr, svgDoc, text } from "./svg.js";
 export type { Attrs } from "./svg.js";
 export { assertSize, fitAspect, focalTransform } from "./geometry.js";
 export type { Size } from "./geometry.js";
+export {
+  mix,
+  parseColor,
+  ramp,
+  toCss,
+  toHex,
+  toVec3,
+  withAlpha,
+} from "./color.js";
+export type { Rgba } from "./color.js";
