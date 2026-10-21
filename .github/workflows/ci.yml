@@ -1,0 +1,159 @@
+name: CI
+
+# Public repo, so these runs are real evidence. The release workflow calls
+# this file, so a tag cannot publish a commit these jobs would have failed.
+# The Playwright gallery job is added by the animation plan, when demo/ exists.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+# Least privilege: no job here writes to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, format, types, tests at 100% coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # The dev/CI toolchain needs Node >= 22.12 (vitest 5). The package's own
+      # `engines.node >=20` is for consumers, who run the built dist/.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.12"
+          cache: npm
+
+      - run: npm ci
+
+      # eslint (layer rules) -> prettier --check -> tsc --noEmit -> vitest at
+      # 100/100/100/100, the same gate as `npm run check` locally.
+      - run: npm run check
+
+      # Goldens are generated artifacts: a stale one must fail here, not get
+      # silently rewritten. UPDATE_GOLDENS is never set in CI.
+      - name: Assert no golden was rewritten by the run
+        run: git diff --exit-code -- tests/goldens
+
+  package:
+    name: Build, pack, install in isolation, run the CLI
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.12"
+          cache: npm
+
+      - run: npm ci && npm run build
+
+      # The fonts ARE the determinism: a tarball without them renders text in
+      # whatever the host has. Assert they are inside before anything else, and
+      # that no test, source or coverage output rides along (`files` is an
+      # allow-list, so this guards against someone widening it).
+      - name: Pack and assert what ships
+        run: |
+          tarball="$PWD/$(npm pack --silent)"
+          listing=$(tar -tzf "$tarball")
+          for f in dist/node/fonts/Inter-Regular.ttf dist/node/fonts/Inter-Bold.ttf dist/node/fonts/OFL.txt bin/dag-vis.mjs dist/index.js dist/index.d.ts dist/node/index.js dist/node/index.d.ts LICENSE README.md; do
+            echo "$listing" | grep -qx "package/$f" || { echo "::error::$f missing from the tarball"; exit 1; }
+          done
+          if echo "$listing" | grep -E '^package/(tests|src|coverage|\.github)/'; then
+            echo "::error::the tarball contains files that must not ship"; exit 1
+          fi
+          echo "tarball=$tarball" >> "$GITHUB_ENV"
+
+      # A consumer gets the tarball plus (optionally) the native rasteriser.
+      # Exercise every entry from an empty directory: the browser-safe root
+      # without resvg installed, then the node entry + CLI with it.
+      - name: Install in isolation and smoke both entries
+        run: |
+          cd "$(mktemp -d)"
+          npm init -y >/dev/null
+          npm pkg set type=module >/dev/null
+          npm install "$tarball" >/dev/null
+
+          # Browser-safe means the root entry's import graph never reaches a
+          # Node builtin, the node entry or the native rasteriser. Walk it.
+          cat > root-graph.mjs <<'EOF'
+          import { readFileSync } from "node:fs";
+          import { dirname, resolve } from "node:path";
+          import { fileURLToPath } from "node:url";
+          const dist = resolve(fileURLToPath(import.meta.url), "../node_modules/@dagnam/vis/dist");
+          const seen = new Set();
+          const walk = (file) => {
+            if (seen.has(file)) return;
+            seen.add(file);
+            const src = readFileSync(file, "utf8");
+            // Static import/export-from, side-effect import, dynamic import().
+            const edge = /^(?:import|export)\s*(?:type\s+)?(?:\*(?:\s+as\s+\w+)?|\{[^}]*\}|[\w$]+)\s*from\s*["']([^"']+)["']|^import\s*["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)/gm;
+            for (const m of src.matchAll(edge)) {
+              const spec = m[1] ?? m[2] ?? m[3];
+              if (!spec.startsWith(".")) throw new Error(`${file} imports ${spec}`);
+              const target = resolve(dirname(file), spec);
+              if (target.startsWith(resolve(dist, "node"))) throw new Error(`${file} reaches the node layer: ${spec}`);
+              walk(target);
+            }
+          };
+          walk(resolve(dist, "index.js"));
+          // A regex that stopped matching would pass vacuously: insist on a real graph.
+          if (seen.size < 30) throw new Error(`only ${seen.size} modules found; the walker is broken`);
+          console.log(`root graph ok: ${seen.size} modules, no node: / resvg / node layer`);
+          EOF
+          node root-graph.mjs
+
+          cat > root.mjs <<'EOF'
+          import { brandBackground, gradient, ogCard, pattern, ribbon } from "@dagnam/vis";
+          const svg = brandBackground({ width: 1200, height: 630 });
+          if (!svg.startsWith("<svg")) throw new Error("brandBackground did not render");
+          if (!gradient({ kind: "linear", stops: ["#ef4444", "#10abba"] }).css.startsWith("background:")) throw new Error("gradient");
+          if (!pattern({ kind: "dagMesh" }).cssBackground.startsWith("url(")) throw new Error("pattern");
+          if (!ogCard({ title: "Smoke" }).includes("Smoke")) throw new Error("ogCard");
+          if (!ribbon({ width: 100, height: 50, lines: 4, samples: 8 }).includes("<path")) throw new Error("ribbon");
+          console.log("root ok:", svg.length, "bytes");
+          EOF
+          node root.mjs
+
+          cat > node-missing.mjs <<'EOF'
+          import { renderPng } from "@dagnam/vis/node";
+          try { await renderPng("<svg xmlns='http://www.w3.org/2000/svg'/>"); throw new Error("expected a VisError"); }
+          catch (e) { if (e.name !== "VisError" || !e.message.includes("@resvg/resvg-js")) throw e; console.log("node entry loads without resvg and says what to install"); }
+          EOF
+          node node-missing.mjs
+
+          # The shipped .d.ts must resolve for a strict TypeScript consumer
+          # (skipLibCheck stays off, so a broken declaration fails here).
+          npm install --save-dev typescript@5.9.3 @types/node@22.20.5 >/dev/null
+          cat > consumer.ts <<'EOF'
+          import { gradient, ogCard, VisError } from "@dagnam/vis";
+          import type { GradientSpec } from "@dagnam/vis";
+          import { favicons, renderPng } from "@dagnam/vis/node";
+          const spec: GradientSpec = { kind: "linear", stops: ["#ef4444", "#10abba"] };
+          const css: string = gradient(spec).css;
+          const card: string = ogCard({ title: css.slice(0, 4) });
+          const png: Promise<Buffer> = renderPng(card, { width: 600 });
+          const written: Promise<string[]> = favicons({ outDir: "icons" });
+          export { png, written, VisError };
+          EOF
+          cat > tsconfig.json <<'EOF'
+          { "compilerOptions": { "module": "NodeNext", "moduleResolution": "NodeNext", "target": "ES2022", "strict": true, "noEmit": true, "skipLibCheck": false, "types": ["node"] }, "files": ["consumer.ts"] }
+          EOF
+          npx tsc -p tsconfig.json
+          echo "types ok"
+
+          npm install @resvg/resvg-js@2.6.2 >/dev/null
+          npx dag-vis --help | head -1
+          npx dag-vis og --title "CI smoke" --out out/og.png
+          npx dag-vis favicons --out out/icons
+          node -e "const b=require('fs').readFileSync('out/og.png'); if(b.readUInt32BE(16)!==1200) throw new Error('png width'); console.log('cli ok')"
+          test -s out/icons/favicon.ico && test -s out/icons/site.webmanifest

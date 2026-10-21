@@ -1,0 +1,93 @@
+name: Release @dagnam/vis
+
+# One tag publishes the package. The prefix mirrors dag-lib (`dagnam/v*`) and
+# dag-contracts (`contracts/v*`), so a glance at a tag says what it released.
+# Only a `vis/v*` tag triggers this: a push to a branch never publishes.
+on:
+  push:
+    tags:
+      - "vis/v*"
+
+# npm refuses to publish over an existing version, so a started upload must
+# finish: cancel-in-progress is false on purpose.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+# Default for every job; the job that mints an OIDC token says so itself.
+permissions:
+  contents: read
+
+jobs:
+  # The whole CI workflow (check + packed-tarball smoke), on the tagged commit.
+  # npm never takes a version back, so nothing below starts until it is green.
+  ci:
+    name: CI on the tagged commit
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish to npm
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Mints the OIDC token npm trusted publishing exchanges for a short-lived
+      # publish credential, and the one the provenance attestation is signed with.
+      id-token: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.12"
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      # package.json is the single source of the version; the tag must agree
+      # BEFORE anything is built, since npm never takes a version back.
+      - name: Assert package.json claims the tag's version
+        run: |
+          tag="${GITHUB_REF_NAME#vis/v}"
+          js=$(node -p "require('./package.json').version")
+          echo "tag=$tag  package.json=$js"
+          [ "$js" = "$tag" ] || { echo "::error::package.json says $js, tag says $tag"; exit 1; }
+
+      # OIDC trusted publishing needs npm >= 11.5.1; the runner's bundled npm
+      # predates it and would 403 looking for a token this job does not have.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
+      # `prepublishOnly` builds again, so this is the explicit, visible build.
+      - run: npm ci && npm run build
+
+      # Credential: trusted publishing (OIDC). Configure the trusted publisher
+      # once on npmjs.com for @dagnam/vis (repository Dagnam-AI/dag-vis,
+      # workflow release.yml); no secret is stored anywhere and the OIDC token
+      # lives for this job only. The first publish of a new package name cannot
+      # use it (the package must exist before a trusted publisher can be
+      # attached), which is what the fallback is for.
+      #
+      # Fallback: an `NPM_TOKEN` repository secret (an npm automation token
+      # that can publish @dagnam/vis). When it is set it is used as the
+      # credential; when it is absent the step is byte-for-byte the OIDC path.
+      # Delete the secret once trusted publishing is configured: a long-lived
+      # token is the hole OIDC exists to close.
+      #
+      # `--provenance` signs a build attestation (needs id-token: write above).
+      # Idempotent on re-runs: a moved tag must skip a version npm already has
+      # instead of failing on it.
+      - name: Publish (skips a version npm already has)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "@dagnam/vis@${version}" version >/dev/null 2>&1; then
+            echo "@dagnam/vis@${version} is already on npm; skipping publish"
+          elif [ -n "$NPM_TOKEN" ]; then
+            echo "publishing with the NPM_TOKEN fallback"
+            NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish --provenance --access public
+          else
+            echo "publishing with npm trusted publishing (OIDC)"
+            npm publish --provenance --access public
+          fi

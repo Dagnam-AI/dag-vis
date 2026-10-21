@@ -7,6 +7,8 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-21
+
 ### Added
 
 - Core: `createRng` (mulberry32), `fmt`, `parseColor`/`toHex`/`toCss`/`mix`/`ramp`, SVG builder, `focalTransform`, `VisError`.
@@ -15,3 +17,10 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 - Patterns: dots, grid, lines, stripes, dagMesh, contours, noise.
 - Scenes: `brandBackground` (the og-default look), `ogCard`, `ribbon` (+ pure `ribbonCurves`).
 - Node: `renderPng` (resvg, bundled Inter), `icoFromPngs`, `favicons`, the `dag-vis` CLI.
+- Tooling: CI (lint, format, types, tests at 100% coverage, and a packed-tarball smoke test that installs the package in an empty directory, checks both entries and the types, and runs the CLI) and a tag-triggered npm release with provenance.
+
+### Notes
+
+- First release. `./react` is declared in `exports` but its entry point is not built yet; it lands with the animation engine.
+- `@resvg/resvg-js` is an optional peer dependency, needed only for PNG output (`@dagnam/vis/node`, the CLI).
+- Contributing needs Node 22.12 or newer; the package itself supports Node 20 or newer.
