@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { VisError } from "../../src/core/errors.js";
 import { gradient, gradientSvg } from "../../src/gradient/index.js";
 import type { GradientSpec } from "../../src/gradient/index.js";
+import { cssLayers } from "../helpers/css.js";
 import { expectGolden } from "../helpers/golden.js";
 import { pixelAt, rasterize } from "../helpers/render.js";
 
@@ -56,6 +57,7 @@ function expectPixels(
   s: GradientSpec,
   expected: readonly (readonly [number, number, Rgb])[],
 ): void {
+  expect(() => cssLayers(gradient(s).css)).not.toThrow();
   const raster = rasterize(gradientSvg(s));
   for (const [x, y, rgb] of expected) {
     const px = pixelAt(raster, x, y);
@@ -156,6 +158,24 @@ describe("mesh gradient", () => {
       gradient({ ...spec, points: [{ at: [0.5, 0.5], color: "nope" }] }),
     ).toThrow(VisError);
     expect(() => gradient({ ...spec, base: "nope" })).toThrow(VisError);
+  });
+
+  it("rejects malformed points with a VisError that names the problem", () => {
+    const bad = (point: unknown) =>
+      gradient({ ...spec, points: [point as never] });
+    expect(() => bad(null)).toThrow(VisError);
+    expect(() => bad(null)).toThrow("mesh point 0 must be an object");
+    expect(() => bad("x")).toThrow("mesh point 0 must be an object");
+    expect(() => bad({ color: "#fff" })).toThrow(VisError);
+    expect(() => bad({ color: "#fff" })).toThrow("mesh point 0 needs `at`");
+    expect(() => bad({ at: [0.5], color: "#fff" })).toThrow("needs `at`");
+    expect(() => bad({ at: [0.5, 0.5] })).toThrow(VisError);
+    expect(() => bad({ at: [0.5, 0.5] })).toThrow(
+      "mesh point 0 needs a `color`",
+    );
+    expect(() =>
+      gradient({ ...spec, points: [spec.points[0], null as never] }),
+    ).toThrow("mesh point 1 must be an object");
   });
 
   it("matches its golden", () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { VisError } from "../../src/core/errors.js";
 import { gradient, gradientSvg } from "../../src/gradient/index.js";
+import { cssLayers } from "../helpers/css.js";
 import { expectGolden } from "../helpers/golden.js";
 import { pixelAt, rasterize } from "../helpers/render.js";
 
@@ -24,36 +25,41 @@ interface CssBlob {
   stops: Stop[];
 }
 
-/** Read the CSS this kind emits: blobs top first (in px of `size`), then the base colour. */
+/**
+ * Read the CSS this kind emits (via `cssLayers`, which rejects what a browser would):
+ * blobs top first, in px of `size`, then the final bare base colour.
+ */
 function parseCss(
   css: string,
   size: { width: number; height: number },
 ): { blobs: CssBlob[]; base: [number, number, number] } {
-  const blobs = [
-    ...css.matchAll(
-      /radial-gradient\(ellipse ([\d.]+)% ([\d.]+)% at ([\d.]+)% ([\d.]+)%, (.*?)\)(?=,|;)(?!,\s\d)/g,
-    ),
-  ].map((m) => ({
-    rx: (Number(m[1]) / 100) * size.width,
-    ry: (Number(m[2]) / 100) * size.height,
-    x: (Number(m[3]) / 100) * size.width,
-    y: (Number(m[4]) / 100) * size.height,
-    stops: [
-      ...(m[5] ?? "").matchAll(
-        /rgba\((\d+), (\d+), (\d+), ([\d.]+)\) ([\d.]+)%/g,
-      ),
-    ].map((s) => ({
-      rgb: [Number(s[1]), Number(s[2]), Number(s[3])] as [
-        number,
-        number,
-        number,
-      ],
-      a: Number(s[4]),
-      f: Number(s[5]) / 100,
-    })),
-  }));
-  const hex = /, #([0-9a-f]{6});$/.exec(css)?.[1] ?? "";
-  const n = parseInt(hex, 16);
+  const layers = cssLayers(css);
+  const blobs = layers.slice(0, -1).map((layer) => {
+    const m =
+      /^radial-gradient\(ellipse ([\d.]+)% ([\d.]+)% at ([\d.]+)% ([\d.]+)%, (.*)\)$/.exec(
+        layer,
+      );
+    return {
+      rx: (Number(m?.[1]) / 100) * size.width,
+      ry: (Number(m?.[2]) / 100) * size.height,
+      x: (Number(m?.[3]) / 100) * size.width,
+      y: (Number(m?.[4]) / 100) * size.height,
+      stops: [
+        ...(m?.[5] ?? "").matchAll(
+          /rgba\((\d+), (\d+), (\d+), ([\d.]+)\) ([\d.]+)%/g,
+        ),
+      ].map((s) => ({
+        rgb: [Number(s[1]), Number(s[2]), Number(s[3])] as [
+          number,
+          number,
+          number,
+        ],
+        a: Number(s[4]),
+        f: Number(s[5]) / 100,
+      })),
+    };
+  });
+  const n = parseInt((layers.at(-1) ?? "").slice(1), 16);
   return { blobs, base: [(n >> 16) & 255, (n >> 8) & 255, n & 255] };
 }
 

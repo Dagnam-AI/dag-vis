@@ -1,3 +1,4 @@
+import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
 import { cssStops, normalizeStops, repeatSpan, svgStops } from "./stops.js";
@@ -5,6 +6,10 @@ import type { Ctx, KindOutput, LinearSpec } from "./types.js";
 
 export function renderLinear(spec: LinearSpec, ctx: Ctx): KindOutput {
   const angle = spec.angle ?? 180;
+  if (!Number.isFinite(angle))
+    throw new VisError(
+      `linear angle must be a finite number, got ${String(angle)}`,
+    );
   const stops = normalizeStops(spec.stops, spec.reverse);
   const { width, height } = ctx.size;
   const rad = (angle * Math.PI) / 180;

@@ -39,6 +39,30 @@ describe("banded gradient", () => {
     ).toThrow(VisError);
   });
 
+  it("caps bands, naming the value", () => {
+    const stops = ["#000", "#fff"];
+    expect(
+      gradient({ kind: "banded", stops, bands: 256 }).css.match(/%/g),
+    ).toHaveLength(512);
+    expect(() => gradient({ kind: "banded", stops, bands: 257 })).toThrow(
+      VisError,
+    );
+    expect(() => gradient({ kind: "banded", stops, bands: 200000 })).toThrow(
+      "200000",
+    );
+  });
+
+  it("rejects a non-finite angle, naming `angle`", () => {
+    for (const angle of [Number.NaN, Infinity]) {
+      expect(() =>
+        gradient({ kind: "banded", stops: ["#000", "#fff"], bands: 3, angle }),
+      ).toThrow(VisError);
+      expect(() =>
+        gradient({ kind: "banded", stops: ["#000", "#fff"], bands: 3, angle }),
+      ).toThrow("banded angle");
+    }
+  });
+
   it("rasterises to the CSS bands, flat colour per band (resvg vs CSS maths)", () => {
     // CSS: the gradient line at `angle` runs through the centre and is
     // |w sin a| + |h cos a| long; a pixel's t is its projection on it.

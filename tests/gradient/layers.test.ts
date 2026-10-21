@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { VisError } from "../../src/core/errors.js";
 import { gradient, gradientSvg } from "../../src/gradient/index.js";
 import type { GradientSpec } from "../../src/gradient/index.js";
+import { cssLayers } from "../helpers/css.js";
 import { expectGolden } from "../helpers/golden.js";
 import { pixelAt, rasterize } from "../helpers/render.js";
 
@@ -82,11 +83,68 @@ describe("layers gradient", () => {
       ],
       size: { width: 10, height: 10 },
     });
-    const order = ["#555555 0%", "#444444 0%", "#333333,", "#111111 0%"].map(
-      (needle) => g.css.indexOf(needle),
-    );
+    const order = [
+      "#555555 0%",
+      "#444444 0%",
+      "linear-gradient(#333333, #333333)",
+      "#111111 0%",
+    ].map((needle) => g.css.indexOf(needle));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it("emits a bare colour only as the final CSS layer (a browser drops the whole declaration otherwise)", () => {
+    const size = { width: 10, height: 10 };
+    const mesh = {
+      kind: "mesh",
+      base: "#102030",
+      points: [{ at: [0.5, 0.5], color: "#ffffff" }],
+    } as const;
+    const aurora = {
+      kind: "aurora",
+      palette: ["#10abba"],
+      base: "#203040",
+      blobs: 2,
+    } as const;
+    const linear = { kind: "linear", stops: ["#000000", "#ffffff"] } as const;
+    const stacks = [
+      [linear, mesh], // mesh above: its base is mid-stack
+      [linear, aurora],
+      [mesh, linear], // mesh at the bottom: its base is still last
+      [aurora, mesh, linear],
+      [linear, { kind: "layers", layers: [linear, mesh] } as const], // nested
+    ] as const;
+    for (const layers of stacks) {
+      for (const blend of ["normal", "multiply"] as const) {
+        const g = gradient({ kind: "layers", layers, blend, size });
+        const parts = cssLayers(g.css); // throws on a bare colour before the last layer
+        const blends = /background-blend-mode: (.*);$/.exec(g.css)?.[1];
+        if (blends !== undefined)
+          expect(blends.split(", ")).toHaveLength(parts.length);
+      }
+    }
+    // the rewrite keeps the colour, and the final bare colour stays bare
+    const g = gradient({ kind: "layers", layers: [mesh, linear], size });
+    expect(cssLayers(g.css).at(-1)).toBe("#102030");
+    const over = gradient({ kind: "layers", layers: [linear, mesh], size });
+    expect(cssLayers(over.css)).toContain("linear-gradient(#102030, #102030)");
+  });
+
+  it("keeps a translucent base as a valid mid-stack layer too", () => {
+    const g = gradient({
+      kind: "layers",
+      layers: [
+        { kind: "linear", stops: ["#000", "#fff"] },
+        {
+          kind: "mesh",
+          base: "rgba(16, 32, 48, 0.5)",
+          points: [{ at: [0.5, 0.5], color: "#fff" }],
+        },
+      ],
+    });
+    expect(cssLayers(g.css)).toContain(
+      "linear-gradient(rgba(16, 32, 48, 0.5), rgba(16, 32, 48, 0.5))",
+    );
   });
 
   it("draws a composite layer over the one below it, as CSS stacks it", () => {
@@ -103,6 +161,7 @@ describe("layers gradient", () => {
       ],
       size: { width: 20, height: 20 },
     };
+    expect(() => cssLayers(gradient(ok).css)).not.toThrow();
     const raster = rasterize(gradientSvg(ok));
     expect(pixelAt(raster, 0, 0)).toEqual([0x10, 0x20, 0x30, 255]);
     // 0.707px from the centre of a 10px-radius circle: alpha 1 - 0.707/10

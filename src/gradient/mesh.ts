@@ -6,6 +6,23 @@ import { assertUnit } from "./radial.js";
 import { assertList, cssStops, svgStops } from "./stops.js";
 import type { Ctx, KindOutput, MeshSpec } from "./types.js";
 
+/** JS callers can pass anything: name the bad point instead of failing on a property read. */
+function assertPoint(p: unknown, i: number): void {
+  if (typeof p !== "object" || p === null)
+    throw new VisError(
+      `mesh point ${i} must be an object, got ${JSON.stringify(p)}`,
+    );
+  const { at, color } = p as { at?: unknown; color?: unknown };
+  if (!Array.isArray(at) || at.length !== 2)
+    throw new VisError(
+      `mesh point ${i} needs \`at\` as [x, y], got ${JSON.stringify(at)}`,
+    );
+  if (typeof color !== "string")
+    throw new VisError(
+      `mesh point ${i} needs a \`color\` string, got ${JSON.stringify(color)}`,
+    );
+}
+
 /**
  * Stacked soft radials over a base colour. Each point is the same thing in both
  * outputs: colour at `at`, fading linearly to transparent at `radius`; later points
@@ -21,6 +38,7 @@ export function renderMesh(spec: MeshSpec, ctx: Ctx): KindOutput {
   const rects: string[] = [];
   const css: string[] = [];
   spec.points.forEach((p, i) => {
+    assertPoint(p, i);
     assertUnit("mesh point `at`", p.at);
     const radius = p.radius ?? 0.5;
     if (!Number.isFinite(radius) || radius <= 0)

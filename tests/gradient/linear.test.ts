@@ -143,6 +143,17 @@ describe("linear gradient", () => {
     ).toThrow(VisError);
   });
 
+  it("rejects a non-finite angle, naming `angle`", () => {
+    for (const angle of [Number.NaN, Infinity, -Infinity]) {
+      expect(() =>
+        gradient({ kind: "linear", stops: ["#000", "#fff"], angle }),
+      ).toThrow(VisError);
+      expect(() =>
+        gradient({ kind: "linear", stops: ["#000", "#fff"], angle }),
+      ).toThrow("linear angle");
+    }
+  });
+
   it("is deterministic and matches its golden as a standalone document", () => {
     const spec = {
       kind: "linear",

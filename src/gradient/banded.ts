@@ -4,11 +4,19 @@ import { renderLinear } from "./linear.js";
 import { normalizeStops, sampleStops } from "./stops.js";
 import type { BandedSpec, Ctx, KindOutput, Stop } from "./types.js";
 
+/** Each band is two stops of CSS and SVG; this keeps the output to tens of KB. */
+const MAX_BANDS = 256;
+
 /** Posterised linear gradient: `bands` flat steps with hard edges. */
 export function renderBanded(spec: BandedSpec, ctx: Ctx): KindOutput {
-  if (!Number.isInteger(spec.bands) || spec.bands < 2)
+  if (!Number.isInteger(spec.bands) || spec.bands < 2 || spec.bands > MAX_BANDS)
     throw new VisError(
-      `banded needs an integer bands >= 2, got ${String(spec.bands)}`,
+      `banded needs an integer bands in 2..${MAX_BANDS}, got ${String(spec.bands)}`,
+    );
+  const angle = spec.angle ?? 180;
+  if (!Number.isFinite(angle))
+    throw new VisError(
+      `banded angle must be a finite number, got ${String(angle)}`,
     );
   const stops = normalizeStops(spec.stops);
   const hard: Stop[] = [];
@@ -19,8 +27,5 @@ export function renderBanded(spec: BandedSpec, ctx: Ctx): KindOutput {
       { color, at: (i + 1) / spec.bands },
     );
   }
-  return renderLinear(
-    { kind: "linear", angle: spec.angle ?? 180, stops: hard },
-    ctx,
-  );
+  return renderLinear({ kind: "linear", angle, stops: hard }, ctx);
 }
