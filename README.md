@@ -52,7 +52,7 @@ ribbon({ width: 1600, height: 900, lines: 120, mesh: true }); // the wave-mesh r
   - A stop is a colour string or `{ color, at?, opacity? }`.
 - **Patterns**: `pattern(spec)` returns `{ svg, defs, fill, cssBackground, tile }`. Kinds: `dots`, `grid`, `lines`, `stripes`, `dagMesh`, `contours`, `noise`.
 - **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry).
-- **Text and core helpers**: `measureText`, `wrapText`, `FONT_FAMILY`, `createRng`, `fmt`, colour helpers (`parseColor`, `toHex`, `toCss`, `mix`, `ramp`, `withAlpha`, `toVec3`), the SVG builder (`el`, `svgDoc`, `text`, `escapeAttr`), `focalTransform`, `VisError`.
+- **Text and core helpers**: `measureText`, `wrapText`, `FONT_FAMILY`, `createRng`, `fmt`, colour helpers (`parseColor`, `toHex`, `toCss`, `mix`, `ramp`, `withAlpha`, `toVec3`), `fitAspect`, `focalScale`, `focalTransform`, `VisError`. The SVG builder, the validators and the stop pipeline are internal and not exported.
 
 ### Node API
 

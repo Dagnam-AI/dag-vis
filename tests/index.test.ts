@@ -16,30 +16,27 @@ describe("@dagnam/vis root barrel", () => {
 
   // API surface: every runtime export of the package root, sorted. Adding or
   // removing a public name must show up here. To change it deliberately, edit
-  // this list in the same commit as the export and say why (validators in
-  // core/validate.ts, cleanText and the other scene internals are NOT public).
+  // this list in the same commit as the export and say why. Not public, on
+  // purpose (names can be added after 0.1.0 but never removed): the SVG
+  // builder (el, text, svgDoc, escapeAttr), the validators (assertSize,
+  // assertBlend, core/validate.ts), the stop pipeline (normalizeStops,
+  // sampleStops, cssStops, svgStops), the Inter metrics (INTER, advance),
+  // cleanText and the other scene internals.
   it("exports exactly the documented runtime names", () => {
     expect(Object.keys(vis).sort()).toEqual([
       "BLENDS",
       "BRAND",
       "FONT_FAMILY",
       "FREEFORM_PALETTES",
-      "INTER",
       "LOGO",
       "MAX_LINES",
       "MAX_TEXT_LENGTH",
       "PALETTES",
       "VisError",
-      "advance",
       "animatedGradientCss",
-      "assertBlend",
-      "assertSize",
       "brandBackground",
       "brandBackgroundLayers",
       "createRng",
-      "cssStops",
-      "el",
-      "escapeAttr",
       "fitAspect",
       "fmt",
       "focalScale",
@@ -51,7 +48,6 @@ describe("@dagnam/vis root barrel", () => {
       "logoSvg",
       "measureText",
       "mix",
-      "normalizeStops",
       "ogCard",
       "palette",
       "parseColor",
@@ -59,10 +55,6 @@ describe("@dagnam/vis root barrel", () => {
       "ramp",
       "ribbon",
       "ribbonCurves",
-      "sampleStops",
-      "svgDoc",
-      "svgStops",
-      "text",
       "toCss",
       "toHex",
       "toVec3",
