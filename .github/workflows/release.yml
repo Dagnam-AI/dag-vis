@@ -3,8 +3,17 @@ name: Release @dagnam/vis
 # One tag publishes the package. The prefix mirrors dag-lib (`dagnam/v*`) and
 # dag-contracts (`contracts/v*`), so a glance at a tag says what it released.
 # Only a `vis/v*` tag triggers this: a push to a branch never publishes.
-# Recommended repository setting: a tag ruleset limiting who can create
-# `vis/v*` tags, since creating one starts a release.
+#
+# REQUIRED owner setup before the first tag (the checks in this file are NOT
+# a security boundary: they live in the tagged commit's own copy of this
+# workflow, so anyone who can push a branch and a tag can edit or delete them):
+#   1. A GitHub tag ruleset restricting who can create `vis/v*` tags, since
+#      creating one starts a release.
+#   2. A protected GitHub Environment (for example `npm`) limited to `vis/v*`
+#      tags, with required reviewers if wanted, and bound in npm's trusted
+#      publisher configuration for @dagnam/vis. Then add `environment: npm` to
+#      the publish job (not added here: the environment must exist first, and
+#      the NPM_TOKEN fallback below must keep working until it does).
 on:
   push:
     tags:
@@ -54,9 +63,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # A release is a tag on `main`. Anyone able to push a tag could otherwise
-      # publish any commit, including one from an unmerged branch. Refresh
-      # origin/main first (the checkout may be older than the tag push).
+      # A release is a tag on `main`. This stops an ACCIDENTAL tag on an
+      # unmerged branch; it does not stop a malicious one, because the check is
+      # part of the tagged commit's own workflow file (see the owner setup at
+      # the top). Refresh origin/main first (the checkout may be older than the
+      # tag push).
       - name: Assert the tagged commit is on main
         run: |
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main

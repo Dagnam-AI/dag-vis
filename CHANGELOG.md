@@ -25,4 +25,4 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 - First release. `./react` is declared in `exports` but its entry point is not built yet; it lands with the animation engine.
 - `@resvg/resvg-js` is an optional peer dependency, needed only for PNG output (`@dagnam/vis/node`, the CLI).
 - Contributing needs Node 22.12 or newer; the package itself supports Node 20 or newer.
-- Releases support plain `vis/vX.Y.Z` tags only: a prerelease suffix would publish to the `latest` dist-tag, so the release workflow rejects any other tag format. It also requires the tagged commit to be on `main`.
+- Releases support plain `vis/vX.Y.Z` tags only: a prerelease suffix would publish to the `latest` dist-tag, so the release workflow rejects any other tag format. It also refuses (as a guard against accidental tags, not an attacker) a tagged commit that is not on `main`; a tag ruleset and a protected npm Environment are required owner setup, see the README.

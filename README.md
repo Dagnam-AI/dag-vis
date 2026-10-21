@@ -54,6 +54,15 @@ ribbon({ width: 1600, height: 900, lines: 120, mesh: true }); // the wave-mesh r
 - **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry).
 - **Text and core helpers**: `measureText`, `wrapText`, `FONT_FAMILY`, `createRng`, `fmt`, colour helpers (`parseColor`, `toHex`, `toCss`, `mix`, `ramp`, `withAlpha`, `toVec3`), `VisError`. `measureText` and `wrapText` take at most 10,000 characters of text and `wrapText` returns at most 100 lines. The SVG builder, the validators, the stop pipeline, the geometry helpers and the font metrics are internal and not exported.
 
+### API conventions
+
+A few differences between the generators are deliberate; check them before wiring two together:
+
+- `gradient().css` is a declaration list (`background: …;`), while `pattern().cssBackground` is a bare value (`url("data:…")`) you put after `background:` yourself.
+- `gradient()` returns `{ css, svg, defs, fill }` but `brandBackgroundLayers()` returns `{ defs, body }`.
+- `logoSvg({ size })` is a number (a square), while gradient and pattern specs take `size: { width, height }`.
+- The scenes name their colour lists differently: `brandBackground({ palette })`, `ribbon({ colors })`.
+
 ### Node API
 
 ```ts
@@ -70,7 +79,7 @@ await favicons({ outDir: "public" }); // favicon.ico/svg, apple-touch-icon, PWA 
 
 ### Security
 
-`renderPng` is meant for SVG that this package's own generators produced from validated options; it is defence in depth, not a sandbox. It refuses file and network reads through `href` (`<image>` and `<feImage>` may only use `data:` URIs with a comma, every other element only `#id` references, so a `gradient` overlay image must be a `data:` URI to render to PNG), DTD entity declarations, SVG text over 5,000,000 characters, more than 5000 `<clipPath>`/`<mask>` elements (a `layers` spec of more than 19 fluted-256 layers reaches this), and any output over 16384 px a side or 64 megapixels. The href check is a text scan, not an XML parser: it can only err towards rejecting, but it can in principle disagree with resvg's parser. It cannot make `@resvg/resvg-js` safe against hostile input: deeply chained clipPaths or masks (a chain of 20,000 crashed resvg-js 2.6.2 on macOS arm64; 10,000 rendered), a huge `patternTransform` scale, raster bombs inside `data:` PNGs and expensive filters can crash the process, exhaust memory or run for a very long time, and rendering is synchronous native work that blocks the event loop. Never pass SVG you did not generate to `renderPng` in a server. If you must render untrusted SVG, do it in a separate process, container or worker with memory and CPU-time limits, and expect it to fail. The default fonts are the bundled Inter only; pass `fontFiles` for CJK or emoji.
+`renderPng` is meant for SVG that this package's own generators produced from validated options; it is defence in depth, not a sandbox. It refuses file and network reads through `href` (`<image>` and `<feImage>` may only use `data:` URIs with a comma, every other element only `#id` references, so a `gradient` overlay image must be a `data:` URI to render to PNG), DTD entity declarations, SVG text over 5,000,000 characters, more than 5000 `<clipPath>`/`<mask>` elements (a `layers` spec of more than 19 fluted-256 layers reaches this), and any output over 16384 px a side or 64 megapixels. The href check is a text scan, not an XML parser: it can only err towards rejecting, but it can in principle disagree with resvg's parser. It cannot make `@resvg/resvg-js` safe against hostile input: deeply chained clipPaths or masks (a chain of 20,000 crashed resvg-js 2.6.2 on macOS arm64; 10,000 rendered), a huge `patternTransform` scale, raster bombs inside `data:` PNGs and expensive filters can crash the process, exhaust memory or run for a very long time, and rendering is synchronous native work that blocks the event loop. A gradient spec from an untrusted source is untrusted input to `renderPng` too, including `dag-vis gradient --spec <someone else's file> --out x.png`: `overlay.image` accepts any `data:` URI (a raster bomb), and a spec may have up to 64 nodes, which can stack heavy layers; render such specs in a separate process with limits. Never pass SVG you did not generate to `renderPng` in a server. If you must render untrusted SVG, do it in a separate process, container or worker with memory and CPU-time limits, and expect it to fail. The default fonts are the bundled Inter only; pass `fontFiles` for CJK or emoji.
 
 ## CLI
 
@@ -88,7 +97,25 @@ An `--out` ending in `.png` is rasterised with the bundled Inter (it needs `@res
 
 ## Determinism
 
-SVG and CSS output is a pure function of the options: every random choice comes from a seeded generator (`createRng`, mulberry32, `seed` defaults to `1`), every number the generators compute is written with at most three decimals (the embedded logo path keeps the brand asset's original precision), and `<defs>` ids are namespaced with `idPrefix` (default `"vis" + seed`) so two results can share a page. Same options and seed give byte-identical strings. `tests/goldens/` pins the SVG output; regenerate it only with `UPDATE_GOLDENS=1 npx vitest run` after an intended change, and say so in the PR.
+SVG and CSS output is a pure function of the options: every random choice comes from a seeded generator (`createRng`, mulberry32, `seed` defaults to `1`), every number the generators compute is written with at most three decimals (the embedded logo path keeps the brand asset's original precision), and `<defs>` ids are namespaced with `idPrefix` (default `"vis" + seed`). Results made with the same seed therefore share ids: two default `gradientSvg` results both define `vis1-g`, and `brandBackground` and `ogCard` both define `vis1-band`, so inlined on one page the second picks up the first's `<defs>`. Give every inline result on one page its own `seed` or `idPrefix`:
+
+```ts
+import { gradientSvg } from "@dagnam/vis";
+
+const hero = gradientSvg({
+  kind: "linear",
+  stops: ["#ef4444", "#10abba"],
+  idPrefix: "hero",
+});
+const card = gradientSvg({
+  kind: "radial",
+  stops: ["#ef4444", "#10abba"],
+  idPrefix: "card",
+});
+// hero uses id="hero-g", card uses id="card-g": safe to inline together
+```
+
+Same options and seed give byte-identical strings. `tests/goldens/` pins the SVG output; regenerate it only with `UPDATE_GOLDENS=1 npx vitest run` after an intended change, and say so in the PR.
 
 PNGs add the rasteriser: with the bundled fonts and no system fonts they are repeatable for a given `@resvg/resvg-js` build (checked here with `2.6.2` on one platform; pin the version if you need byte-identical PNGs across upgrades).
 
@@ -112,7 +139,8 @@ Options and gradient specs are validated at the boundary, including ones that co
 - Inter has no CJK or emoji glyphs. They draw as missing-glyph boxes in PNGs unless you pass `fontFiles` that cover them and name that family in the SVG; `measureText` only estimates their width.
 - Text is wrapped with Inter's advance widths and no kerning, so a line can render a few percent narrower or wider than measured.
 - Gradient overlay images must be `data:` URIs to rasterise (see Security); a URL or path works in the CSS and SVG output only.
-- `pattern(...).cssBackground` repeats seamlessly only for `dots`, `grid`, `stripes` and `lines` at multiples of 90 degrees, with the default sample size; see the `PatternResult` doc comment in `src/pattern/types.ts` for the rest.
+- `pattern(...).cssBackground` repeats seamlessly only for `dots`, `grid`, `stripes` and `lines` at multiples of 90 degrees, with the default sample size; see the `PatternResult` doc comment in [`src/pattern/types.ts`](https://github.com/Dagnam-AI/dag-vis/blob/main/src/pattern/types.ts) for the rest.
+- Colours are parsed as hex, `rgb()`/`rgba()` and `oklch()` only: no CSS Color 4 `none`, no `turn`/`rad`/`grad` hue units, no `calc()`, no named colours.
 - `brandBackground` reconstructs the production og-default look from parameters; it is not a pixel match, and its defaults may be retuned after design review.
 
 ## Layering
@@ -134,9 +162,9 @@ UPDATE_GOLDENS=1 npx vitest run   # regenerate tests/goldens after an intended c
 
 ## Release
 
-Tag `vis/vX.Y.Z` on `main` (the version in `package.json` must match). `release.yml` rejects a tag that is not exactly `vis/v<digits>.<digits>.<digits>` or whose commit is not on `main`, re-runs CI (including the packed-tarball smoke test) on the tagged commit, holds the tarball it then publishes to the same file-list assertions, and publishes that exact tarball to npm with provenance through npm trusted publishing (OIDC), or an `NPM_TOKEN` repository secret as a documented fallback. A branch push never publishes. See [CHANGELOG.md](CHANGELOG.md).
+Tag `vis/vX.Y.Z` on `main` (the version in `package.json` must match). `release.yml` rejects a tag that is not exactly `vis/v<digits>.<digits>.<digits>` or whose commit is not on `main` (a guard against accidental tags only; see below), re-runs CI (including the packed-tarball smoke test) on the tagged commit, holds the tarball it then publishes to the same file-list assertions, and publishes that exact tarball to npm with provenance through npm trusted publishing (OIDC), or an `NPM_TOKEN` repository secret as a documented fallback. A branch push never publishes. See [CHANGELOG.md](CHANGELOG.md).
 
-Only plain `vis/vX.Y.Z` tags are supported: a prerelease suffix (`vis/v0.2.0-rc.1`) would publish to the `latest` dist-tag, so the workflow refuses it. Anyone who can push a `vis/v*` tag can start a release, so restrict who can create those tags with a GitHub tag ruleset (recommended).
+Only plain `vis/vX.Y.Z` tags are supported: a prerelease suffix (`vis/v0.2.0-rc.1`) would publish to the `latest` dist-tag, so the workflow refuses it. The on-`main` check is part of the tagged commit's own workflow file, so anyone who can push a branch and a tag can edit it away: it stops accidents, not an attacker. **Required owner setup before the first tag:** (a) a GitHub tag ruleset restricting who can create `vis/v*` tags, and (b) a protected GitHub Environment (for example `npm`) limited to `vis/v*` tags and bound in npm's trusted-publisher configuration for `@dagnam/vis`; then add `environment: npm` to the publish job in `release.yml` (it is not there yet, because the environment must exist first and the `NPM_TOKEN` fallback has to keep working until it does).
 
 ## Licence
 
