@@ -7,10 +7,7 @@
 export {
   VisError,
   createRng,
-  fitAspect,
   fmt,
-  focalScale,
-  focalTransform,
   mix,
   parseColor,
   ramp,
@@ -74,8 +71,6 @@ export type {
 // scene
 export {
   FONT_FAMILY,
-  MAX_LINES,
-  MAX_TEXT_LENGTH,
   brandBackground,
   brandBackgroundLayers,
   measureText,

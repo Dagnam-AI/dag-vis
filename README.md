@@ -47,12 +47,12 @@ ribbon({ width: 1600, height: 900, lines: 120, mesh: true }); // the wave-mesh r
 ### Root API (browser-safe)
 
 - **Brand**: `BRAND` (colours), `PALETTES` / `palette(name)` (`red`, `mono`, `stripes`, `ocean`, `ember`), `LOGO` (path data), `logoSvg`.
-- **Gradients**: `gradient(spec)` returns `{ css, svg, defs, fill }`: `css` is a declaration list (`background: …;`, plus `background-blend-mode` when needed), `svg` is body markup to pair with `defs`. `gradientSvg(spec, size?)` is a standalone `<svg>` document. `animatedGradientCss(spec, { kind: "rotate" | "shift" | "hue" })` returns `{ css, keyframes }` with a `prefers-reduced-motion` override; `freeformPalette(name)` (`dawn`, `aurora`, `ember`, `brand`) and `freeformRandom({ count, palette, seed })` build freeform points.
+- **Gradients**: `gradient(spec)` returns `{ css, svg, defs, fill }`: `css` is a declaration list (`background: …;`, plus `background-blend-mode` when needed), `svg` is body markup to pair with `defs`. `gradientSvg(spec, size?)` is a standalone `<svg>` document. `animatedGradientCss(spec, { kind: "rotate" | "shift" | "hue" })` returns `{ css, keyframes }` with a `prefers-reduced-motion` override; `freeformPalette(name)` (`dawn`, `aurora`, `ember`, `brand`) and `freeformRandom({ count, palette, seed })` build freeform points; `BLENDS` lists the blend modes.
   - Kinds: `linear`, `radial`, `conic` (all three take `repeat`, `reverse` and per-stop `opacity`), `mesh`, `aurora`, `banded`, `layers` (with `blend`), `freeform` and `fluted` (reeded glass over any other spec). Any spec also takes `size`, `grain`, `overlay`, `seed` and `idPrefix`.
   - A stop is a colour string or `{ color, at?, opacity? }`.
 - **Patterns**: `pattern(spec)` returns `{ svg, defs, fill, cssBackground, tile }`. Kinds: `dots`, `grid`, `lines`, `stripes`, `dagMesh`, `contours`, `noise`.
 - **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry).
-- **Text and core helpers**: `measureText`, `wrapText`, `FONT_FAMILY`, `createRng`, `fmt`, colour helpers (`parseColor`, `toHex`, `toCss`, `mix`, `ramp`, `withAlpha`, `toVec3`), `fitAspect`, `focalScale`, `focalTransform`, `VisError`. The SVG builder, the validators and the stop pipeline are internal and not exported.
+- **Text and core helpers**: `measureText`, `wrapText`, `FONT_FAMILY`, `createRng`, `fmt`, colour helpers (`parseColor`, `toHex`, `toCss`, `mix`, `ramp`, `withAlpha`, `toVec3`), `VisError`. `measureText` and `wrapText` take at most 10,000 characters of text and `wrapText` returns at most 100 lines. The SVG builder, the validators, the stop pipeline, the geometry helpers and the font metrics are internal and not exported.
 
 ### Node API
 

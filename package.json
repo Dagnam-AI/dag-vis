@@ -26,7 +26,8 @@
     "./node": {
       "types": "./dist/node/index.d.ts",
       "default": "./dist/node/index.js"
-    }
+    },
+    "./package.json": "./package.json"
   },
   "bin": {
     "dag-vis": "./bin/dag-vis.mjs"
@@ -62,7 +63,7 @@
     "vitest": "5.0.5"
   },
   "peerDependencies": {
-    "@resvg/resvg-js": ">=2.6.2"
+    "@resvg/resvg-js": "^2.6.2"
   },
   "peerDependenciesMeta": {
     "@resvg/resvg-js": {

@@ -20,7 +20,9 @@ describe("@dagnam/vis root barrel", () => {
   // purpose (names can be added after 0.1.0 but never removed): the SVG
   // builder (el, text, svgDoc, escapeAttr), the validators (assertSize,
   // assertBlend, core/validate.ts), the stop pipeline (normalizeStops,
-  // sampleStops, cssStops, svgStops), the Inter metrics (INTER, advance),
+  // sampleStops, cssStops, svgStops), the geometry helpers (fitAspect,
+  // focalScale, focalTransform), the text caps (MAX_LINES, MAX_TEXT_LENGTH),
+  // the Inter metrics (INTER, advance),
   // cleanText and the other scene internals.
   it("exports exactly the documented runtime names", () => {
     expect(Object.keys(vis).sort()).toEqual([
@@ -29,18 +31,13 @@ describe("@dagnam/vis root barrel", () => {
       "FONT_FAMILY",
       "FREEFORM_PALETTES",
       "LOGO",
-      "MAX_LINES",
-      "MAX_TEXT_LENGTH",
       "PALETTES",
       "VisError",
       "animatedGradientCss",
       "brandBackground",
       "brandBackgroundLayers",
       "createRng",
-      "fitAspect",
       "fmt",
-      "focalScale",
-      "focalTransform",
       "freeformPalette",
       "freeformRandom",
       "gradient",
