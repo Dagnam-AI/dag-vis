@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { VisError } from "../../src/core/errors.js";
 import { ogCard } from "../../src/scene/og-card.js";
-import { MAX_TEXT_LENGTH } from "../../src/scene/text.js";
+import { MAX_TEXT_LENGTH, measureText } from "../../src/scene/text.js";
 import { expectGolden } from "../helpers/golden.js";
 import { rasterize } from "../helpers/render.js";
 
@@ -16,6 +16,8 @@ interface Line {
   x: number;
   y: number;
   size: number;
+  weight: "regular" | "bold";
+  letterSpacing: number;
   text: string;
 }
 
@@ -23,17 +25,29 @@ interface Line {
 function textLines(svg: string): Line[] {
   const out: Line[] = [];
   for (const m of svg.matchAll(
-    /<text x="([-\d.]+)" y="([-\d.]+)"[^>]*?font-size="([\d.]+)"[^>]*>(.*?)<\/text>/g,
+    /<text x="([-\d.]+)" y="([-\d.]+)"([^>]*?font-size="([\d.]+)"[^>]*)>(.*?)<\/text>/g,
   )) {
+    const attrs = m[3] ?? "";
     out.push({
       x: Number(m[1]),
       y: Number(m[2]),
-      size: Number(m[3]),
-      text: (m[4] ?? "").replace(/<[^>]+>/g, ""),
+      size: Number(m[4]),
+      weight: attrs.includes('font-weight="700"') ? "bold" : "regular",
+      letterSpacing: Number(/letter-spacing="([\d.]+)"/.exec(attrs)?.[1] ?? 0),
+      text: (m[5] ?? "").replace(/<[^>]+>/g, ""),
     });
   }
   return out;
 }
+
+/** Right edge in px by measureText. */
+const rightEdge = (l: Line): number =>
+  l.x +
+  measureText(l.text, {
+    size: l.size,
+    weight: l.weight,
+    letterSpacing: l.letterSpacing,
+  });
 
 describe("ogCard", () => {
   it("renders 1200×630 by default with the logo, wordmark, wrapped title, rule, subtitle and footer", () => {
@@ -63,7 +77,9 @@ describe("ogCard", () => {
     });
     expect(svg).toContain(">BLOG<");
     expect(svg).toContain('fill="#ffffff"'); // light base
-    expect(svg).toContain('fill="#0a0a0a"'); // dark text
+    // The brief's `fill="#0a0a0a">` cannot hold: fill is not the last attribute
+    // of a <text>. Assert it on the text elements instead.
+    expect(svg).toMatch(/<text [^>]*fill="#0a0a0a"/); // dark text
     expect(svg).not.toContain('fill="#fafafa"');
     expect(svg).toContain('A &lt;b&gt; &amp; "c"');
   });
@@ -90,7 +106,8 @@ describe("ogCard", () => {
     const byText = (end: string): Line[] =>
       lines.filter((l) => l.text.endsWith(end));
     expect(byText("…")).toHaveLength(3); // eyebrow, last subtitle line, footer
-    for (const l of lines) expect(l.x).toBeLessThan(1200);
+    for (const l of lines)
+      expect(rightEdge(l), l.text).toBeLessThanOrEqual(1200);
   });
 
   it("passes background overrides through; the card owns size, seed and id", () => {
@@ -139,6 +156,7 @@ describe("ogCard", () => {
           expect(l.y).toBeGreaterThan(0);
           expect(l.y).toBeLessThan(height);
           expect(l.x).toBeGreaterThanOrEqual(0);
+          expect(rightEdge(l), l.text).toBeLessThanOrEqual(width);
         }
         // Consecutive lines never overlap: each baseline clears the previous one by its cap height.
         rest.slice(1).forEach((l, i) => {

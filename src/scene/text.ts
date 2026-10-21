@@ -22,9 +22,22 @@ const MIN_SIZE = 0.01;
 const ELLIPSIS = "…";
 const SEGMENTER = new Intl.Segmenter("en", { granularity: "grapheme" });
 
-/** Draw nothing (soft hyphen, zero-width space, word joiner, BOM) or are not XML characters (lone surrogates, U+FFFE/F). */
+/**
+ * Draw nothing (soft hyphen, zero-width space, word joiner, BOM), are not XML
+ * characters (lone surrogates, U+FFFE/F), or reorder the text around them
+ * (bidi embeddings/overrides U+202A-202E and isolates U+2066-2069: an
+ * unterminated RLO would reverse the rest of the line).
+ */
 const INVISIBLE =
-  /[\u{ad}\u{200b}\u{2060}\u{feff}\u{fffe}\u{ffff}\ud800-\udfff]/gu;
+  /[\u{ad}\u{200b}\u{2060}\u{feff}\u{fffe}\u{ffff}\u{202a}-\u{202e}\u{2066}-\u{2069}\ud800-\udfff]/gu;
+/** Take no space: variation selectors, ZWJ/ZWNJ, fillers, ... (Unicode Default_Ignorable_Code_Point). */
+const ZERO_WIDTH = /\p{Default_Ignorable_Code_Point}/u;
+/**
+ * Em-wide in any CJK font and in emoji fonts: ideographs, kana, hangul,
+ * pictographs, CJK symbols and full-width forms.
+ */
+const WIDE =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Extended_Pictographic}\u{3000}-\u{303f}\u{ff00}-\u{ffef}]/u;
 /** Whitespace, control characters and line/paragraph separators all collapse to one space. */
 const BREAKING = /[\s\p{Cc}\p{Zl}\p{Zp}]+/gu;
 
@@ -86,10 +99,24 @@ function span(text: string, weight: Weight): Span {
   let u = 0;
   let n = 0;
   for (const ch of text) {
-    u += advance(orDefault(ch.codePointAt(0), 0), weight);
+    u += glyphUnits(ch, weight);
     n += 1;
   }
   return { text, u, n };
+}
+
+/**
+ * Advance of one code point in Inter font units: zero for default-ignorable
+ * characters, the table's value for anything it holds, a full em for CJK and
+ * emoji, and for every other code point Inter lacks the width of its .notdef
+ * box (the table's U+00AD entry), or the mean advance if that is larger.
+ */
+function glyphUnits(ch: string, weight: Weight): number {
+  if (ZERO_WIDTH.test(ch)) return 0;
+  const known = INTER[weight].get(orDefault(ch.codePointAt(0), 0));
+  if (known !== undefined) return known;
+  if (WIDE.test(ch)) return INTER.unitsPerEm;
+  return Math.max(INTER.fallback[weight], advance(0xad, weight));
 }
 
 const join = (a: Span, b: Span): Span => ({
@@ -105,9 +132,14 @@ const px = (s: Run, f: Font): number =>
  * Width in px of `text` as drawn: Inter advances (so it is machine
  * independent), plus `letterSpacing` after every code point. Whitespace is
  * collapsed and trimmed and invisible characters (U+00AD, zero-width space,
- * ...) count nothing (see `cleanText`). Code points outside the bundled table
- * (CJK, emoji, ...) count the table's mean advance. No kerning: rendered text
- * is usually a little narrower.
+ * ...) count nothing (see `cleanText`), as do variation selectors and joiners.
+ * CJK, kana, hangul and emoji count a full em (their width in a CJK or emoji
+ * font); any other code point Inter lacks counts its .notdef box, which is
+ * what a renderer with only Inter draws. Inter has no CJK or emoji glyphs, so
+ * supplying a font that does is the integrator's concern (the PNG pipeline's
+ * fallback is decided with the node entry point). No kerning: it narrows most
+ * text, but a pair like "WW" can render about 3% wider than the plain advance
+ * sum, and nothing here adds a safety margin, so leave slack beside the box.
  */
 export function measureText(
   text: string,

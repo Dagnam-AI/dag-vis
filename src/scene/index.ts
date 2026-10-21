@@ -6,7 +6,6 @@ export {
   FONT_FAMILY,
   MAX_LINES,
   MAX_TEXT_LENGTH,
-  cleanText,
   measureText,
   wrapText,
 } from "./text.js";

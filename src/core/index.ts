@@ -21,16 +21,3 @@ export {
   withAlpha,
 } from "./color.js";
 export type { Rgba } from "./color.js";
-export {
-  MAX_DIMENSION,
-  bounded,
-  describeValue,
-  finite,
-  integerIn,
-  orDefault,
-  parseId,
-  parsePaint,
-  parseSeed,
-  within,
-} from "./validate.js";
-export type { Paint } from "./validate.js";

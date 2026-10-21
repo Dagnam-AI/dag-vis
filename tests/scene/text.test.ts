@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { advance } from "../../src/brand/inter-metrics.js";
+import { INTER, advance } from "../../src/brand/inter-metrics.js";
 import { VisError } from "../../src/core/errors.js";
 import {
   FONT_FAMILY,
@@ -31,6 +31,13 @@ describe("cleanText", () => {
       cleanText("t", "a\u{ad}b\u{200b}c\u{2060}d\u{feff}e\u{fffe}f\u{ffff}g"),
     ).toBe("abcdefg");
     expect(cleanText("t", "a\ud800b\udfffc")).toBe("abc");
+    // Bidi embeddings/overrides/isolates would reorder the rest of the line.
+    expect(
+      cleanText(
+        "t",
+        "a\u{202a}b\u{202b}c\u{202c}d\u{202d}e\u{202e}f\u{2066}g\u{2067}h\u{2068}i\u{2069}j",
+      ),
+    ).toBe("abcdefghij");
     // Paired surrogates (an emoji) and joiners survive.
     expect(cleanText("t", "😀\u{200d}👍")).toBe("😀\u{200d}👍");
   });
@@ -82,14 +89,53 @@ describe("measureText", () => {
     );
   });
 
-  it("uses one mean-advance fallback per code point outside the table, without throwing", () => {
+  it("counts CJK, kana, hangul, emoji and full-width forms as a full em, once per code point", () => {
+    for (const ch of [
+      "中",
+      "あ",
+      "カ",
+      "한",
+      "😀",
+      "👍",
+      "！",
+      "。",
+      "\u{1f600}",
+    ]) {
+      expect(measureText(ch, { size: 2048 }), ch).toBe(2048);
+      expect(measureText(ch, { size: 2048, weight: "bold" }), ch).toBe(2048);
+    }
     expect(measureText("中", { size: 2048 })).toBeGreaterThan(1000);
-    expect(measureText("中", { size: 2048 })).toBe(advance(0x4e2d, "regular"));
-    // An emoji is one code point, not two surrogate halves.
-    expect(measureText("😀", { size: 2048 })).toBe(advance(0x1f600, "regular"));
-    expect(measureText("😀中", { size: 2048 })).toBe(
-      2 * advance(0x4e2d, "regular"),
-    );
+    // A surrogate pair is one code point, not two halves.
+    expect(measureText("😀", { size: 100 })).toBe(100);
+    expect(measureText("😀中", { size: 2048 })).toBe(4096);
+    // Characters Inter does have keep the table's width, pictographic or not.
+    expect(measureText("©", { size: 2048 })).toBe(advance(0xa9, "regular"));
+  });
+
+  it("counts any other code point Inter lacks as its .notdef box, never narrower than the mean", () => {
+    for (const weight of ["regular", "bold"] as const) {
+      const notdef = Math.max(INTER.fallback[weight], advance(0xad, weight));
+      for (const ch of ["ʃ", "ع", "ก", "Ж"]) {
+        expect(INTER[weight].has(ch.codePointAt(0) ?? 0), ch).toBe(false);
+        expect(measureText(ch, { size: 2048, weight }), ch).toBe(notdef);
+      }
+      expect(notdef).toBeGreaterThanOrEqual(INTER.fallback[weight]);
+    }
+    expect(measureText("ʃ", { size: 2048 })).toBe(1344);
+  });
+
+  it("gives variation selectors, joiners and other default-ignorable characters zero width", () => {
+    const heart = measureText("\u{2764}", { size: 100 });
+    expect(measureText("\u{2764}\u{fe0f}", { size: 100 })).toBe(heart);
+    expect(measureText("\u{1f468}\u{200d}\u{1f469}", { size: 100 })).toBe(200);
+    for (const cp of [
+      0xfe0f, 0xfe0e, 0x200c, 0x200d, 0x034f, 0xe0020, 0x3164,
+    ]) {
+      expect(
+        measureText(`a${String.fromCodePoint(cp)}b`, { size: 40 }),
+        cp.toString(16),
+      ).toBe(measureText("ab", { size: 40 }));
+    }
   });
 
   it("adds letterSpacing after every code point", () => {
@@ -97,7 +143,7 @@ describe("measureText", () => {
       1413 + advance(66, "regular") + 6,
     );
     expect(measureText("A😀", { size: 2048, letterSpacing: 1 })).toBe(
-      1413 + advance(0x1f600, "regular") + 2,
+      1413 + 2048 + 2,
     );
   });
 
@@ -260,11 +306,24 @@ describe("wrapText", () => {
     expect(accented.join("")).toBe("é".repeat(20));
   });
 
-  it("wraps CJK and emoji text without throwing", () => {
-    const cjk = wrap("日本語のタイトルがとても長い場合の折り返し", 100);
-    expect(cjk.length).toBeGreaterThan(1);
-    expect(cjk.join("")).toBe("日本語のタイトルがとても長い場合の折り返し");
-    expect(wrap("🎉🎉🎉 party 🎉🎉🎉", 80).length).toBeGreaterThan(0);
+  it("wraps CJK and emoji text without throwing, never wider than maxWidth by measureText", () => {
+    const cjkText = "日本語のタイトルがとても長い場合の折り返しを確認する";
+    const emojiText = "🎉🎉🎉 party 🎉🎉🎉 👍👍👍👍👍👍👍👍";
+    for (const [text, maxWidth] of [
+      [cjkText, 100],
+      [cjkText, 307],
+      [emojiText, 80],
+      [emojiText, 200],
+    ] as const) {
+      const lines = wrap(text, maxWidth);
+      expect(lines.length).toBeGreaterThan(1);
+      expect(lines.join("").replace(/ /g, "")).toBe(text.replace(/ /g, ""));
+      for (const l of lines) {
+        expect(measureText(l, { size: 20 }), l).toBeLessThanOrEqual(maxWidth);
+      }
+    }
+    // 20 px ideographs are 20 px wide: 15 fit in 307 px, not 16.
+    expect(wrap(cjkText, 307)[0]).toHaveLength(15);
   });
 
   it("collapses whitespace, treats newlines as spaces and drops soft hyphens", () => {
