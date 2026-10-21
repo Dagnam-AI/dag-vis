@@ -10,6 +10,7 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 ### Changed
 
 - CLI: `--out` of `og`, `background`, `gradient` and `pattern` must now end in `.svg` or `.png` (any case). Any other value (`card.jpg`, `.webp`, no extension, a trailing dot, `-`) exits 1 with one line naming the value and the accepted extensions, and writes nothing; before, it wrote SVG text into the file whatever its name. `favicons --out` (a directory) is unaffected.
+- Release workflow: the `publish` job now runs in the protected `npm` GitHub Environment (limited to `vis/v*` tags). No other workflow logic changed.
 - `favicons`: the icon `src` values in `site.webmanifest` are now relative to the manifest (`icon-192.png`, `icon-512.png`, `icon-maskable-512.png`) instead of root-absolute (`/icon-192.png`), so they resolve at the site root and under any sub-path. Nothing else in the manifest changed.
 
 ## [0.1.0] - 2026-10-21
@@ -30,4 +31,4 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 - First release. `./react` is declared in `exports` but its entry point is not built yet; it lands with the animation engine.
 - `@resvg/resvg-js` is an optional peer dependency, needed only for PNG output (`@dagnam/vis/node`, the CLI).
 - Contributing needs Node 22.12 or newer; the package itself supports Node 20 or newer.
-- Releases support plain `vis/vX.Y.Z` tags only: a prerelease suffix would publish to the `latest` dist-tag, so the release workflow rejects any other tag format. It also refuses (as a guard against accidental tags, not an attacker) a tagged commit that is not on `main`; a tag ruleset and a protected npm Environment are required owner setup, see the README.
+- Releases support plain `vis/vX.Y.Z` tags only: a prerelease suffix would publish to the `latest` dist-tag, so the release workflow rejects any other tag format. It also refuses (as a guard against accidental tags, not an attacker) a tagged commit that is not on `main`; a tag ruleset on `vis/v*` and the protected `npm` Environment (the publish job runs in it) provide the actual protection, and npm's trusted publisher must name workflow `release.yml` and environment `npm`, see the README.

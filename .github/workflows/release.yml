@@ -4,16 +4,17 @@ name: Release @dagnam/vis
 # dag-contracts (`contracts/v*`), so a glance at a tag says what it released.
 # Only a `vis/v*` tag triggers this: a push to a branch never publishes.
 #
-# REQUIRED owner setup before the first tag (the checks in this file are NOT
-# a security boundary: they live in the tagged commit's own copy of this
-# workflow, so anyone who can push a branch and a tag can edit or delete them):
-#   1. A GitHub tag ruleset restricting who can create `vis/v*` tags, since
-#      creating one starts a release.
-#   2. A protected GitHub Environment (for example `npm`) limited to `vis/v*`
-#      tags, with required reviewers if wanted, and bound in npm's trusted
-#      publisher configuration for @dagnam/vis. Then add `environment: npm` to
-#      the publish job (not added here: the environment must exist first, and
-#      the NPM_TOKEN fallback below must keep working until it does).
+# Protection that is in place (the checks in this file are NOT a security
+# boundary: they live in the tagged commit's own copy of this workflow, so
+# anyone who can push a branch and a tag can edit or delete them):
+#   - A GitHub tag ruleset on `vis/v*` restricts who can create such a tag,
+#     since creating one starts a release.
+#   - The `publish` job runs in the `npm` GitHub Environment, which exists and
+#     is limited to `vis/v*` tags, so a run from any other ref cannot use it
+#     (or any secret stored on it).
+# Owner setup still required on npmjs.com: the trusted publisher configuration
+# for @dagnam/vis must name workflow `release.yml` and environment `npm`; and
+# the first publish of a new package name needs the NPM_TOKEN fallback below.
 on:
   push:
     tags:
@@ -41,6 +42,9 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # The protected Environment (limited to `vis/v*` tags); npm's trusted
+    # publisher configuration names it.
+    environment: npm
     permissions:
       contents: read
       # Mints the OIDC token npm trusted publishing exchanges for a short-lived
@@ -65,9 +69,9 @@ jobs:
 
       # A release is a tag on `main`. This stops an ACCIDENTAL tag on an
       # unmerged branch; it does not stop a malicious one, because the check is
-      # part of the tagged commit's own workflow file (see the owner setup at
-      # the top). Refresh origin/main first (the checkout may be older than the
-      # tag push).
+      # part of the tagged commit's own workflow file (see the protection notes
+      # at the top). Refresh origin/main first (the checkout may be older than
+      # the tag push).
       - name: Assert the tagged commit is on main
         run: |
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
@@ -115,15 +119,18 @@ jobs:
       #
       # Credential: trusted publishing (OIDC). Configure the trusted publisher
       # once on npmjs.com for @dagnam/vis (repository Dagnam-AI/dag-vis,
-      # workflow release.yml); no secret is stored anywhere and the OIDC token
-      # lives for this job only. The FIRST publish of a new package name cannot
-      # use it (the package must exist before a trusted publisher can be
-      # attached on npmjs.com), which is what the fallback is for.
+      # workflow release.yml, environment npm); no secret is stored anywhere
+      # and the OIDC token lives for this job only. The FIRST publish of a new
+      # package name cannot use it (the package must exist before a trusted
+      # publisher can be attached on npmjs.com), which is what the fallback is
+      # for.
       #
-      # Fallback: an `NPM_TOKEN` repository secret holding a short-lived
-      # granular access token with publish rights on the @dagnam scope and
-      # 2FA bypass (classic and automation tokens are not the right thing any
-      # more). Use it only until trusted publishing is configured, then delete
+      # Fallback: an `NPM_TOKEN` secret holding a short-lived granular access
+      # token with publish rights on the @dagnam scope and 2FA bypass (classic
+      # and automation tokens are not the right thing any more). It may be
+      # stored as an Environment secret on `npm` (readable only by runs the
+      # Environment admits, i.e. `vis/v*` tags) instead of a repository
+      # secret; the `secrets.NPM_TOKEN` reference below reads either. Use it only until trusted publishing is configured, then delete
       # the secret: a long-lived token is the hole OIDC exists to close. When
       # the secret is set it is the credential; when it is absent the step is
       # the OIDC path.
