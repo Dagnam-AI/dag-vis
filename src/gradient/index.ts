@@ -20,7 +20,7 @@ import { renderLinear } from "./linear.js";
 import { renderMesh } from "./mesh.js";
 import { overlayLayer, parseOverlay } from "./overlay.js";
 import { renderRadial } from "./radial.js";
-import { assertSpec } from "./spec.js";
+import { assertSpec, assertSpecBudget } from "./spec.js";
 import type { Ctx, GradientResult, GradientSpec, KindOutput } from "./types.js";
 
 export * from "./types.js";
@@ -77,6 +77,7 @@ function renderKind(spec: GradientSpec, ctx: Ctx): KindOutput {
 /** CSS + SVG for one spec. `svg` is body markup; pair it with `defs`. */
 export function gradient(spec: GradientSpec): GradientResult {
   assertSpec(spec);
+  assertSpecBudget(spec);
   const size = parseSize("size", orDefault<unknown>(spec.size, DEFAULT_SIZE));
   const grain =
     spec.grain === undefined ? undefined : bounded("grain", spec.grain, 0, 1);

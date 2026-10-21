@@ -53,7 +53,11 @@ function extendsPastBox(spec: { kind?: unknown; shape?: unknown }): boolean {
   );
 }
 
-/** Source paints needed to render `spec` once; tolerant of malformed input (validated later). */
+/**
+ * Source paints needed to render `spec` once; tolerant of malformed input (validated later).
+ * Bounded: `gradient()` has already walked the tree (`assertSpecBudget`), so it is at most
+ * 16 levels deep, with no cycle and at most 64 visits.
+ */
 function renderCost(spec: unknown): number {
   if (typeof spec !== "object" || spec === null) return 1;
   const s = spec as {

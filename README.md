@@ -100,6 +100,7 @@ Typed options and gradient specs from untyped JavaScript or JSON are validated a
 - `ogCard` text is at most 10,000 characters per field; titles wrap to 3 lines (2 with a subtitle), then end in `…`.
 - `ribbon` has at most 400 `lines`, 1000 `samples` and 100,000 drawn points.
 - `fluted` render cost is capped (`reeds` x the source's weight must not exceed 256).
+- A gradient spec nests at most 16 levels (`layers` entries and fluted `source` count as a level each) and has at most 64 nodes in all (a sub-spec used twice counts twice); a cyclic spec is rejected.
 - `renderPng` accepts at most 5,000,000 characters of SVG and 16 `fontFiles`.
 
 ## Known ceilings

@@ -348,14 +348,28 @@ describe("brandBackground validation", () => {
     expect(spacing.cause).toBeInstanceOf(VisError);
   });
 
-  it("lets a non-VisError from a nested generator through unchanged", () => {
-    // A self-referencing layers spec overflows the stack inside gradient().
+  it("reports a self-referencing nested base as a VisError naming the parameter", () => {
     const loop: { kind: "layers"; layers: unknown[] } = {
       kind: "layers",
       layers: [],
     };
     loop.layers.push(loop);
     expect(() => brandBackground({ ...ok, base: loop as never })).toThrow(
+      VisError,
+    );
+    expect(() => brandBackground({ ...ok, base: loop as never })).toThrow(
+      /^base: a gradient spec contains a cycle/,
+    );
+  });
+
+  it("lets a non-VisError from a nested generator through unchanged", () => {
+    // A spec whose `kind` getter throws: not a VisError, so `within` must not wrap it.
+    const hostile = {
+      get kind(): string {
+        throw new RangeError("boom");
+      },
+    };
+    expect(() => brandBackground({ ...ok, base: hostile as never })).toThrow(
       RangeError,
     );
   });
