@@ -3,43 +3,34 @@ import { assertSize } from "../core/geometry.js";
 import type { Size } from "../core/geometry.js";
 import { createRng } from "../core/rng.js";
 import { el, svgDoc } from "../core/svg.js";
+import { renderAurora } from "./aurora.js";
+import { renderBanded } from "./banded.js";
 import { renderConic } from "./conic.js";
 import { grainLayer } from "./grain.js";
+import { renderLayers } from "./layers.js";
 import { renderLinear } from "./linear.js";
+import { renderMesh } from "./mesh.js";
 import { overlayLayer } from "./overlay.js";
 import { renderRadial } from "./radial.js";
-import type {
-  Blend,
-  Ctx,
-  GradientResult,
-  GradientSpec,
-  KindOutput,
-} from "./types.js";
+import { assertBlend } from "./stops.js";
+import type { Ctx, GradientResult, GradientSpec, KindOutput } from "./types.js";
 
 export * from "./types.js";
-export { normalizeStops, sampleStops, cssStops, svgStops } from "./stops.js";
+export {
+  BLENDS,
+  assertBlend,
+  normalizeStops,
+  sampleStops,
+  cssStops,
+  svgStops,
+} from "./stops.js";
 export type { NormalizedStop } from "./stops.js";
 
-export const BLENDS: readonly Blend[] = [
-  "normal",
-  "multiply",
-  "screen",
-  "overlay",
-  "soft-light",
-];
 const DEFAULT_SIZE: Size = { width: 1200, height: 630 };
 
 function assertUnitRange(name: string, v: number | undefined): void {
   if (v !== undefined && (!Number.isFinite(v) || v < 0 || v > 1))
     throw new VisError(`${name} must be in 0..1, got ${String(v)}`);
-}
-
-export function assertBlend(blend: string | undefined): void {
-  if (blend !== undefined && !BLENDS.includes(blend as Blend)) {
-    throw new VisError(
-      `unknown blend mode: ${blend} (known: ${BLENDS.join(", ")})`,
-    );
-  }
 }
 
 function renderKind(spec: GradientSpec, ctx: Ctx): KindOutput {
@@ -50,6 +41,14 @@ function renderKind(spec: GradientSpec, ctx: Ctx): KindOutput {
       return renderRadial(spec, ctx);
     case "conic":
       return renderConic(spec, ctx);
+    case "mesh":
+      return renderMesh(spec, ctx);
+    case "aurora":
+      return renderAurora(spec, ctx);
+    case "banded":
+      return renderBanded(spec, ctx);
+    case "layers":
+      return renderLayers(spec, ctx);
     default:
       throw new VisError(
         `unknown gradient kind: ${String((spec as { kind?: unknown }).kind)}`,
@@ -82,7 +81,9 @@ export function gradient(spec: GradientSpec): GradientResult {
     fill: out.fill,
   });
   const images = [...out.cssImages];
-  const blends = out.cssBlend === undefined ? [] : [out.cssBlend];
+  // A kind returns the whole comma list: one mode per CSS image, top first.
+  let blends =
+    out.cssBlend === undefined ? undefined : out.cssBlend.split(", ");
   if (spec.grain !== undefined && spec.grain > 0) {
     const g = grainLayer(id, spec.grain, size, seed);
     defs += g.defs;
@@ -91,14 +92,12 @@ export function gradient(spec: GradientSpec): GradientResult {
   if (spec.overlay) {
     const o = overlayLayer(spec.overlay, size);
     svg += o.svg;
+    blends = [o.cssBlend, ...(blends ?? images.map(() => "normal"))];
     images.unshift(o.cssImage);
-    blends.unshift(o.cssBlend);
   }
   let css = `background: ${images.join(", ")};`;
-  if (blends.length > 0) {
-    const all = images.map((_, i) => blends[i] ?? "normal");
-    css += ` background-blend-mode: ${all.join(", ")};`;
-  }
+  if (blends !== undefined)
+    css += ` background-blend-mode: ${blends.join(", ")};`;
   return { css, svg, defs, fill: out.fill };
 }
 

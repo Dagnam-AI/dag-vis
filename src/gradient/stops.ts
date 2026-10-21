@@ -3,7 +3,28 @@ import type { Rgba } from "../core/color.js";
 import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
-import type { Stop } from "./types.js";
+import type { Blend, Stop } from "./types.js";
+
+export const BLENDS: readonly Blend[] = [
+  "normal",
+  "multiply",
+  "screen",
+  "overlay",
+  "soft-light",
+];
+
+/** A non-empty array: JS callers can pass anything, and a type guard here would widen to any[]. */
+export function assertList(message: string, list: unknown): void {
+  if (!Array.isArray(list) || list.length === 0) throw new VisError(message);
+}
+
+export function assertBlend(blend: string | undefined): void {
+  if (blend !== undefined && !BLENDS.includes(blend as Blend)) {
+    throw new VisError(
+      `unknown blend mode: ${blend} (known: ${BLENDS.join(", ")})`,
+    );
+  }
+}
 
 export interface NormalizedStop {
   color: Rgba;

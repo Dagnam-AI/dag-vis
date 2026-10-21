@@ -1,47 +1,31 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import type * as Linear from "../../src/gradient/linear.js";
 import { VisError } from "../../src/core/errors.js";
 import { BLENDS, gradient, gradientSvg } from "../../src/gradient/index.js";
 
-// Lets one test drive the nested-render hook (`ctx.render`) that the layered
-// and fluted kinds use, without a kind that needs it existing yet.
-vi.mock("../../src/gradient/linear.js", async (importOriginal) => {
-  const original = await importOriginal<typeof Linear>();
-  return {
-    ...original,
-    renderLinear: (
-      spec: Parameters<typeof original.renderLinear>[0],
-      ctx: Parameters<typeof original.renderLinear>[1],
-    ) => {
-      if (spec.idPrefix === "nested")
-        return ctx.render({ kind: "radial", stops: spec.stops }, "sub");
-      const out = original.renderLinear(spec, ctx);
-      return spec.idPrefix === "blended" ? { ...out, cssBlend: "screen" } : out;
-    },
-  };
-});
-
 describe("gradient()", () => {
-  it("emits background-blend-mode when a kind supplies a blend", () => {
+  it("emits background-blend-mode when a kind supplies a blend (via layers)", () => {
     const g = gradient({
-      kind: "linear",
-      stops: ["#000", "#fff"],
-      idPrefix: "blended",
+      kind: "layers",
+      blend: "screen",
+      layers: [
+        { kind: "linear", stops: ["#000", "#fff"] },
+        { kind: "radial", stops: ["#f00", "#00f"] },
+      ],
+      size: { width: 10, height: 10 },
     });
     expect(g.css).toBe(
-      "background: linear-gradient(180deg, #000000 0%, #ffffff 100%); background-blend-mode: screen;",
+      "background: radial-gradient(circle 5px at 50% 50%, #ff0000 0%, #0000ff 100%), linear-gradient(180deg, #000000 0%, #ffffff 100%); background-blend-mode: screen, normal;",
     );
   });
 
-  it("hands kinds a ctx.render that renders nested specs under a sub-id", () => {
+  it("hands kinds a ctx.render that renders nested specs under a sub-id (via layers)", () => {
     const g = gradient({
-      kind: "linear",
-      stops: ["#000", "#fff"],
-      idPrefix: "nested",
+      kind: "layers",
+      layers: [{ kind: "radial", stops: ["#000", "#fff"] }],
     });
-    expect(g.fill).toBe("url(#sub-g)");
-    expect(g.defs).toContain('<radialGradient id="sub-g"');
+    expect(g.fill).toBe("url(#vis1-g)");
+    expect(g.defs).toContain('<radialGradient id="vis1-l0-g"');
   });
 
   it("namespaces ids from the seed by default and from idPrefix when given", () => {
