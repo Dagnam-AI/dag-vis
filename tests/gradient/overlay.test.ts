@@ -13,7 +13,7 @@ describe("overlay", () => {
     expect(o.svg).toBe(
       '<image href="https://x/y.png" width="10" height="20" preserveAspectRatio="xMidYMid slice" opacity="0.5" style="mix-blend-mode:multiply"/>',
     );
-    expect(o.cssImage).toBe('url("https://x/y.png")');
+    expect(o.cssImage).toBe('url("https://x/y.png") center / cover no-repeat');
     expect(o.cssBlend).toBe("multiply");
   });
 
@@ -26,14 +26,18 @@ describe("overlay", () => {
     });
     expect(g.svg).toMatch(/^<rect .*\/><image href="a.png"/);
     expect(g.css).toBe(
-      'background: url("a.png"), linear-gradient(180deg, #000000 0%, #ffffff 100%); background-blend-mode: normal, normal;',
+      'background: url("a.png") center / cover no-repeat, linear-gradient(180deg, #000000 0%, #ffffff 100%); background-blend-mode: normal, normal;',
     );
   });
 
   it("escapes quotes in the image url and validates opacity/blend", () => {
     expect(
       overlayLayer({ image: 'a"b.png' }, { width: 1, height: 1 }).cssImage,
-    ).toBe('url("a%22b.png")');
+    ).toContain('url("a%22b.png")');
+    expect(
+      overlayLayer({ image: "a\\b\nc\rd.png" }, { width: 1, height: 1 })
+        .cssImage,
+    ).toContain('url("a%5Cb%0Ac%0Dd.png")');
     expect(() =>
       gradient({
         kind: "linear",

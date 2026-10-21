@@ -85,6 +85,12 @@ describe("gradient()", () => {
     ).toThrow(VisError);
   });
 
+  it.each([Number.NaN, Infinity, 1.5, 1e21])("rejects seed %s", (seed) => {
+    expect(() =>
+      gradient({ kind: "linear", stops: ["#000", "#fff"], seed }),
+    ).toThrow(VisError);
+  });
+
   it("lists the blend modes", () => {
     expect(BLENDS).toEqual([
       "normal",

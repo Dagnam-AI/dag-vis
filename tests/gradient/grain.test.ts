@@ -29,6 +29,22 @@ describe("grain", () => {
     ).not.toContain("grain");
   });
 
+  it("seeds the noise so different seeds give different SVG", () => {
+    const spec = {
+      kind: "linear",
+      stops: ["#000", "#fff"],
+      grain: 0.5,
+    } as const;
+    const a = gradient({ ...spec, seed: 1 });
+    const b = gradient({ ...spec, seed: 2 });
+    expect(a.defs).toContain('seed="1"');
+    expect(b.defs).toContain('seed="2"');
+    expect(a.defs).not.toBe(b.defs);
+    expect(grainLayer("x", 0.4, { width: 1, height: 1 }).defs).toContain(
+      'seed="1"',
+    );
+  });
+
   it("rejects grain outside 0..1", () => {
     expect(() =>
       gradient({ kind: "linear", stops: ["#000", "#fff"], grain: 1.5 }),

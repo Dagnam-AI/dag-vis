@@ -5,6 +5,8 @@ import { VisError } from "../../src/core/errors.js";
 import {
   cssStops,
   normalizeStops,
+  phaseShift,
+  repeatSpan,
   sampleStops,
   svgStops,
 } from "../../src/gradient/stops.js";
@@ -68,6 +70,68 @@ describe("normalizeStops", () => {
   });
 });
 
+describe("normalizeStops input validation", () => {
+  it.each([[undefined], [null], ["#000"], [42], [{}]])(
+    "rejects non-array stops %j",
+    (stops) => {
+      expect(() => normalizeStops(stops as never)).toThrow(VisError);
+    },
+  );
+
+  it.each([[[null, "#000"]], [[{ at: 0 }, "#000"]], [[7, "#000"]]])(
+    "rejects a malformed stop entry in %j",
+    (stops) => {
+      expect(() => normalizeStops(stops as never)).toThrow(VisError);
+    },
+  );
+});
+
+describe("repeatSpan / phaseShift", () => {
+  it("rescales the stop span to 0..1", () => {
+    const r = repeatSpan(
+      normalizeStops([
+        { color: "#000", at: 0.2 },
+        { color: "#fff", at: 0.4 },
+      ]),
+    );
+    expect([r.from, r.to]).toEqual([0.2, 0.4]);
+    expect(r.unit.map((s) => s.at)).toEqual([0, 1]);
+  });
+
+  it("rejects a zero-width span", () => {
+    expect(() =>
+      repeatSpan(
+        normalizeStops([
+          { color: "#000", at: 1 },
+          { color: "#fff", at: 1 },
+        ]),
+      ),
+    ).toThrow(VisError);
+  });
+
+  it("leaves the period alone at offset 0 and rotates it otherwise", () => {
+    const unit = repeatSpan(normalizeStops(["#000000", "#ffffff"])).unit;
+    expect(phaseShift(unit, 0).map((s) => s.at)).toEqual([0, 1]);
+    expect(phaseShift(unit, 1).map((s) => s.at)).toEqual([0, 1]);
+    const shifted = phaseShift(unit, 0.25);
+    // starts 25% in (grey 0.25), ramps to white at 0.75, hard edge back to black, ends grey
+    expect(shifted.map((s) => s.at)).toEqual([0, 0.75, 0.75, 1]);
+    expect(shifted.map((s) => toHex(s.color))).toEqual([
+      "#404040",
+      "#ffffff",
+      "#000000",
+      "#404040",
+    ]);
+  });
+
+  it("negative offsets wrap into 0..1", () => {
+    const unit = repeatSpan(normalizeStops(["#000000", "#ffffff"])).unit;
+    expect(phaseShift(unit, -0.75).map((s) => s.at)).toEqual([
+      0, 0.75, 0.75, 1,
+    ]);
+  });
+});
+
 describe("sampleStops", () => {
   const s = normalizeStops([
     { color: "#000000", at: 0.25 },
@@ -104,6 +168,38 @@ describe("sampleStops", () => {
     const late = sampleStops(three, 0.75);
     expect(late.r).toBeGreaterThan(0.3);
     expect(late.r).toBeLessThan(0.7);
+  });
+
+  it("lets the later stop win at every duplicate position (middle and triple)", () => {
+    const mid = normalizeStops([
+      { color: "#000000", at: 0 },
+      { color: "#ff0000", at: 0.5 },
+      { color: "#00ff00", at: 0.5 },
+      { color: "#ffffff", at: 1 },
+    ]);
+    expect(toHex(sampleStops(mid, 0.5))).toBe("#00ff00");
+    const triple = normalizeStops([
+      { color: "#000000", at: 0 },
+      { color: "#ff0000", at: 0.5 },
+      { color: "#00ff00", at: 0.5 },
+      { color: "#0000ff", at: 0.5 },
+      { color: "#ffffff", at: 1 },
+    ]);
+    expect(toHex(sampleStops(triple, 0.5))).toBe("#0000ff");
+    expect(toHex(sampleStops(triple, 0.4999))).not.toBe("#0000ff");
+  });
+
+  it("interpolates in sRGB, not OKLab", () => {
+    const m = sampleStops(normalizeStops(["#f00", "#0f0"]), 0.5);
+    expect(toHex(m)).toBe("#808000");
+    const a = sampleStops(
+      normalizeStops([
+        { color: "#000", at: 0, opacity: 0 },
+        { color: "#000", at: 1, opacity: 1 },
+      ]),
+      0.25,
+    );
+    expect(a.a).toBeCloseTo(0.25, 9);
   });
 
   it("rejects an empty stop list", () => {

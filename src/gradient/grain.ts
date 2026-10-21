@@ -6,6 +6,7 @@ export function grainLayer(
   id: string,
   grain: number,
   size: Size,
+  seed = 1,
 ): { defs: string; svg: string } {
   const fid = `${id}-grain`;
   return {
@@ -16,6 +17,7 @@ export function grainLayer(
         type: "fractalNoise",
         baseFrequency: 0.8,
         numOctaves: 2,
+        seed,
         stitchTiles: "stitch",
       }),
       el("feColorMatrix", { type: "saturate", values: 0 }),

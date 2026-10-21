@@ -65,6 +65,8 @@ export function gradient(spec: GradientSpec): GradientResult {
   assertUnitRange("overlay.opacity", spec.overlay?.opacity);
   assertBlend(spec.overlay?.blend);
   const seed = spec.seed ?? 1;
+  if (!Number.isSafeInteger(seed))
+    throw new VisError(`seed must be a safe integer, got ${String(seed)}`);
   const id = spec.idPrefix ?? `vis${seed}`;
   const ctx: Ctx = {
     id,
@@ -82,7 +84,7 @@ export function gradient(spec: GradientSpec): GradientResult {
   const images = [...out.cssImages];
   const blends = out.cssBlend === undefined ? [] : [out.cssBlend];
   if (spec.grain !== undefined && spec.grain > 0) {
-    const g = grainLayer(id, spec.grain, size);
+    const g = grainLayer(id, spec.grain, size, seed);
     defs += g.defs;
     svg += g.svg;
   }
