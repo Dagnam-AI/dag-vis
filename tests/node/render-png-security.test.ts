@@ -171,12 +171,12 @@ describe("renderPng external resources", () => {
     expect(decode(await renderPng(withFace)).pixels).toEqual(
       decode(await renderPng(without)).pixels,
     );
-    // An SVG nested as a data: URI cannot load files either.
+    // An SVG nested as a data: URI is refused outright (see render-png-guard.test.ts).
     const nested = sized(10, 10, `<image href="${join(dir, "red.png")}"/>`);
     const outer = image(
       `data:image/svg+xml;base64,${Buffer.from(nested).toString("base64")}`,
     );
-    expect(pixel(decode(await renderPng(outer)), 5, 5)).toEqual([0, 0, 0, 0]);
+    await expect(renderPng(outer)).rejects.toThrow(/external reference/);
   });
 });
 

@@ -45,7 +45,8 @@ parent directories are created. favicons --out is a directory. Numbers are plain
 Options take "--name value" or "--name=value" (use the second form for a value
 that starts with "--"). A spec is a JSON object in a file of at most 1 MiB. To
 rasterise a gradient spec whose overlay has an image, give the image as a
-data: URI (a URL or path cannot be rendered to PNG; SVG output keeps it as is).
+raster data: URI (data:image/png, jpeg, gif or webp; a URL, a path or an SVG
+data: URI cannot be rendered to PNG; SVG output keeps it as is).
 Exit status 0 on success, 1 on any error (one line on stderr).
 `;
 

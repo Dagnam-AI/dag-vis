@@ -13,6 +13,7 @@ import {
   orDefault,
   parsePaint,
 } from "../core/validate.js";
+import { MAX_CLIP_MASKS, checkMarkup } from "./markup-guard.js";
 import { messageOf } from "./util.js";
 
 /** The bundled Inter faces (SIL OFL 1.1, see ./fonts/OFL.txt), resolved beside this module in src/ and dist/. */
@@ -25,16 +26,7 @@ export const FONT_FILES: readonly string[] = [
 export const MAX_SVG_LENGTH = 5_000_000;
 /** Most pixels (width x height) one PNG may have: 64 MP is about 256 MB of RGBA. */
 export const MAX_OUTPUT_PIXELS = 64_000_000;
-/**
- * Most `<clipPath>` plus `<mask>` elements. A coarse guard against the one
- * crash seen: a CHAIN of 20,000 clip-path-referencing clipPaths segfaulted
- * resvg 2.6.2 on one machine (10,000 rendered; other platforms not checked).
- * It counts elements, not depth. The generators emit clipPaths only for
- * `fluted`, one per reed (256 at most, siblings, nesting bounded by fluted's
- * own cost cap), and `layers` adds them up, so more than 19 fluted-256 layers
- * (5000 / 256) reaches this cap.
- */
-export const MAX_CLIP_MASKS = 5000;
+export { MAX_CLIP_MASKS };
 /** Most entries in `fontFiles`. */
 export const MAX_FONT_FILES = 16;
 
@@ -99,58 +91,6 @@ function isMissingResvg(error: unknown): boolean {
   );
 }
 
-// resvg draws files it is told about. For `<image>` and `<feImage>` an href
-// that is not a valid data URL (needs a comma) is a PATH relative to the
-// process's working directory, and neither element ever resolves `#id`, so
-// `#x.png`, `data:x.png` and a directory called `#` all read files. So the
-// rule is element-aware and deny-by-default, applied to the raw text:
-//   - <image>, <feImage> (any namespace prefix): href / xlink:href must be
-//     `data:` + anything but a comma + `,`. Nothing else.
-//   - every other element: href / xlink:href must be `#` + an NCName without
-//     `.`, `/` or `:`, so it can never read as a path.
-// Elements are found by a quote-aware scan of the start tags (not parsed XML)
-// and tags inside comments or CDATA are checked as if live, which only errs on
-// the rejecting side. DTD entities could expand into markup this scan never
-// sees, so they are refused outright (no generator emits one).
-const START_TAG = /<([^\s/>!?<]+)((?:[^<>"']|"[^"]*"|'[^']*')*)/g;
-const ATTRIBUTE = /([^\s=/>"']+)\s*=\s*("[^"]*"|'[^']*')/g;
-const HREF_NAME = /(?:^|:)href$/i;
-const DATA_URI = /^data:[^,]*,/;
-const FRAGMENT = /^#[A-Za-z_][A-Za-z0-9_-]*$/;
-const FILE_READERS = new Set(["image", "feimage"]);
-const CLIP_OR_MASK = new Set(["clippath", "mask"]);
-
-// `replace` with a callback is the one regex loop whose groups are typed as
-// strings, so no unreachable `undefined` branch; the callbacks only inspect.
-function checkMarkup(svg: string): void {
-  if (svg.includes("<!ENTITY"))
-    throw new VisError(
-      "svg must not contain DTD entity declarations (<!ENTITY ...>)",
-    );
-  let clipMasks = 0;
-  svg.replace(START_TAG, (tag: string, name: string, attrs: string) => {
-    const element = name.slice(name.lastIndexOf(":") + 1).toLowerCase();
-    if (CLIP_OR_MASK.has(element)) clipMasks++;
-    attrs.replace(ATTRIBUTE, (attr: string, key: string, quoted: string) => {
-      if (!HREF_NAME.test(key)) return attr;
-      const value = quoted.slice(1, -1);
-      const allowed = FILE_READERS.has(element)
-        ? DATA_URI.test(value)
-        : FRAGMENT.test(value);
-      if (!allowed)
-        throw new VisError(
-          `svg has an external reference (${describeValue(`<${name} ${key}=${quoted}`)}): <image> and <feImage> may only use data: URIs with a comma, every other element only #id references`,
-        );
-      return attr;
-    });
-    return tag;
-  });
-  if (clipMasks > MAX_CLIP_MASKS)
-    throw new VisError(
-      `svg must have at most ${MAX_CLIP_MASKS} <clipPath> and <mask> elements, got ${clipMasks}`,
-    );
-}
-
 function isFile(path: string): boolean {
   try {
     return statSync(path).isFile();
@@ -197,18 +137,25 @@ function parseFontFiles(v: unknown): string[] {
  * sandbox for arbitrary untrusted SVG:
  *
  * - It refuses things a reader of the PNG could be hurt by and the generators
- *   do not emit: file reads through `href` (see `checkMarkup`), DTD entity
+ *   do not emit: file reads through `href` (see `markup-guard.ts`), DTD entity
  *   declarations, SVG text over `MAX_SVG_LENGTH`, more than `MAX_CLIP_MASKS`
  *   `<clipPath>`/`<mask>` elements, and a canvas over 16384 px a side or
  *   `MAX_OUTPUT_PIXELS` (checked before rendering, because resvg aborts the
  *   process on a huge canvas).
  * - The generators DO emit `<clipPath>` (`fluted`, one per reed) and
  *   `<image href>` (`gradient({ overlay: { image } })`). An overlay image must
- *   therefore be a `data:` URI with a comma to render to PNG; a URL or path is
- *   rejected here (it is fine in the CSS output).
- * - The href check is a text scan of the start tags, not an XML parser. It can
- *   only err towards rejecting, but it can in principle disagree with resvg's
- *   parser: it is a layer of defence, not a proof.
+ *   therefore be a RASTER `data:` URI with a comma (`data:image/png`, `jpeg`,
+ *   `gif` or `webp`) to render to PNG; a URL, a path or a `data:` URI of any
+ *   other type (including `image/svg+xml`) is rejected here (it is fine in the
+ *   CSS output).
+ * - The href check is a single linear pass over the text, not an XML parser,
+ *   and it refuses markup it cannot classify. It is meant to err towards
+ *   rejecting, but it can in principle disagree with resvg's parser. An
+ *   independent differential fuzz of about 139,000 documents against bare
+ *   resvg found it accepting file reads (a quote opened in a comment hiding a
+ *   real tag, and an SVG nested in a `data:` URL), a `data:` URL that aborted
+ *   the process, and a quadratic scan; all were fixed and the fuzz re-run. That
+ *   is evidence, not proof: this is a layer of defence, not a sandbox.
  * - It cannot stop resvg from crashing or exhausting memory on other input
  *   inside those limits. Cases seen on one machine (resvg-js 2.6.2, macOS
  *   arm64; other platforms not checked): a chain of 20,000 clip-path-referencing

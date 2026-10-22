@@ -172,7 +172,7 @@ describe("renderPng href rules are element-aware and deny by default", () => {
     }
   });
 
-  it("renders data: URIs with a comma on image and feImage", async () => {
+  it("renders raster data: URIs on image and feImage", async () => {
     expect(pixel(decode(await renderPng(image(dataPng))), 5, 5)).toEqual([
       255, 0, 0, 255,
     ]);
@@ -186,7 +186,6 @@ describe("renderPng href rules are element-aware and deny by default", () => {
     expect(pixel(decode(await renderPng(feImage(dataPng))), 5, 5)).toEqual([
       255, 0, 0, 255,
     ]);
-    expect(dims(await renderPng(image("data:,")))).toEqual([10, 10]);
   });
 
   it("renders same-document references on use, pattern, gradients and filters", async () => {

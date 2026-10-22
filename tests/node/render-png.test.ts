@@ -96,11 +96,14 @@ describe("renderPng output", () => {
   });
 
   it("rejects malformed SVG with a VisError naming the parser error", async () => {
-    await expect(renderPng("<svg")).rejects.toThrow(VisError);
-    await expect(renderPng("<svg")).rejects.toThrow(
+    const mismatched = `<svg ${NS} width="8" height="8"><g></svg>`;
+    await expect(renderPng(mismatched)).rejects.toThrow(VisError);
+    await expect(renderPng(mismatched)).rejects.toThrow(
       /SVG could not be parsed: /,
     );
     await expect(renderPng("")).rejects.toThrow(VisError);
+    // Markup the href check cannot classify is refused before the parser sees it.
+    await expect(renderPng("<svg")).rejects.toThrow(/cannot classify/);
   });
 });
 
