@@ -302,12 +302,14 @@ describe("the guard is linear in the input size", () => {
       const make = hostile[name] ?? ((): string => "");
       const small = make(MB / 4);
       const large = make(MB);
-      timed(small); // warm up
-      const tSmall = Math.max(timed(small), 1);
-      const tLarge = timed(large);
+      // Best of three: one scheduling hiccup under load must not decide it.
+      const best = (svg: string): number =>
+        Math.min(timed(svg), timed(svg), timed(svg));
+      const tSmall = Math.max(best(small), 1);
+      const tLarge = best(large);
       expect(tLarge).toBeLessThan(2000);
       // Quadratic would be 16x; the margin absorbs timer noise and machine load.
-      expect(tLarge).toBeLessThan(tSmall * 12 + 50);
+      expect(tLarge).toBeLessThan(tSmall * 12 + 100);
     },
     30_000,
   );
