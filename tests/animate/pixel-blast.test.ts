@@ -157,6 +157,15 @@ describe("createPixelBlast", () => {
     );
   });
 
+  it("exports frozen defaults a consumer cannot mutate", () => {
+    expect(Object.isFrozen(PIXEL_BLAST_DEFAULTS)).toBe(true);
+    expect(() => {
+      // @ts-expect-error readonly: the fallback colour of every live effect
+      PIXEL_BLAST_DEFAULTS.color = "#000000";
+    }).toThrow(TypeError);
+    expect(PIXEL_BLAST_DEFAULTS.color).toBe("#B497CF");
+  });
+
   it("validates options and names the offending one", () => {
     expect(() =>
       createPixelBlast(canvas, { shape: "hexagon" as never }),

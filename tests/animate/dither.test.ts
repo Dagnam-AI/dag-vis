@@ -150,6 +150,15 @@ describe("createDither", () => {
     expect(firstFrame).toContain("uniform1f time 1.25");
   });
 
+  it("exports frozen defaults a consumer cannot mutate", () => {
+    expect(Object.isFrozen(DITHER_DEFAULTS)).toBe(true);
+    expect(() => {
+      // @ts-expect-error readonly: the fallback colour of every live effect
+      DITHER_DEFAULTS.color = "#000000";
+    }).toThrow(TypeError);
+    expect(DITHER_DEFAULTS.color).toBe("#808080");
+  });
+
   it("validates its own options", () => {
     expect(() => createDither(canvas, { colorNum: 1 })).toThrow(/colorNum/);
     expect(() => createDither(canvas, { pixelSize: 0 })).toThrow(VisError);
