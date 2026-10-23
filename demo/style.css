@@ -52,3 +52,10 @@ h1 {
 .controls input[type="range"] {
   width: 140px;
 }
+.error {
+  color: #f87171;
+  margin: 0;
+}
+.controls .error {
+  grid-column: 1 / -1;
+}

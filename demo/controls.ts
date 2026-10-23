@@ -49,13 +49,20 @@ export const CONTROLS: Record<string, Control[]> = {
   ],
 };
 
-/** Range inputs showing `shown`; `onChange` receives the one-key patch. */
+/**
+ * Range inputs showing `shown`; `onChange` receives the one-key patch. If it
+ * throws (a range wider than the effect accepts), the slider goes back to the
+ * last accepted value and the message appears under the sliders.
+ */
 export function bindControls(
   form: HTMLElement,
   controls: Control[],
   shown: Record<string, unknown>,
   onChange: (patch: Record<string, number>) => void,
 ): void {
+  const error = document.createElement("p");
+  error.className = "error";
+  error.setAttribute("role", "alert");
   for (const c of controls) {
     const label = document.createElement("label");
     label.textContent = c.key;
@@ -69,10 +76,19 @@ export function bindControls(
     input.name = c.key;
     const out = document.createElement("output");
     out.textContent = input.value;
+    let accepted = input.value;
     input.addEventListener("input", () => {
+      try {
+        onChange({ [c.key]: Number(input.value) });
+        accepted = input.value;
+        error.textContent = "";
+      } catch (e) {
+        input.value = accepted;
+        error.textContent = e instanceof Error ? e.message : String(e);
+      }
       out.textContent = input.value;
-      onChange({ [c.key]: Number(input.value) });
     });
     form.append(label, input, out);
   }
+  form.append(error);
 }

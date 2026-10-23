@@ -281,9 +281,12 @@ npm ci
 npm run check      # eslint → prettier --check → tsc --noEmit → vitest at 100% coverage
 npm run build      # dist/ (+ the bundled fonts)
 UPDATE_GOLDENS=1 npx vitest run   # regenerate tests/goldens after an intended change
+npm run demo       # animated-effects gallery on http://localhost:5173/ (dev only, never published)
 ```
 
 `npm run check` is the gate CI runs on every pull request, together with a packed-tarball smoke test (install the tarball in an empty directory, import both entries, check the types, run the CLI). Run `npm run format` before it.
+
+The demo gallery takes `?effect=<dither|pixel|terminal|glitch|ribbon>&t=<seconds>&seed=<int>&w=<16..4096>&h=<16..4096>`: `t` freezes one frame instead of animating, and an invalid parameter shows an error instead of the cards.
 
 ## Release
 
