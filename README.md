@@ -112,7 +112,7 @@ exported from the package root (`createDither`, `createPixelBlast`, `createTermi
 `createRibbon`, their `*_DEFAULTS`, `COMMON_DEFAULTS`, `loopTime` and the option types). Importing the root touches
 no DOM global and creates no context: nothing happens until you call a factory and `start()` or `renderAt()`.
 
-Fidelity vs. the current landing cards: `npm run fidelity` (needs a sibling `mvp-frontend` with `node_modules`).
+Fidelity vs. the current landing cards: `npm run fidelity` (needs a sibling `mvp-frontend` with a current `yarn install`, else it stops at once with a message; starting Vite there rewrites one tracked generated file, byte-identical on a clean `main`, so set `FIDELITY_FRONTEND_DIR` to an archive copy to leave that checkout untouched).
 
 Every factory takes a `<canvas>` whose **parent** sets the size and returns an `EffectHandle`:
 
