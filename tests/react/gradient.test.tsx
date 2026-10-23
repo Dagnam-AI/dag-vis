@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
-import { cleanup, render } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, render } from "@testing-library/react";
+import { hydrateRoot } from "react-dom/client";
+import { renderToString } from "react-dom/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { gradientSvg, type GradientSpec } from "../../src/gradient/index.js";
 import { Gradient } from "../../src/react/index.js";
 
 const SPEC: GradientSpec = {
   kind: "linear",
+  idPrefix: "g1",
   angle: 90,
   stops: ["#000000", "#ffffff"],
 };
@@ -40,7 +43,7 @@ describe("<Gradient>", () => {
     expect(svg.getAttribute("viewBox")).toBe("0 0 300 100");
     const expected = gradientSvg(SPEC, { width: 300, height: 100 }).replace(
       "<svg",
-      `<svg style="${STRETCH}"`,
+      `<svg preserveAspectRatio="xMidYMid slice" style="${STRETCH}"`,
     );
     expect(wrapper.innerHTML).toBe(parsed(expected));
   });
@@ -68,5 +71,89 @@ describe("<Gradient>", () => {
     );
     const svg = container.querySelector("svg")!;
     expect(svg.getAttribute("viewBox")).toBe("0 0 800 200");
+  });
+
+  it("fills its wrapper instead of letterboxing: slice by default, meet and none on request", () => {
+    const fit = (f?: "slice" | "meet" | "none"): string | null => {
+      const { container, unmount } = render(
+        f === undefined ? (
+          <Gradient spec={SPEC} />
+        ) : (
+          <Gradient spec={SPEC} fit={f} />
+        ),
+      );
+      const value =
+        container.querySelector("svg")?.getAttribute("preserveAspectRatio") ??
+        null;
+      unmount();
+      return value;
+    };
+    expect(fit()).toBe("xMidYMid slice");
+    expect(fit("slice")).toBe("xMidYMid slice");
+    expect(fit("meet")).toBe("xMidYMid meet");
+    expect(fit("none")).toBe("none");
+  });
+
+  it("is decorative by default and an img with a label when titled", () => {
+    const plain = render(<Gradient spec={SPEC} />);
+    const wrapper = plain.container.firstElementChild as HTMLElement;
+    expect(wrapper.getAttribute("aria-hidden")).toBe("true");
+    expect(wrapper.getAttribute("role")).toBeNull();
+    plain.unmount();
+    const titled = render(<Gradient spec={SPEC} title="Sunset" />);
+    const labelled = titled.container.firstElementChild as HTMLElement;
+    expect(labelled.getAttribute("role")).toBe("img");
+    expect(labelled.getAttribute("aria-label")).toBe("Sunset");
+    expect(labelled.getAttribute("aria-hidden")).toBeNull();
+  });
+
+  it("gives two gradients in one document distinct ids, and keeps an explicit idPrefix", () => {
+    const bare: GradientSpec = {
+      kind: "linear",
+      stops: ["#000000", "#ffffff"],
+    };
+    const { container } = render(
+      <>
+        <Gradient spec={bare} />
+        <Gradient spec={bare} />
+        <Gradient spec={SPEC} />
+      </>,
+    );
+    const ids = Array.from(container.querySelectorAll("[id]"), (e) => e.id);
+    expect(ids.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const id of ids) expect(id).toMatch(/^[A-Za-z_][\w-]*$/);
+    expect(ids.some((id) => id.startsWith("g1"))).toBe(true);
+  });
+
+  it("hydrates server markup with the same ids", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {
+      /* asserted below */
+    });
+    const bare: GradientSpec = {
+      kind: "linear",
+      stops: ["#000000", "#ffffff"],
+    };
+    const host = document.createElement("div");
+    document.body.append(host);
+    const tree = (
+      <>
+        <Gradient spec={bare} />
+        <Gradient spec={bare} />
+      </>
+    );
+    host.innerHTML = renderToString(tree);
+    const serverHtml = host.innerHTML;
+    let root!: ReturnType<typeof hydrateRoot>;
+    act(() => {
+      root = hydrateRoot(host, tree);
+    });
+    expect(error).not.toHaveBeenCalled();
+    expect(host.innerHTML).toBe(serverHtml);
+    act(() => {
+      root.unmount();
+    });
+    host.remove();
+    error.mockRestore();
   });
 });

@@ -1,10 +1,19 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from "@testing-library/react";
-import { StrictMode } from "react";
+import { StrictMode, type ReactElement } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
 
+import { VisError } from "../../src/core/index.js";
 import { VisBackground } from "../../src/react/index.js";
 import { installFakeDom, type FakeDom } from "../animate/fake-dom.js";
 import { installFakeGl, type FakeGl } from "../animate/fake-gl.js";
@@ -35,13 +44,15 @@ describe("<VisBackground>", () => {
     );
     const wrapper = container.firstElementChild as HTMLDivElement;
     expect(wrapper.className).toBe("bg");
-    expect(wrapper.style.position).toBe("relative");
+    // No inline position: the consumer's className governs layout (e.g. `absolute inset-0`).
+    expect(wrapper.style.position).toBe("");
     expect(wrapper.style.overflow).toBe("hidden");
     expect(wrapper.style.opacity).toBe("0.4");
     const canvases = wrapper.querySelectorAll("canvas");
     expect(canvases).toHaveLength(1);
     expect(canvases[0]?.getAttribute("aria-hidden")).toBe("true");
     expect(canvases[0]?.style.display).toBe("block");
+    expect(canvases[0]?.style.pointerEvents).toBe("none");
     expect(fake.gls).toHaveLength(1);
     expect(fake.gls[0]?.canvas).toBe(canvases[0]);
     expect(dom.pending()).toBe(1);
@@ -74,17 +85,6 @@ describe("<VisBackground>", () => {
     expect(container.querySelector("canvas")).toBe(canvas);
     expect(fake.gls[0]?.calls).toContain("uniform1f waveSpeed 0.08");
     expect(released(fake.gls[0]!)).toBe(false);
-  });
-
-  it("does not touch the effect when a re-render passes equal options", () => {
-    const { rerender } = render(
-      <VisBackground effect="dither" options={{ waveSpeed: 0.03 }} />,
-    );
-    frame();
-    const before = fake.gls[0]!.calls.length;
-    rerender(<VisBackground effect="dither" options={{ waveSpeed: 0.03 }} />);
-    expect(fake.gls).toHaveLength(1);
-    expect(fake.gls[0]!.calls).toHaveLength(before);
   });
 
   it("re-phases a live effect when only the seed changes (E5)", () => {
@@ -221,6 +221,21 @@ describe("<VisBackground>", () => {
     error.mockRestore();
   });
 
+  it("throws a VisError naming `effect` for an unknown name, including inherited keys", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {
+      /* React logs the render error */
+    });
+    for (const bad of ["bogus", "toString"]) {
+      expect(() => render(<VisBackground effect={bad as "dither"} />)).toThrow(
+        VisError,
+      );
+      expect(() => render(<VisBackground effect={bad as "dither"} />)).toThrow(
+        /effect must be one of dither, pixel, terminal, glitch, ribbon/,
+      );
+    }
+    error.mockRestore();
+  });
+
   it("drives Canvas2D effects too", () => {
     const glitch = render(
       <VisBackground
@@ -254,6 +269,146 @@ describe("<VisBackground> under prefers-reduced-motion", () => {
         fake.gls[0]?.calls.filter((c) => c.startsWith("drawArrays")),
       ).toHaveLength(1);
       expect(dom.pending()).toBe(0);
+    } finally {
+      cleanup();
+      fake.restore();
+      dom.restore();
+    }
+  });
+});
+
+describe("<VisBackground> failure containment", () => {
+  let dom: FakeDom;
+  let fake: ReturnType<typeof installFakeGl>;
+  let error: MockInstance<typeof console.error>;
+  beforeEach(() => {
+    dom = installFakeDom({ dpr: 1 });
+    error = vi.spyOn(console, "error").mockImplementation(() => {
+      /* asserted per test */
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    fake.restore();
+    dom.restore();
+    error.mockRestore();
+  });
+
+  it("renders nothing and reports through onError when WebGL2 is unavailable, leaving the page up", () => {
+    fake = installFakeGl({ webgl2: false });
+    const onError = vi.fn();
+    const { container } = render(
+      <main>
+        <h1>Landing</h1>
+        <VisBackground effect="dither" className="bg" onError={onError} />
+      </main>,
+    );
+    expect(container.querySelector("h1")?.textContent).toBe("Landing");
+    expect(container.querySelector(".bg")).not.toBeNull();
+    expect(container.querySelectorAll("canvas")).toHaveLength(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(VisError);
+    expect(String(onError.mock.calls[0]?.[0])).toContain("WebGL2");
+    expect(dom.pending()).toBe(0);
+  });
+
+  it("falls back to console.error without an onError prop", () => {
+    fake = installFakeGl({ webgl2: false });
+    render(<VisBackground effect="dither" />);
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error.mock.calls[0]?.[0]).toBeInstanceOf(VisError);
+  });
+
+  it("contains invalid creation options too, with no half-built handle", () => {
+    fake = installFakeGl();
+    const onError = vi.fn();
+    const { container } = render(
+      <VisBackground
+        effect="dither"
+        options={{ waveSpeed: -1 }}
+        onError={onError}
+      />,
+    );
+    expect(container.querySelectorAll("canvas")).toHaveLength(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(fake.gls).toHaveLength(0);
+  });
+
+  it("contains a failing Canvas2D effect as well", () => {
+    fake = installFakeGl({ canvas2d: false });
+    const onError = vi.fn();
+    const { container } = render(
+      <VisBackground effect="glitch" onError={onError} />,
+    );
+    expect(container.querySelectorAll("canvas")).toHaveLength(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the live effect and reports an invalid update", () => {
+    fake = installFakeGl();
+    const onError = vi.fn();
+    const { rerender, container } = render(
+      <VisBackground
+        effect="dither"
+        options={{ waveSpeed: 0.1 }}
+        onError={onError}
+      />,
+    );
+    const canvas = container.querySelector("canvas");
+    rerender(
+      <VisBackground
+        effect="dither"
+        options={{ waveSpeed: -1 }}
+        onError={onError}
+      />,
+    );
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("canvas")).toBe(canvas);
+    expect(dom.pending()).toBe(1);
+  });
+
+  it("uses the latest onError without recreating the effect", () => {
+    fake = installFakeGl();
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = render(
+      <VisBackground effect="dither" onError={first} />,
+    );
+    rerender(
+      <VisBackground
+        effect="dither"
+        options={{ waveSpeed: -1 }}
+        onError={second}
+      />,
+    );
+    expect(fake.gls).toHaveLength(1);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("<VisBackground> update churn", () => {
+  it("does not call update() on re-renders with equal inline literals, only on a changed value", () => {
+    // Under reduced motion update() redraws, so a spurious update() shows up as an extra draw.
+    const dom = installFakeDom({ dpr: 1, reducedMotion: true });
+    const fake = installFakeGl();
+    const draws = (): number =>
+      (fake.gls[0]?.calls ?? []).filter((c) => c.startsWith("drawArrays"))
+        .length;
+    try {
+      const view = (waveSpeed: number): ReactElement => (
+        <VisBackground
+          effect="dither"
+          options={{ colors: ["#ff0000"], waveSpeed, loop: undefined }}
+        />
+      );
+      const { rerender } = render(view(0.15));
+      expect(draws()).toBe(1);
+      for (let i = 0; i < 20; i++) rerender(view(0.15));
+      expect(draws()).toBe(1);
+      expect(fake.gls).toHaveLength(1);
+      rerender(view(0.2));
+      expect(draws()).toBe(2);
     } finally {
       cleanup();
       fake.restore();

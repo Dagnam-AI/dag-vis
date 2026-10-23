@@ -2,6 +2,7 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { VisError } from "../../src/core/index.js";
 import { Gradient, VisBackground } from "../../src/react/index.js";
 
 describe("server rendering", () => {
@@ -10,7 +11,7 @@ describe("server rendering", () => {
     expect(typeof document).toBe("undefined");
   });
 
-  it("renders <VisBackground> to an empty, positioned wrapper (the canvas is added by an effect)", () => {
+  it("renders <VisBackground> to an empty, wrapper (the canvas is added by an effect)", () => {
     const html = renderToString(
       <VisBackground
         effect="dither"
@@ -20,7 +21,7 @@ describe("server rendering", () => {
       />,
     );
     expect(html).toBe(
-      '<div class="bg" style="position:relative;overflow:hidden;height:120px"></div>',
+      '<div class="bg" style="overflow:hidden;height:120px"></div>',
     );
   });
 
@@ -43,6 +44,15 @@ describe("server rendering", () => {
         spec={{ kind: "linear", angle: 90, stops: ["#000000", "#ffffff"] }}
       />,
     );
-    expect(html).toContain('<svg style="display:block;width:100%;height:100%"');
+    expect(html).toContain(
+      '<svg preserveAspectRatio="xMidYMid slice" style="display:block;width:100%;height:100%"',
+    );
+  });
+
+  it("throws a VisError for an unknown effect, including inherited keys", () => {
+    for (const bad of ["bogus", "toString"])
+      expect(() =>
+        renderToString(<VisBackground effect={bad as "dither"} />),
+      ).toThrow(VisError);
   });
 });

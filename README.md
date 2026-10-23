@@ -6,7 +6,7 @@ Deterministic, parameterised [Dagnam.AI](https://dagnam.ai) visuals: brand token
 | ---------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------- |
 | `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), browser-safe         | none                         |
 | `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, the CLI (bundled Inter, Unbounded and Moonhouse fonts) | `@resvg/resvg-js` (optional) |
-| `@dagnam/vis/react`                | **planned, not in 0.1.0**: the export path is reserved and does not resolve yet     | `react` (peer)               |
+| `@dagnam/vis/react`                | `<VisBackground>` (the animated effects) and `<Gradient>` for React 18 and 19       | `react` (optional peer)      |
 
 Seeded generators take `seed` (default `1`); all output is deterministic, so the same options and seed give byte-identical SVG and CSS (`logoSvg` and `animatedGradientCss` take no seed).
 
@@ -160,6 +160,48 @@ Per-effect notes:
   a tween over a third of a second (the landing page's current tween is a no-op).
 - **`createRibbon`**: draws one stroke, with the opacity applied to the whole ribbon like the static SVG, not per
   line.
+
+## React
+
+```tsx
+import { Gradient, VisBackground } from "@dagnam/vis/react";
+
+<div className="relative h-64">
+  <VisBackground
+    effect="dither" // "dither" | "pixel" | "terminal" | "glitch" | "ribbon"
+    options={{ waveSpeed: 0.15, colors: ["#e64040"] }} // that effect's options, typed per effect
+    className="absolute inset-0" // layout is yours: the wrapper only sets overflow: hidden
+    onError={(e) => report(e)} // optional: no WebGL2, invalid options
+  />
+  <Gradient
+    spec={{
+      kind: "linear",
+      angle: 135,
+      stops: ["#0f172a", "#1d4ed8", "#e64040"],
+    }}
+    width={1200} // intrinsic size (default spec.size, else 1200 x 630)
+    height={630}
+    fit="slice" // "slice" (default, covers) | "meet" | "none"
+    title="Brand gradient" // omit for a decorative gradient (aria-hidden)
+  />
+</div>;
+```
+
+- **One canvas per mount.** Each effect instance creates its own `<canvas>` (`aria-hidden`, `pointer-events: none`)
+  in an effect and removes it on cleanup, so StrictMode and switching `effect` are safe. The server renders an empty
+  wrapper and every DOM access happens in effects.
+- **Options.** A changed value is applied with `update()` on the running effect (`seed` re-phases, `colors`
+  recolours); equal re-renders do nothing. Adding or removing an option key (turning `loop` on or off, dropping
+  `colors`) recreates the effect, because `update()` cannot clear a value.
+- **Failures stay local.** If WebGL2 is missing or an option is invalid, the canvas is removed, the wrapper stays
+  empty and `onError` is called (`console.error` without it); the rest of the page keeps rendering. An unknown `effect`
+  name is a programmer error and throws a `VisError` while rendering.
+- **Reduced motion.** The wrapper follows the runtime: under `prefers-reduced-motion: reduce` it draws one static
+  frame. To draw nothing at all (what the landing page does today), do not mount it:
+  `reduced ? null : <VisBackground ... />`.
+- **`<Gradient>`** gets its `<defs>` ids from `useId()` unless the spec sets an `idPrefix`, so several gradients on one
+  page do not collide.
+- `react` (>= 18) is an optional peer; the root entry never imports it.
 
 ## CLI
 
