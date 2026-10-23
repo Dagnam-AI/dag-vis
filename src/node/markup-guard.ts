@@ -18,8 +18,8 @@ export const MAX_CLIP_MASKS = 5000;
 // `#x.png`, `data:x.png` and a directory called `#` all read files. A data URL
 // that IS valid can still hurt: resvg sniffs an SVG out of `image/svg+xml`,
 // `text/*` and a missing type, and a nested SVG's `<feImage href>` reads files
-// again; and a comma-bearing URL whose payload is no image at all makes
-// `<feImage>` abort the process. So the rule is element-aware and
+// again; and a comma-bearing URL that resvg takes for a nested SVG (`text/*`, an
+// empty type) makes `<feImage>` abort the process. So the rule is element-aware and
 // deny-by-default, applied to the raw text:
 //   - <image>, <feImage> (any namespace prefix): href / xlink:href must be a
 //     RASTER data URL: `data:image/png|jpeg|jpg|gif|webp`, optional `;params`,

@@ -99,6 +99,11 @@ describe.skipIf(process.platform === "win32")(
       await expect(renderPng(svg)).rejects.toThrow(EXTERNAL);
     });
 
+    it("survives an accepted raster data: URL whose payload does not decode", async () => {
+      const out = await renderPng(feImage("data:image/png;base64,AAAA"));
+      expect(out.length).toBeGreaterThan(0);
+    });
+
     // F3: a comma-bearing data: URL that is no image makes resvg panic inside
     // <feImage>, and the panic aborts the whole process.
     it("rejects data: URLs that abort resvg inside feImage instead of letting it kill the process", async () => {
