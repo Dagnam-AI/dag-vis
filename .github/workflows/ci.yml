@@ -2,7 +2,7 @@ name: CI
 
 # Public repo, so these runs are real evidence. The release workflow calls
 # this file, so a tag cannot publish a commit these jobs would have failed.
-# The Playwright gallery job is added by the animation plan, when demo/ exists.
+# The gallery job drives the demo in headless Chromium (software WebGL).
 on:
   push:
     branches: [main]
@@ -164,3 +164,37 @@ jobs:
           npx dag-vis favicons --out out/icons
           node -e "const b=require('fs').readFileSync('out/og.png'); if(b.readUInt32BE(16)!==1200) throw new Error('png width'); console.log('cli ok')"
           test -s out/icons/favicon.ico && test -s out/icons/site.webmanifest
+
+  gallery:
+    name: Gallery smoke in headless Chromium, screenshots for sign-off
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # The Chromium revision is pinned by the exact @playwright/test version in
+      # package-lock.json; --with-deps adds the system libraries it needs.
+      - run: npx playwright install --with-deps chromium
+
+      # Starts the Vite demo itself (playwright.config.ts webServer) and checks
+      # every effect renders a non-blank, deterministic frame. Screenshots are
+      # artifacts for a human, never compared against a baseline.
+      - run: npm run test:e2e
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: gallery-screenshots
+          path: screenshots/
+          retention-days: 7
+          if-no-files-found: warn

@@ -5,3 +5,8 @@ coverage/
 .DS_Store
 # Agent worktrees are created BESIDE the repo (../dag-vis--<slug>), never inside.
 .claude/
+# Playwright output and the sign-off screenshots (artifacts, never committed).
+screenshots/
+fidelity/
+playwright-report/
+test-results/

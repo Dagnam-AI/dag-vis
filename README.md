@@ -282,6 +282,7 @@ npm run check      # eslint → prettier --check → tsc --noEmit → vitest at 
 npm run build      # dist/ (+ the bundled fonts)
 UPDATE_GOLDENS=1 npx vitest run   # regenerate tests/goldens after an intended change
 npm run demo       # animated-effects gallery on http://localhost:5173/ (dev only, never published)
+npm run test:e2e   # Playwright smoke of the gallery in headless Chromium; screenshots land in screenshots/ (needs: npx playwright install chromium)
 ```
 
 `npm run check` is the gate CI runs on every pull request, together with a packed-tarball smoke test (install the tarball in an empty directory, import both entries, check the types, run the CLI). Run `npm run format` before it.
