@@ -90,6 +90,33 @@ describe("pure cell state", () => {
     expect(lastChange(1, 3, -1, K)).toBeLessThanOrEqual(-1);
   });
 
+  it("a looping cell's state really changes at its changes: two per loop at least, so short loops move", () => {
+    for (const K of [4, 20, 21]) {
+      let moving = 0;
+      for (let c = 0; c < 400; c += 1) {
+        const keys = new Set<number>();
+        for (let k = 0; k < K; k += 1)
+          keys.add(((lastChange(1, c, k, K) % K) + K) % K);
+        // distinct states over the loop: more than one means the cell visibly changes
+        if (keys.size > 1) moving += 1;
+      }
+      expect(moving / 400).toBeGreaterThan(0.99);
+    }
+  });
+
+  it("seeds 2^32 apart do not collide", () => {
+    const seq = (seed: number) =>
+      Array.from({ length: 300 }, (_, k) => changedAt(seed, 0, k + 1, 0));
+    expect(seq(1)).not.toEqual(seq(1 + 2 ** 32));
+    expect(seq(0)).not.toEqual(seq(2 ** 32));
+    expect(seq(-5)).not.toEqual(seq(2 ** 32 - 5));
+    const states = (seed: number) =>
+      Array.from({ length: 60 }, (_, c) =>
+        cellState(seed, c, 5, 0, CHARS, PALETTE),
+      );
+    expect(states(1)).not.toEqual(states(1 + 2 ** 32));
+  });
+
   it("lastChange never hangs on a non-finite tick", () => {
     expect(lastChange(1, 0, Number.NaN, 0)).toBeNaN();
     expect(lastChange(1, 0, Number.NaN, 40)).toBeNaN();
@@ -345,11 +372,100 @@ describe("createGlitch", () => {
     }
   });
 
-  it("a loop whose duration is not a multiple of the tick stays seamless", () => {
-    const h = oneCell({ loop: { duration: 1.03 }, colors: ["#000", "#fff"] });
-    const justBefore = shot(h, 1.03 - 1e-9)[0];
-    const start = shot(h, 0)[0];
-    expect(fill(justBefore ?? "")).toBe(fill(start ?? ""));
+  it("a loop whose duration is not a multiple of the tick stays seamless: the step back to frame 0 is one ordinary tick", () => {
+    const duration = 1.03; // 21 ticks of 49.05 ms
+    const h = createGlitch(canvas, {
+      loop: { duration },
+      vignette: "none",
+      seed: 4,
+      characters: GLITCH_DEFAULTS.characters,
+    });
+    h.start();
+    dom.resize(300, 200); // 30 × 10 cells
+    const before = shot(h, duration - 1e-9);
+    const start = shot(h, 0);
+    expect(before).toHaveLength(300);
+    let changing = 0;
+    for (const [i, line] of start.entries()) {
+      if (changedAt(4, i, 0, 21)) {
+        // The seam tick re-rolls these cells: they are the only ones allowed to differ.
+        changing += 1;
+        continue;
+      }
+      expect(before[i]).toBe(line);
+    }
+    // Not vacuous: a good share of the cells really does change across the seam.
+    expect(changing).toBeGreaterThan(300 * 0.05 * 0.5);
+    const differing = start.filter((l, i) => l !== before[i]).length;
+    expect(differing).toBeGreaterThan(changing * 0.8);
+    expect(shot(h, duration)).toEqual(start);
+  });
+
+  /** Glyph lines of `ticks` successive frames of a `loop` grid (one frame per tick, mid-tick). */
+  function glyphRun(duration: number, seed: number, ticks: number): string[][] {
+    const h = createGlitch(canvas, {
+      loop: { duration },
+      vignette: "none",
+      seed,
+      characters: GLITCH_DEFAULTS.characters,
+    });
+    h.start();
+    dom.resize(300, 200); // 30 × 10 cells
+    const period = duration / ticks;
+    return Array.from({ length: ticks }, (_, k) =>
+      shot(h, (k + 0.5) * period).map((l) => l.split(" ")[1] ?? ""),
+    );
+  }
+
+  it("short loops still visibly change: most cells show a new glyph at some tick (1 s and 2 s)", () => {
+    for (const [duration, ticks] of [
+      [1, 20],
+      [2, 40],
+    ] as const) {
+      const run = glyphRun(duration, 2, ticks);
+      let moving = 0;
+      for (let i = 0; i < 300; i += 1)
+        if (run.some((frame, k) => frame[i] !== run[(k + 1) % ticks]?.[i]))
+          moving += 1;
+      expect(moving / 300).toBeGreaterThan(0.9);
+    }
+  });
+
+  it("loops of any length glitch at the overall 5 % rate (6 s) and shorter ones at 2/K", () => {
+    // 59 glyphs: a re-roll lands on the same glyph 1/59 of the time.
+    const rate = (run: string[][]): number => {
+      let changed = 0;
+      const ticks = run.length;
+      for (let k = 0; k < ticks; k += 1)
+        for (let i = 0; i < 300; i += 1)
+          if (run[k]?.[i] !== run[(k + 1) % ticks]?.[i]) changed += 1;
+      return changed / (300 * ticks);
+    };
+    const six = rate(glyphRun(6, 3, 120));
+    expect(six).toBeGreaterThan(0.04);
+    expect(six).toBeLessThan(0.06);
+    const one = rate(glyphRun(1, 3, 20)); // 2 changes per 20 ticks = 10 %
+    expect(one).toBeGreaterThan(0.08);
+    expect(one).toBeLessThan(0.12);
+  });
+
+  it("the same overall rate without a loop", () => {
+    const h = createGlitch(canvas, {
+      vignette: "none",
+      seed: 3,
+      characters: GLITCH_DEFAULTS.characters,
+    });
+    h.start();
+    dom.resize(300, 200);
+    let prev = shot(h, 50.01).map((l) => l.split(" ")[1]);
+    let changed = 0;
+    for (let k = 1; k <= 120; k += 1) {
+      const now = shot(h, 50.01 + k * 0.05).map((l) => l.split(" ")[1]);
+      for (let i = 0; i < 300; i += 1) if (now[i] !== prev[i]) changed += 1;
+      prev = now;
+    }
+    expect(changed / (300 * 120)).toBeGreaterThan(0.04);
+    expect(changed / (300 * 120)).toBeLessThan(0.06);
   });
 
   it("update({ colors, characters, seed }) takes effect on the next frame (E4/E5)", () => {

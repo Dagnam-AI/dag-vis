@@ -60,9 +60,15 @@ const mixIn = (h: number, v: number): number => {
   return x ^ (x >>> 16);
 };
 
-/** A well-mixed uint32 of (salt, seed, cell, tick). */
+/**
+ * A well-mixed uint32 of (salt, seed, cell, tick). The seed's high word is
+ * mixed in separately: `^` only sees 32 bits, so seeds 2^32 apart would collide.
+ */
 const hash = (salt: number, seed: number, cell: number, tick: number): number =>
-  mixIn(mixIn(mixIn(salt, seed), cell), tick) >>> 0;
+  mixIn(
+    mixIn(mixIn(mixIn(salt, seed), Math.floor(seed / 2 ** 32)), cell),
+    tick,
+  ) >>> 0;
 
 const wrap = (tick: number, ticksPerLoop: number): number =>
   ticksPerLoop > 0
@@ -74,11 +80,13 @@ const forcePeriod = (ticksPerLoop: number): number =>
   ticksPerLoop > 0 ? ticksPerLoop : FORCE_PERIOD;
 
 /**
- * Does `cell` re-roll at `tick`? Each tick is a seeded Bernoulli draw, plus one
- * forced change per cell every `forcePeriod` ticks (at a per-cell offset) so a
- * cell's last change is always within that window. The draw rate is lowered by
- * the same amount, keeping the overall rate at 5 %. Without a loop, tick <= 0
- * is the initial state, which counts as a change.
+ * Does `cell` re-roll at `tick`? Each tick is a seeded Bernoulli draw, plus
+ * forced changes at per-cell offsets so a cell's last change is always within
+ * one `forcePeriod`: one per period without a loop, two per loop half a loop
+ * apart (a cell changing once per loop would end where it began and never
+ * visibly move). The draw rate is lowered by the forced rate, keeping the
+ * overall rate at 5 % for loops of 2 s or more; shorter loops run at 2/K.
+ * Without a loop, tick <= 0 is the initial state, which counts as a change.
  */
 export function changedAt(
   seed: number,
@@ -92,8 +100,13 @@ export function changedAt(
   const forced = Math.floor(
     (hash(SALT_FORCE, seed, cell, 0) / 2 ** 32) * period,
   );
+  // A one-tick loop has only one tick to change on.
+  const forcedCount = ticksPerLoop > 0 ? Math.min(2, period) : 1;
   if (k % period === forced) return true;
-  const draw = Math.max(0, (CHANGE_RATE - 1 / period) / (1 - 1 / period));
+  if (forcedCount === 2 && k === (forced + Math.floor(period / 2)) % period)
+    return true;
+  const forcedRate = forcedCount / period;
+  const draw = Math.max(0, (CHANGE_RATE - forcedRate) / (1 - forcedRate));
   return hash(SALT_CHANGE, seed, cell, k) / 2 ** 32 < draw;
 }
 
