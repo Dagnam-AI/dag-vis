@@ -2,11 +2,11 @@
 
 Deterministic, parameterised [Dagnam.AI](https://dagnam.ai) visuals: brand tokens, gradients, patterns, social-preview (OG) cards, ribbons and favicon sets. Generators are pure functions that return SVG or CSS strings; a small Node layer turns them into PNGs.
 
-| import                             | what                                                                            | runtime deps                 |
-| ---------------------------------- | ------------------------------------------------------------------------------- | ---------------------------- |
-| `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), browser-safe     | none                         |
-| `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, the CLI (bundled Inter font)                       | `@resvg/resvg-js` (optional) |
-| `@dagnam/vis/react`                | **planned, not in 0.1.0**: the export path is reserved and does not resolve yet | `react` (peer)               |
+| import                             | what                                                                                | runtime deps                 |
+| ---------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------- |
+| `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), browser-safe         | none                         |
+| `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, the CLI (bundled Inter, Unbounded and Moonhouse fonts) | `@resvg/resvg-js` (optional) |
+| `@dagnam/vis/react`                | **planned, not in 0.1.0**: the export path is reserved and does not resolve yet     | `react` (peer)               |
 
 Seeded generators take `seed` (default `1`); all output is deterministic, so the same options and seed give byte-identical SVG and CSS (`logoSvg` and `animatedGradientCss` take no seed).
 
@@ -27,6 +27,7 @@ import {
   gradient,
   gradientSvg,
   freeformPalette,
+  coverSpec,
   ogCard,
   pattern,
   ribbon,
@@ -34,6 +35,16 @@ import {
 
 brandBackground({ width: 1200, height: 630 }); // the og-default look, any size (SVG string)
 ogCard({ title: "Build AI Systems Visually", subtitle: "Dagnam.AI" }); // SVG with real Inter metrics
+ogCard({
+  title: "Building a reasoning model",
+  excerpt: "Data, architecture and training on one GPU.",
+  cover: coverSpec({
+    family: "tag:ai",
+    item: "my-post",
+    theme: "dark",
+    variant: "banner",
+  }),
+}); // the 1200x630 social card (see below)
 gradient({ kind: "freeform", points: freeformPalette("dawn") }).css; // "background: …;"
 gradientSvg({
   kind: "fluted",
@@ -48,11 +59,24 @@ ribbon({ width: 1600, height: 900, lines: 120, mesh: true }); // the wave-mesh r
 
 - **Brand**: `BRAND` (colours), `PALETTES` / `palette(name)` (`red`, `mono`, `stripes`, `ocean`, `ember`), `LOGO` (path data), `logoSvg`.
 - **Gradients**: `gradient(spec)` returns `{ css, svg, defs, fill }`: `css` is a declaration list (`background: …;`, plus `background-blend-mode` when needed), `svg` is body markup to pair with `defs`. `gradientSvg(spec, size?)` is a standalone `<svg>` document. `animatedGradientCss(spec, { kind: "rotate" | "shift" | "hue" })` returns `{ css, keyframes }` with a `prefers-reduced-motion` override; `FREEFORM_PALETTES` (a frozen object of the same four presets, `dawn`, `aurora`, `ember` and `brand`, each an array of `{ at, color, spread }` points), `freeformPalette(name)` (looks one up by name) and `freeformRandom({ count, palette, seed })` build freeform points; `BLENDS` lists the blend modes.
-  - Kinds: `linear`, `radial`, `conic` (all three take `repeat`, `reverse` and per-stop `opacity`), `mesh`, `aurora`, `banded`, `layers` (with `blend`), `freeform` and `fluted` (reeded glass over any other spec). Any spec also takes `size`, `grain`, `overlay`, `seed` and `idPrefix`.
+  - Kinds: `linear`, `radial`, `conic` (all three take `repeat`, `reverse` and per-stop `opacity`), `mesh`, `aurora`, `banded`, `layers` (with `blend`), `freeform`, `glows` (elliptical glows sized and placed in percent of the box, fading to transparent at 70%, over a `base` colour; later glows paint over earlier ones, at most 64 of them; a radius is at least half a pixel in both outputs; in the CSS that is exact only when the box it is applied to has the spec's `size`) and `fluted` (reeded glass over any other spec). Any spec also takes `size`, `grain`, `overlay`, `seed` and `idPrefix`.
   - A stop is a colour string or `{ color, at?, opacity? }`.
 - **Patterns**: `pattern(spec)` returns `{ svg, defs, fill, cssBackground, tile }`. Kinds: `dots`, `grid`, `lines`, `stripes`, `dagMesh`, `contours`, `noise`.
-- **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry).
+- **Covers**: `coverSpec(input)` returns a `glows` gradient spec and `coverLayers(input)` the same cover as `{ base, glows }`: one deterministic look per `family` (a topic; omit it and the `item` is its own family), nudged per `item`, with optional `index`/`count` for an ordered family and the editor choices `seed`, `hue`, `region` and `intensity` (`null` or omitted means derive as usual). `family: ""` and a `null` `index` or `count` throw a `VisError`, as does any non-finite number; an empty `seed` means no seed. `coverSpec` lists the echo first so the main glow paints on top. `gradient(coverSpec({ family, item, theme, variant })).css` is the background.
+- **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`; or `title`, `excerpt` and `cover` for the social card), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry).
 - **Text and core helpers**: `measureText`, `wrapText`, `FONT_FAMILY`, `createRng`, `fmt`, colour helpers (`parseColor`, `toHex`, `toCss`, `mix`, `ramp`, `withAlpha`, `toVec3`), `VisError`. `measureText` and `wrapText` take at most 10,000 characters of text and `wrapText` returns at most 100 lines. The SVG builder, the validators, the stop pipeline, the geometry helpers and the font metrics are internal and not exported.
+
+### Social card
+
+`ogCard({ title, excerpt?, cover })` draws the per-post `og:image`: 1200×630, the cover's art as the background, the title large, the excerpt under it and a Dagnam.AI bar at the bottom. Pass `coverSpec({ theme: "dark", variant: "banner", ... })` as `cover` (any gradient spec works; it is drawn at the card's size, and the card's `seed` and `idPrefix` replace the spec's, see below).
+
+- Title: uppercase, Moonhouse, the largest of 92, 84, 76, 68, 60 and 52 px that fits three lines in 1040 px; at 52 px a longer title ends its third line in `...`. Typographic punctuation (curly quotes, dashes, `…`) becomes its ASCII stand-in, because Moonhouse has no such glyphs and the renderer would draw the whole line in another face.
+- Excerpt (optional, omitted when blank): Unbounded 400, 30 px, at most two lines, ending in `…`; white at 72% opacity.
+- Bar: a 1 px rule 104 px from the bottom, the `DAGNAM.AI` wordmark (the `.AI` in `#ef4444`) and `dagnam.ai/blog` right-aligned.
+- Passing `cover` selects this layout: `subtitle`, `eyebrow`, `footer` and `background` throw a `VisError` naming the option, as does a `theme` other than `"dark"`, a `width` other than 1200 or a `height` other than 630. `excerpt` without `cover` throws too. Without `cover`, `ogCard` is the brand card, unchanged.
+- Lines are wrapped by the fonts' advance widths (generated tables in `src/brand/`, no canvas, no font parsing at run time), so the same title wraps the same way in a browser and in Node. `renderPng` draws the card in the bundled fonts.
+- **The SVG names its fonts (`moonhouse` and `Unbounded`) but does not embed them.** Rasterise it with `renderPng`, or, to draw it in a browser, make both faces available under exactly those family names (an SVG shown through `<img>` or drawn onto a canvas cannot use the page's fonts: register them inside the SVG, for instance as `data:` URIs in an `@font-face`). A face under another name (the app's `Unbounded Variable`, say) is not used.
+- `seed` and `idPrefix` are the card's own: the card's `seed` (default 1) overrides a `seed` inside the `cover` spec, and its `idPrefix` any `idPrefix` there. This changes nothing for `coverSpec` (the `glows` kind uses no random numbers), but a seeded kind or `grain` in a hand-written `cover` takes the card's seed, so pass the seed you want to `ogCard`.
 
 ### API conventions
 
@@ -73,7 +97,7 @@ const png = await renderPng(ogCard({ title: "Hi" }), { width: 1200 }); // Buffer
 await favicons({ outDir: "public" }); // favicon.ico/svg, apple-touch-icon, PWA icons, site.webmanifest
 ```
 
-- `renderPng(svg, { width?, background?, fontFiles? })` resolves to a PNG `Buffer`. Text is drawn with the bundled Inter only (no system fonts), so output does not depend on the machine's fonts.
+- `renderPng(svg, { width?, background?, fontFiles? })` resolves to a PNG `Buffer`. Text is drawn with the bundled fonts only (Inter, Unbounded, Moonhouse; no system fonts), so output does not depend on the machine's fonts.
 - `favicons({ outDir, background?, color?, name?, shortName? })` writes the files listed in `FAVICON_FILES` and resolves to their paths. The icon `src` values in `site.webmanifest` are relative (`icon-192.png`, not `/icon-192.png`), so they resolve against the manifest's own URL and work at the site root and under any sub-path; serve the icons next to the manifest and link it with `<link rel="manifest" href="site.webmanifest">` (a path relative to the page, or an absolute one for a root deployment).
 - `icoFromPngs(pngs)` packs PNG buffers into an `.ico`; `FONT_FILES` lists the bundled font paths; `run(argv, io)` is the CLI entry (it never calls `process.exit`).
 
@@ -93,7 +117,7 @@ npx dag-vis favicons --out public
 
 A spec is a JSON object in a file of at most 1 MiB, for example `{ "kind": "linear", "angle": 90, "stops": ["#ef4444", "#10abba"] }` for `gradient` and `{ "kind": "dots", "spacing": 24 }` for `pattern`. Numbers are plain decimals (`600`, `0.5`). Options take `--name value` or `--name=value`. `dag-vis --help` (or `-h`, anywhere among the arguments) prints every option.
 
-For `og`, `background`, `gradient` and `pattern`, `--out` must end in `.svg` or `.png` (any case). `.png` is rasterised with the bundled Inter (it needs `@resvg/resvg-js`) and `.svg` is written as is; anything else (`card.jpg`, `.webp`, no extension, a trailing dot, `-`) exits `1` with `dag-vis: --out must end in .svg or .png, got "card.jpg"` and writes nothing. `favicons --out` is a directory and has no extension rule. Files are written atomically (a temp file renamed over the target, so an existing file is replaced even if read-only and the new one gets the default mode) and missing parent directories are created. Exit status is `0` on success and `1` with a single `dag-vis: …` line on stderr for any invalid option or spec.
+For `og`, `background`, `gradient` and `pattern`, `--out` must end in `.svg` or `.png` (any case). `.png` is rasterised with the bundled fonts (it needs `@resvg/resvg-js`) and `.svg` is written as is; anything else (`card.jpg`, `.webp`, no extension, a trailing dot, `-`) exits `1` with `dag-vis: --out must end in .svg or .png, got "card.jpg"` and writes nothing. `favicons --out` is a directory and has no extension rule. Files are written atomically (a temp file renamed over the target, so an existing file is replaced even if read-only and the new one gets the default mode) and missing parent directories are created. Exit status is `0` on success and `1` with a single `dag-vis: …` line on stderr for any invalid option or spec.
 
 ## Determinism
 
@@ -137,7 +161,8 @@ Options and gradient specs are validated at the boundary, including ones that co
 - `fluted` refraction is SVG-only: the CSS form ignores `refraction`, so the two agree exactly only at `refraction: 0`. `grain` is SVG-only too, and CSS ignores `overlay.opacity`.
 - `ribbon` with a custom `path` joins its points with straight segments and does not mitre: at a sharp corner the family of lines fans out on the outside and overlaps on the inside.
 - Inter has no CJK or emoji glyphs. They draw as missing-glyph boxes in PNGs unless you pass `fontFiles` that cover them and name that family in the SVG; `measureText` only estimates their width.
-- Text is wrapped with Inter's advance widths and no kerning, so a line can render a few percent narrower or wider than measured.
+- Text is wrapped with Inter's advance widths and no kerning, so a line can render a few percent narrower or wider than measured. The social card does the same with Moonhouse's and Unbounded's widths (both fonts carry kerning, which resvg and browsers apply): a title or excerpt line can render about 1% narrower or wider than measured. A single word wider than 1040 px stays on its own line and overflows the card even at 52 px, as the app's canvas card did.
+- Moonhouse lacks 22 Latin-1 symbols (`§ © ® ± ² ³ ¶ · ¼ ½ ¾ Ð Þ` and a few more) and, besides the punctuation the social card replaces, all non-Latin scripts and emoji. A title line containing one is drawn entirely in the fallback face (Inter), and measured with Moonhouse's `.notdef` width, so it can wrap a little early. Unbounded (the excerpt) lacks only `µ` in the measured range.
 - Gradient overlay images must be raster `data:` URIs (`data:image/png`, `jpeg`, `gif` or `webp`) to rasterise (see Security); a URL, a path or an `image/svg+xml` data URI works in the CSS and SVG output only.
 - `pattern(...).cssBackground` repeats seamlessly only for `dots`, `grid`, `stripes` and `lines` at multiples of 90 degrees, with the default sample size; see the `PatternResult` doc comment in [`src/pattern/types.ts`](https://github.com/Dagnam-AI/dag-vis/blob/main/src/pattern/types.ts) for the rest.
 - Colours are parsed as hex, `rgb()`/`rgba()` and `oklch()` only: no CSS Color 4 `none`, no `turn`/`rad`/`grad` hue units, no `calc()`, no named colours.
@@ -154,7 +179,7 @@ Contributors need **Node 22.12 or newer** (the test runner, vitest 5, requires i
 ```sh
 npm ci
 npm run check      # eslint → prettier --check → tsc --noEmit → vitest at 100% coverage
-npm run build      # dist/ (+ bundled Inter fonts)
+npm run build      # dist/ (+ the bundled fonts)
 UPDATE_GOLDENS=1 npx vitest run   # regenerate tests/goldens after an intended change
 ```
 
@@ -166,6 +191,16 @@ Tag `vis/vX.Y.Z` on `main` (the version in `package.json` must match). `release.
 
 Only plain `vis/vX.Y.Z` tags are supported: a prerelease suffix (`vis/v0.2.0-rc.1`) would publish to the `latest` dist-tag, so the workflow refuses it. The on-`main` check is part of the tagged commit's own workflow file, so anyone who can push a branch and a tag can edit it away: it stops accidents, not an attacker. The release is gated outside the file too: a GitHub tag ruleset on `vis/v*` restricts who can create such a tag, and the `publish` job runs in the `npm` GitHub Environment (`environment: npm`), which is limited to `vis/v*` tags. **Owner setup still required on npmjs.com:** the trusted-publisher configuration for `@dagnam/vis` must name workflow `release.yml` and environment `npm`, and the very first publish of the package (which cannot use trusted publishing, since the package must exist before a publisher can be attached) needs the `NPM_TOKEN` fallback, which may be stored as an Environment secret on `npm`.
 
+## Fonts
+
+`dist/node/fonts/` ships the fonts `renderPng` draws with ([`NOTICE`](NOTICE) lists them):
+
+- **Inter 4.1** (`Inter-Regular.ttf`, `Inter-Bold.ttf`): SIL Open Font License 1.1, [`OFL.txt`](src/node/fonts/OFL.txt).
+- **Unbounded** (`Unbounded-Regular.ttf`, a static wght 400 instance of the variable font): SIL Open Font License 1.1, [`OFL-Unbounded.txt`](src/node/fonts/OFL-Unbounded.txt).
+- **Moonhouse** (`moonhouse/moonhouse.ttf`, Copyright (c) 2013 by NimaVisual, licensor Andres Moreno W. / NimaVisual), byte for byte as received. **Its embedded licence forbids modification and redistribution without written permission. It is bundled at the package owner's instruction; confirm the permission with NimaVisual or replace the font before relying on it.** Removing it is one directory (`src/node/fonts/moonhouse/`) and one entry in `FONT_FILES` (`src/node/render-png.ts`); the licence text is in [`LICENSE-NOTE.txt`](src/node/fonts/moonhouse/LICENSE-NOTE.txt).
+
+The advance tables behind the social card's wrapping (`src/brand/moonhouse-metrics.ts`, `src/brand/unbounded-metrics.ts`) are generated from these files by `node scripts/gen-font-metrics.mjs` (`--check` fails when they are stale; a test runs it).
+
 ## Licence
 
-Apache-2.0, see [LICENSE](LICENSE). The bundled fonts are Inter 4.1 under the SIL Open Font License 1.1 (`src/node/fonts/OFL.txt`, shipped as `dist/node/fonts/OFL.txt`).
+Apache-2.0, see [LICENSE](LICENSE). The bundled fonts have their own licences, see Fonts above and [NOTICE](NOTICE): Inter 4.1 and Unbounded under the SIL Open Font License 1.1, Moonhouse under its own terms (permission to redistribute still to be confirmed).

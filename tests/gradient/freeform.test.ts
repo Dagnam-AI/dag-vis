@@ -444,6 +444,14 @@ describe("freeform gradient", () => {
     }
   });
 
+  it("rejects a sparse point list instead of skipping the holes", () => {
+    const sparse: unknown[] = [spec.points[0]];
+    sparse[2] = spec.points[1];
+    expect(() => gradient({ ...spec, points: sparse as never })).toThrow(
+      "freeform point 1 must be an object",
+    );
+  });
+
   it("is byte-identical for the same spec", () => {
     expect(gradient(spec)).toEqual(gradient({ ...spec }));
   });

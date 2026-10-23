@@ -233,7 +233,9 @@ export function renderFreeform(spec: FreeformSpec, ctx: Ctx): KindOutput {
   const defs: string[] = [];
   const rects: string[] = [];
   const css: string[] = [];
-  spec.points.forEach((p: unknown, i) => {
+  // An index loop, not forEach: forEach skips the holes of a sparse list.
+  for (let i = 0; i < spec.points.length; i++) {
+    const p: unknown = spec.points[i];
     assertPoint(p, i);
     const { extent, stops } = profile(
       parseRgba(`freeform point ${i} color`, p.color),
@@ -258,7 +260,7 @@ export function renderFreeform(spec: FreeformSpec, ctx: Ctx): KindOutput {
     css.push(
       `radial-gradient(circle ${fmt(extent)}px at ${fmt(p.at[0] * 100)}% ${fmt(p.at[1] * 100)}%, ${cssStops(stops)})`,
     );
-  });
+  }
   return {
     defs:
       defs.join("") +

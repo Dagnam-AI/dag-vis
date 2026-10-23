@@ -43,6 +43,11 @@ const VALID: Record<string, object> = {
   banded: { kind: "banded", stops: STOPS, bands: 4 },
   layers: { kind: "layers", layers: [{ kind: "linear", stops: STOPS }] },
   freeform: { kind: "freeform", points: [POINT] },
+  glows: {
+    kind: "glows",
+    base: "#000000",
+    glows: [{ size: [50, 50], at: [50, 50], color: "#ff0000" }],
+  },
   fluted: { kind: "fluted", source: { kind: "linear", stops: STOPS } },
 };
 
@@ -112,6 +117,38 @@ const BAD_POINT_LISTS = [
   [{ at: {}, color: "#ff0000" }],
   [{ at: [0.5, 0.5], color: 5 }],
   [{ at: [0.5, 0.5], color: "nope" }],
+];
+const BAD_GLOW_LISTS = [
+  undefined,
+  null,
+  [],
+  5,
+  "x",
+  {},
+  [null],
+  [5],
+  ["x"],
+  [[]],
+  [{}],
+  [{ size: [50, 50], at: [50, 50] }],
+  [{ size: [50, 50], color: "#ff0000" }],
+  [{ at: [50, 50], color: "#ff0000" }],
+];
+const BAD_GLOW_PAIR = [
+  undefined,
+  null,
+  5,
+  "ab",
+  {},
+  [],
+  [50],
+  [50, 50, 50],
+  ["a", "b"],
+  [null, 50],
+  [Number.NaN, 50],
+  [50, Number.POSITIVE_INFINITY],
+  [-1, 50],
+  [50, 1001],
 ];
 const BAD_BLEND = [null, "bogus", 5, {}];
 const BAD_SPREAD = [null, "1", 0, -1, Number.NaN];
@@ -199,6 +236,25 @@ const KIND_CASES: Record<string, Case[]> = {
       bad: [null, "1", {}, -1, 2, Number.NaN],
     },
     { path: ["base"], name: "base", bad: [null, 5, "nope", {}] },
+  ],
+  glows: [
+    { path: ["base"], name: "base", bad: [undefined, null, 5, "nope", {}] },
+    { path: ["glows"], name: "glow", bad: BAD_GLOW_LISTS },
+    {
+      path: ["glows", 0, "size"],
+      name: "size",
+      bad: [...BAD_GLOW_PAIR, [0, 50]],
+    },
+    {
+      path: ["glows", 0, "at"],
+      name: "at",
+      bad: [...BAD_GLOW_PAIR, [101, 50]],
+    },
+    {
+      path: ["glows", 0, "color"],
+      name: "color",
+      bad: [undefined, null, 5, "nope", {}],
+    },
   ],
   fluted: [
     {

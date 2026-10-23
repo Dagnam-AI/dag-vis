@@ -1,0 +1,162 @@
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+import { describe, expect, it } from "vitest";
+
+import { MOONHOUSE } from "../../src/brand/moonhouse-metrics.js";
+import { UNBOUNDED } from "../../src/brand/unbounded-metrics.js";
+import { FONT_FILES, renderPng } from "../../src/node/render-png.js";
+import { coverSpec } from "../../src/scene/cover.js";
+import { ogCard } from "../../src/scene/og-card.js";
+import { fontWidth } from "../../src/scene/text-fonts.js";
+import type { Raster } from "../helpers/render.js";
+import { ROOT } from "../helpers/ttf.js";
+import { decode, dims, inkWidth, pixel, sized } from "./png-helpers.js";
+
+/** Near-white: the card's text, never the red-on-dark art. */
+const bright = (r: Raster, x: number, y: number): boolean =>
+  pixel(r, x, y)
+    .slice(0, 3)
+    .every((v) => v > 230);
+const FONTS = dirname(FONT_FILES[0] ?? "");
+const read = (...path: string[]): string =>
+  readFileSync(join(FONTS, ...path), "utf8");
+
+describe("the bundled display fonts", () => {
+  it("ship Unbounded under its OFL, with the project's copyright", () => {
+    const ofl = read("OFL-Unbounded.txt");
+    expect(ofl).toContain("Copyright 2022 The Unbounded Project Authors");
+    expect(ofl).toContain("https://github.com/googlefonts/unbounded");
+    expect(ofl).toContain("SIL OPEN FONT LICENSE Version 1.1");
+  });
+
+  it("ship Moonhouse alone in its directory, byte for byte, with its own licence and the owner-instruction note", () => {
+    expect(readdirSync(join(FONTS, "moonhouse")).sort()).toEqual([
+      "LICENSE-NOTE.txt",
+      "moonhouse.ttf",
+    ]);
+    // sha-256 of the file as received from the app's public/fonts: unmodified, not subset, not renamed.
+    expect(
+      createHash("sha256")
+        .update(readFileSync(join(FONTS, "moonhouse", "moonhouse.ttf")))
+        .digest("hex"),
+    ).toBe("a014f2f1f265653340d02f24af3f219023f993bed5801c99710dafbee220e827");
+    const note = read("moonhouse", "LICENSE-NOTE.txt");
+    expect(note).toContain("Copyright (c) 2013 by NimaVisual");
+    expect(note).toContain(
+      "The font files may not be modified without written permission from Andres Moreno W. / NimaVisual.",
+    );
+    expect(note).toContain(
+      "Bundled at the package owner's instruction; terms require written permission from NimaVisual for redistribution; confirm or replace before relying on it.",
+    );
+  });
+
+  it("are listed, with their licences and the Moonhouse caveat, in NOTICE (which the package ships)", () => {
+    const notice = readFileSync(join(ROOT, "NOTICE"), "utf8");
+    for (const part of [
+      "Inter 4.1",
+      "Unbounded",
+      "Moonhouse",
+      "SIL Open Font License 1.1",
+      "NimaVisual",
+      "written\n  permission from NimaVisual for redistribution",
+    ])
+      expect(notice).toContain(part);
+    const pkg = JSON.parse(
+      readFileSync(join(ROOT, "package.json"), "utf8"),
+    ) as { files: string[]; scripts: Record<string, string> };
+    expect(pkg.files).toContain("NOTICE");
+    // The build copies the fonts directory with its subdirectory.
+    expect(pkg.scripts.build).toContain("cp -R src/node/fonts/.");
+  });
+});
+
+describe("renderPng with the bundled display fonts", () => {
+  const ink = async (family: string, text: string, weight = "400") =>
+    inkWidth(
+      decode(
+        await renderPng(
+          sized(
+            900,
+            200,
+            `<text x="20" y="150" font-family="${family}" font-size="100" font-weight="${weight}" fill="#fff">${text}</text>`,
+          ),
+        ),
+      ),
+    );
+
+  it("draws Moonhouse and Unbounded, not a fallback, at the widths the metrics predict", async () => {
+    // The ink is the advance sum less the side bearings: a bit narrower, never wider.
+    const moon = await ink("moonhouse", "HELLO");
+    const predictedMoon = fontWidth(MOONHOUSE, "HELLO", 100);
+    expect(moon).toBeLessThanOrEqual(predictedMoon);
+    expect(moon).toBeGreaterThan(0.9 * predictedMoon);
+    const sans = await ink("Unbounded", "Hello");
+    const predictedSans = fontWidth(UNBOUNDED, "Hello", 100);
+    expect(sans).toBeLessThanOrEqual(predictedSans);
+    expect(sans).toBeGreaterThan(0.9 * predictedSans);
+    // An unknown family falls back to Inter, which is narrower than both.
+    expect(await ink("NoSuchFace", "HELLO")).toBeLessThan(0.85 * moon);
+    expect(await ink("NoSuchFace", "Hello")).toBeLessThan(0.85 * sans);
+  });
+
+  it("renders a social card to a 1200x630 PNG whose title is drawn in Moonhouse", async () => {
+    const cover = coverSpec({
+      family: "tag:ai",
+      item: "my-post",
+      theme: "dark",
+      variant: "banner",
+    });
+    const png = await renderPng(
+      ogCard({ title: "Hello", excerpt: "A short excerpt.", cover }),
+    );
+    expect(dims(png)).toEqual([1200, 630]);
+    const raster = decode(png);
+    // Opaque everywhere; white ink in the title band (y 80..172 at 92 px) and none right of it.
+    expect(pixel(raster, 5, 5)[3]).toBe(255);
+    const white = (x0: number, x1: number, y0: number, y1: number): number => {
+      let n = 0;
+      for (let y = y0; y < y1; y++)
+        for (let x = x0; x < x1; x++) {
+          if (bright(raster, x, y)) n++;
+        }
+      return n;
+    };
+    expect(white(80, 80 + 450, 80, 175)).toBeGreaterThan(2000);
+    expect(white(80 + 600, 1200, 80, 175)).toBe(0);
+    // The first row of ink starts where the metrics put it: just under the top margin, the cap height 0.7 em or so.
+    expect(white(80, 80 + 450, 80, 90)).toBe(0);
+  });
+
+  it("keeps a title with curly quotes and an ellipsis in Moonhouse, which lacks them (a missing glyph would move the whole line to Inter)", async () => {
+    const cover = coverSpec({ item: "q", theme: "dark", variant: "banner" });
+    const raster = decode(
+      await renderPng(ogCard({ title: "Don\u2019t stop\u2026", cover })),
+    );
+    let lo = raster.width;
+    let hi = -1;
+    for (let y = 80; y < 175; y++)
+      for (let x = 0; x < raster.width; x++) {
+        if (bright(raster, x, y)) {
+          lo = Math.min(lo, x);
+          hi = Math.max(hi, x);
+        }
+      }
+    const predicted = fontWidth(MOONHOUSE, "DON'T STOP...", 92);
+    expect(hi - lo).toBeLessThanOrEqual(predicted);
+    expect(hi - lo).toBeGreaterThan(0.9 * predicted);
+  });
+
+  it("keeps the PNG identical between runs", async () => {
+    const svg = ogCard({
+      title: "Same",
+      cover: coverSpec({ item: "a", theme: "dark", variant: "banner" }),
+    });
+    expect((await renderPng(svg)).equals(await renderPng(svg))).toBe(true);
+  });
+
+  it("bundles the files the card names", () => {
+    for (const p of FONT_FILES) expect(existsSync(p)).toBe(true);
+  });
+});

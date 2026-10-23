@@ -15,11 +15,12 @@ describe("GradientSpec", () => {
       banded: { kind: "banded", stops: ["#000", "#fff"], bands: 4 },
       layers: { kind: "layers", layers: [] },
       freeform: { kind: "freeform", points: [] },
+      glows: { kind: "glows", base: "#000", glows: [] },
       fluted: {
         kind: "fluted",
         source: { kind: "linear", stops: ["#000", "#fff"] },
       },
     } satisfies Record<GradientSpec["kind"], GradientSpec>;
-    expect(Object.keys(kinds)).toHaveLength(9);
+    expect(Object.keys(kinds)).toHaveLength(10);
   });
 });

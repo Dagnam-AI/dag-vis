@@ -36,6 +36,8 @@ describe("@dagnam/vis root barrel", () => {
       "animatedGradientCss",
       "brandBackground",
       "brandBackgroundLayers",
+      "coverLayers",
+      "coverSpec",
       "createRng",
       "fmt",
       "freeformPalette",

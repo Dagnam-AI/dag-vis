@@ -178,6 +178,14 @@ describe("mesh gradient", () => {
     ).toThrow("mesh point 1 must be an object");
   });
 
+  it("rejects a sparse point list instead of skipping the holes", () => {
+    const sparse: unknown[] = [spec.points[0]];
+    sparse[2] = spec.points[1];
+    expect(() => gradient({ ...spec, points: sparse as never })).toThrow(
+      "mesh point 1 must be an object",
+    );
+  });
+
   it("matches its golden", () => {
     expectGolden("gradient/mesh.svg", gradientSvg(spec));
   });

@@ -7,6 +7,17 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+### Added
+
+- Gradients: the `glows` kind (`GlowsSpec`, `GlowPoint`): elliptical glows sized and placed in percent of the box, fading to transparent at 70%, over a base colour; later glows paint over earlier ones, at most 64; CSS and SVG agree (a radius is at least half a pixel in both; in the CSS that is exact only when the box it is applied to has the spec's `size`, because the clamp is computed in px).
+- Covers: `coverSpec` and `coverLayers` (plus the `CoverInput`, `CoverLayers` and `CoverGlow` types): deterministic generated covers, one look per family, nudged per item.
+- Scenes: the social card. `ogCard({ title, excerpt?, cover })` (new `cover` and `excerpt` options) draws the 1200×630 per-post `og:image`: the `cover` gradient spec as background, the title uppercase in Moonhouse (92 px stepping down to 52 to fit three lines, then `...`), the excerpt in Unbounded (30 px, two lines) and a Dagnam.AI bar. `subtitle`, `eyebrow`, `footer`, `background`, a light theme and any other size throw a `VisError` with `cover`; `excerpt` without `cover` throws; the brand card is unchanged.
+- Node: `renderPng` and `FONT_FILES` now bundle Unbounded (static wght 400, SIL OFL 1.1) and Moonhouse (NimaVisual; bundled unmodified at the package owner's instruction, its terms require written permission for redistribution: confirm or replace it before relying on it). New `NOTICE` lists the bundled fonts; `scripts/gen-font-metrics.mjs` generates their advance tables.
+
+### Fixed
+
+- `mesh` and `freeform` now throw a `VisError` naming the entry for a sparse point list (a hole), where they used to skip it silently. A stricter input check, so a caller that passed holes must now pass dense lists.
+
 ## [0.1.0] - 2026-10-21
 
 ### Added

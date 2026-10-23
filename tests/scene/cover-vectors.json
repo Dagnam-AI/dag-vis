@@ -1,0 +1,128 @@
+{
+  "fnv1a32": {
+    "": 2166136261,
+    "hello": 1335831723,
+    "hello-world": 1116541326
+  },
+  "cases": [
+    {
+      "input": {
+        "item": "hello-world",
+        "variant": "card",
+        "theme": "dark"
+      },
+      "params": {
+        "familyHue": 24.71995896631852,
+        "hue": 24.71995896631852,
+        "region": [24, 28],
+        "anchor": [23.690644782036543, 31.306056182831526],
+        "familyRadius": [74.46486700326204, 109.54199631232768],
+        "radius": [81.51286762927676, 119.9100005760077],
+        "phase": 0,
+        "intensity": 1
+      },
+      "css": "radial-gradient(ellipse 81.51% 119.91% at 23.69% 31.31%, oklch(0.6 0.22 24.72 / 0.6), transparent 70%), radial-gradient(ellipse 57.06% 83.94% at 76.31% 68.69%, oklch(0.6 0.22 24.72 / 0.21), transparent 70%), #0a0a0a"
+    },
+    {
+      "input": {
+        "item": "hello-world",
+        "variant": "banner",
+        "theme": "light"
+      },
+      "params": {
+        "familyHue": 24.71995896631852,
+        "hue": 24.71995896631852,
+        "region": [24, 28],
+        "anchor": [23.690644782036543, 31.306056182831526],
+        "familyRadius": [69.46486700326204, 129.54199631232768],
+        "radius": [76.03962427911365, 141.8029739766601],
+        "phase": 0,
+        "intensity": 1
+      },
+      "css": "radial-gradient(ellipse 76.04% 141.8% at 23.69% 31.31%, oklch(0.72 0.17 24.72 / 0.5), transparent 70%), radial-gradient(ellipse 53.23% 99.26% at 76.31% 68.69%, oklch(0.72 0.17 24.72 / 0.18), transparent 70%), #ffffff"
+    },
+    {
+      "input": {
+        "family": "tag:ml",
+        "item": "post-a",
+        "variant": "card",
+        "theme": "dark"
+      },
+      "params": {
+        "familyHue": 17.22032612860203,
+        "hue": 21.601920310594142,
+        "region": [84, 20],
+        "anchor": [85.09779880940914, 17.429091665893793],
+        "familyRadius": [57.47637886554003, 103.61593368230388],
+        "radius": [55.70596105597021, 100.42430091129192],
+        "phase": 0,
+        "intensity": 1
+      },
+      "css": "radial-gradient(ellipse 55.71% 100.42% at 85.1% 17.43%, oklch(0.6 0.22 21.6 / 0.6), transparent 70%), radial-gradient(ellipse 38.99% 70.3% at 14.9% 82.57%, oklch(0.6 0.22 21.6 / 0.21), transparent 70%), #0a0a0a"
+    },
+    {
+      "input": {
+        "family": "course:ai/nn",
+        "item": "perceptron",
+        "index": 0,
+        "count": 6,
+        "variant": "card",
+        "theme": "dark"
+      },
+      "params": {
+        "familyHue": 35.23678339058533,
+        "hue": 29.23678339058533,
+        "region": [78, 50],
+        "anchor": [77.56014031916857, 42.82216261699796],
+        "familyRadius": [70.8218903420493, 83.42378091765568],
+        "radius": [73.83371623806126, 86.97152445425884],
+        "phase": 0,
+        "intensity": 1
+      },
+      "css": "radial-gradient(ellipse 73.83% 86.97% at 77.56% 42.82%, oklch(0.6 0.22 29.24 / 0.6), transparent 70%), radial-gradient(ellipse 51.68% 60.88% at 22.44% 57.18%, oklch(0.6 0.22 29.24 / 0.21), transparent 70%), #0a0a0a"
+    },
+    {
+      "input": {
+        "family": "course:ai/nn",
+        "item": "kv-cache",
+        "index": 5,
+        "count": 6,
+        "variant": "banner",
+        "theme": "dark"
+      },
+      "params": {
+        "familyHue": 35.23678339058533,
+        "hue": 41.23678339058533,
+        "region": [78, 50],
+        "anchor": [70.64351918175817, 44.702538285404444],
+        "familyRadius": [65.8218903420493, 103.42378091765568],
+        "radius": [66.67780701823295, 104.76865476344425],
+        "phase": 0.8333333333333334,
+        "intensity": 1
+      },
+      "css": "radial-gradient(ellipse 66.68% 104.77% at 70.64% 44.7%, oklch(0.6 0.22 41.24 / 0.6), transparent 70%), radial-gradient(ellipse 46.67% 73.34% at 29.36% 55.3%, oklch(0.6 0.22 41.24 / 0.21), transparent 70%), #0a0a0a"
+    },
+    {
+      "input": {
+        "item": "hello-world",
+        "seed": "abc12345",
+        "hue": 10,
+        "region": 2,
+        "intensity": 1.3,
+        "variant": "card",
+        "theme": "dark"
+      },
+      "params": {
+        "familyHue": 35.3,
+        "hue": 35.3,
+        "region": [84, 20],
+        "anchor": [79.82898833975196, 17.158420361578465],
+        "familyRadius": [70.15882352367043, 95.36649488145486],
+        "radius": [73.77819341553997, 100.28628405309931],
+        "phase": 0,
+        "intensity": 1.3
+      },
+      "css": "radial-gradient(ellipse 73.78% 100.29% at 79.83% 17.16%, oklch(0.6 0.22 35.3 / 0.78), transparent 70%), radial-gradient(ellipse 51.64% 70.2% at 20.17% 82.84%, oklch(0.6 0.22 35.3 / 0.27), transparent 70%), #0a0a0a"
+    }
+  ]
+}

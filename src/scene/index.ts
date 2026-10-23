@@ -1,5 +1,7 @@
 export { brandBackground, brandBackgroundLayers } from "./brand-background.js";
 export type { BrandBackgroundOptions } from "./brand-background.js";
+export { coverLayers, coverSpec } from "./cover.js";
+export type { CoverGlow, CoverInput, CoverLayers } from "./cover.js";
 export { ogCard } from "./og-card.js";
 export type { OgBackground, OgCardOptions } from "./og-card.js";
 export {
