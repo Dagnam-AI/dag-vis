@@ -1,0 +1,4 @@
+@property --vis-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@keyframes vis-rotate { from { --vis-angle: 0deg; } to { --vis-angle: 360deg; } }
+.vis-gradient { background: conic-gradient(from var(--vis-angle) at 50% 50%, #ef4444 0%, #10abba 50%, #ef4444 100%); animation: vis-rotate 10s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .vis-gradient { animation: none; } }

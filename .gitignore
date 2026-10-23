@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+*.tgz
+.DS_Store
+# Agent worktrees are created BESIDE the repo (../dag-vis--<slug>), never inside.
+.claude/
