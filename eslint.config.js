@@ -91,6 +91,8 @@ export default tseslint.config(
   forbid("scene", ["animate", "react", "node"]),
   // animate -> core, scene (ribbonCurves). Added by the animation plan, spec section 7.
   forbid("animate", ["brand", "gradient", "pattern", "react", "node"]),
+  // react -> core, animate, gradient. Added by the animation plan, spec section 7.
+  forbid("react", ["brand", "pattern", "scene", "node"]),
   forbid("node", ["animate", "react"], false),
   {
     // The root barrel is browser-safe: nothing from node/ or react/, no Node APIs.
