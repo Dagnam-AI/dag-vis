@@ -260,7 +260,8 @@ export function coverLayers(input: CoverInput): CoverLayers {
 }
 
 /**
- * The cover as a gradient spec: `gradient(coverSpec(input)).css` is the background. Pass
+ * The cover as a gradient spec: `gradient(coverSpec(input)).css` is the background. The
+ * glows come in paint order (echo first, so the main glow is on top). Pass
  * a `size` on the result's spread (`{ ...coverSpec(i), size }`) to size the SVG output.
  */
 export function coverSpec(input: CoverInput): GlowsSpec {
@@ -268,6 +269,9 @@ export function coverSpec(input: CoverInput): GlowsSpec {
   return {
     kind: "glows",
     base,
-    glows: glows.map(({ size, at, colour }) => ({ size, at, color: colour })),
+    // `glows` paints later entries on top; the layers list the main glow first.
+    glows: glows
+      .map(({ size, at, colour }) => ({ size, at, color: colour }))
+      .reverse(),
   };
 }

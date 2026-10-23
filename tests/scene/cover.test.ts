@@ -77,20 +77,28 @@ describe("coverParams and coverLayers reproduce the reference vectors", () => {
     expect(vectors.cases).toHaveLength(6);
   });
 
-  it("pins FNV-1a through the params that depend on it", () => {
-    // "hello-world" is case 0. "hello" is a pin the cases do not use: its family stream
-    // must start from the pinned hash, and the "" pin is not reachable (an empty item
-    // is rejected).
-    expect(vectors.fnv1a32["hello-world"]).toBe(1116541326);
-    const drift = createRng(vectors.fnv1a32.hello).range(-1, 1) * 15;
-    expect(coverParams({ ...ITEM, item: "hello" }).familyHue).toBeCloseTo(
-      25.3 + drift,
-      9,
-    );
-    const first = createRng(vectors.fnv1a32["hello-world"]).range(-1, 1) * 15;
-    expect(coverParams({ ...ITEM, item: "hello-world" }).familyHue).toBeCloseTo(
-      25.3 + first,
-      9,
+  it("hashes the family and item keys with FNV-1a (the pins, through the params)", () => {
+    // fnv1a32 is private, so test it where it shows: each stream starts from the
+    // hash of its key, and the first draw is the family's hue drift. "hello" and
+    // "hello-world" are pins no other test depends on being reachable; the "" pin
+    // is not reachable (an empty item is rejected).
+    const pins = vectors.fnv1a32;
+    for (const key of ["hello", "hello-world"]) {
+      const drift = createRng(pins[key]).range(-1, 1) * 15;
+      expect(coverParams({ ...ITEM, item: key }).familyHue).toBeCloseTo(
+        25.3 + drift,
+        9,
+      );
+      // a seed replaces the key by the same hash
+      expect(coverParams({ ...ITEM, seed: key }).familyHue).toBeCloseTo(
+        25.3 + drift,
+        9,
+      );
+    }
+    // a different key must not share the hash: one character changes the stream
+    expect(coverParams({ ...ITEM, item: "hello!" }).familyHue).not.toBeCloseTo(
+      coverParams({ ...ITEM, item: "hello" }).familyHue,
+      3,
     );
   });
 });
@@ -112,15 +120,39 @@ describe("coverSpec", () => {
     },
   );
 
-  it("is the glows kind over the theme's base, strongest glow first", () => {
+  it("is the glows kind over the theme's base, in paint order (echo first, main last)", () => {
     const spec = coverSpec(ITEM);
     expect(spec.kind).toBe("glows");
     expect(spec).toMatchObject({ base: "#0a0a0a" });
     const { glows } = coverLayers(ITEM);
     expect(spec.glows).toEqual(
-      glows.map((g) => ({ size: g.size, at: g.at, color: g.colour })),
+      glows.map((g) => ({ size: g.size, at: g.at, color: g.colour })).reverse(),
     );
     expect(coverSpec({ ...ITEM, theme: "light" }).base).toBe("#ffffff");
+  });
+
+  it("paints the main glow on top in CSS and in SVG", () => {
+    const input = vectors.cases[0]!.input;
+    const [main, echo] = coverLayers(input).glows;
+    const spec = { ...coverSpec(input), size: { width: 100, height: 100 } };
+    const f = (n: number): string => String(Math.round(n * 1000) / 1000);
+    // CSS: the first layer is the top one
+    const layers = cssLayers(gradient(spec).css);
+    expect(layers[0]).toContain(
+      `ellipse ${f(main.size[0])}% ${f(main.size[1])}% at ${f(main.at[0])}% ${f(main.at[1])}%`,
+    );
+    expect(layers[1]).toContain(
+      `ellipse ${f(echo.size[0])}% ${f(echo.size[1])}% at ${f(echo.at[0])}% ${f(echo.at[1])}%`,
+    );
+    // SVG: the last rect is the top one, and its gradient is centred on the main glow
+    const { defs } = gradient(spec);
+    const rects = [...defs.matchAll(/fill="url\(#(vis1-g-p\d)\)"/g)].map(
+      (m) => m[1],
+    );
+    const top = rects[rects.length - 1];
+    expect(defs).toContain(
+      `<radialGradient id="${top}" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="1" gradientTransform="translate(${f(main.at[0])} ${f(main.at[1])}) scale(${f(main.size[0])} ${f(main.size[1])})">`,
+    );
   });
 
   it("gives the first case's CSS in the pipeline's own colours", () => {
@@ -128,6 +160,63 @@ describe("coverSpec", () => {
       /^background: radial-gradient\(ellipse 81\.513% 119\.91% at 23\.691% 31\.306%, rgba\(\d+, \d+, \d+, 0\.6\), transparent 70%\), radial-gradient\(ellipse 57\.059% 83\.937% at 76\.309% 68\.694%, rgba\(\d+, \d+, \d+, 0\.21\), transparent 70%\), #0a0a0a;$/,
     );
   });
+});
+
+/**
+ * The reference colours as sRGB, pinned: [main, echo] "r, g, b, a" per vector case, as
+ * `gradient(coverSpec(...))` writes them. Generated once from the pipeline's output and
+ * checked below against an independent oklch to sRGB conversion.
+ */
+const PINNED_RGBA = [
+  ["230, 43, 53, 0.6", "230, 43, 53, 0.21"],
+  ["253, 115, 109, 0.5", "253, 115, 109, 0.18"],
+  ["230, 41, 64, 0.6", "230, 41, 64, 0.21"],
+  ["230, 46, 34, 0.6", "230, 46, 34, 0.21"],
+  ["227, 57, 0, 0.6", "227, 57, 0, 0.21"],
+  ["229, 51, 0, 0.78", "229, 51, 0, 0.27"],
+] as const;
+
+/** oklch(L C H / A) to "r, g, b, a" (gamut-clipped sRGB), from the published OKLab matrices. */
+function srgbOf(colour: string): string {
+  const m = /^oklch\(([\d.]+) ([\d.]+) ([\d.]+) \/ ([\d.]+)\)$/.exec(colour)!;
+  const [L, C, H, A] = m.slice(1).map(Number) as [
+    number,
+    number,
+    number,
+    number,
+  ];
+  const a = C * Math.cos((H * Math.PI) / 180);
+  const b = C * Math.sin((H * Math.PI) / 180);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const mm = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  const lin = [
+    4.0767416621 * l - 3.3077115913 * mm + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * mm - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * mm + 1.707614701 * s,
+  ];
+  const ch = lin.map((v) => {
+    const c = Math.min(1, Math.max(0, v));
+    return Math.round(
+      (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055) * 255,
+    );
+  });
+  return `${ch.join(", ")}, ${A}`;
+}
+
+describe("the cover colours, pinned exactly", () => {
+  it.each(vectors.cases.map((c, i) => [i, c] as const))(
+    "case %i: coverSpec writes the pinned rgba, which an independent conversion of the oklch agrees with",
+    (i, { input }) => {
+      const written = [
+        ...gradient(coverSpec(input)).css.matchAll(/rgba\(([^)]*)\)/g),
+      ].map((m) => m[1]);
+      // CSS lists the top glow first: main, then echo
+      expect(written).toEqual(PINNED_RGBA[i]);
+      const independent = coverLayers(input).glows.map((g) => srgbOf(g.colour));
+      expect(independent).toEqual(PINNED_RGBA[i]);
+    },
+  );
 });
 
 describe("derivation rules", () => {

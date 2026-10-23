@@ -5,10 +5,10 @@ import { el } from "../core/svg.js";
 import { orDefault, parseRgba, positive } from "../core/validate.js";
 import { assertUnit } from "./radial.js";
 import { assertList, cssStops, svgStops } from "./stops.js";
-import type { Ctx, KindOutput, MeshSpec } from "./types.js";
+import type { Ctx, KindOutput, MeshPoint, MeshSpec } from "./types.js";
 
 /** JS callers can pass anything: name the bad point instead of failing on a property read. */
-function assertPoint(p: unknown, i: number): void {
+function assertPoint(p: unknown, i: number): asserts p is MeshPoint {
   if (typeof p !== "object" || p === null)
     throw new VisError(
       `mesh point ${i} must be an object, got ${JSON.stringify(p)}`,
@@ -38,7 +38,9 @@ export function renderMesh(spec: MeshSpec, ctx: Ctx): KindOutput {
   const defs: string[] = [];
   const rects: string[] = [];
   const css: string[] = [];
-  spec.points.forEach((p, i) => {
+  // An index loop, not forEach: forEach skips the holes of a sparse list.
+  for (let i = 0; i < spec.points.length; i++) {
+    const p: unknown = spec.points[i];
     assertPoint(p, i);
     assertUnit("mesh point `at`", p.at);
     const radius = positive(
@@ -69,7 +71,7 @@ export function renderMesh(spec: MeshSpec, ctx: Ctx): KindOutput {
     css.push(
       `radial-gradient(circle ${fmt(r)}px at ${fmt(p.at[0] * 100)}% ${fmt(p.at[1] * 100)}%, ${cssStops(stops)})`,
     );
-  });
+  }
   return {
     defs:
       defs.join("") +

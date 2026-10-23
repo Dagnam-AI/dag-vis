@@ -9,8 +9,12 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ### Added
 
-- Gradients: the `glows` kind (elliptical glows sized and placed in percent of the box, fading to transparent at 70%, over a base colour; first glow on top; CSS and SVG agree).
-- Covers: `coverSpec` and `coverLayers` (plus the `CoverInput`, `CoverLayers`, `CoverGlow`, `GlowsSpec` and `GlowPoint` types): deterministic generated covers, one look per family, nudged per item.
+- Gradients: the `glows` kind (`GlowsSpec`, `GlowPoint`): elliptical glows sized and placed in percent of the box, fading to transparent at 70%, over a base colour; later glows paint over earlier ones, at most 64; CSS and SVG agree (a radius is at least half a pixel in both).
+- Covers: `coverSpec` and `coverLayers` (plus the `CoverInput`, `CoverLayers` and `CoverGlow` types): deterministic generated covers, one look per family, nudged per item.
+
+### Fixed
+
+- `mesh`, `freeform` and `glows` reject a sparse point list with a `VisError` naming the entry, instead of skipping the holes.
 
 ## [0.1.0] - 2026-10-21
 

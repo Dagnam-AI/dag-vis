@@ -23,7 +23,7 @@ type Rgb = readonly [number, number, number];
  * What a browser paints for the CSS this kind emits: each glow is
  * `radial-gradient(ellipse W% H% at X% Y%, c, transparent 70%)`, i.e. the colour's alpha
  * falls linearly from the centre to 0 at 70% of the ellipse's radii (RGB constant),
- * listed top first over the base. Evaluated at pixel (x, y), whose centre is
+ * listed top first (the LAST glow is the top one) over the base. Evaluated at pixel (x, y), whose centre is
  * (x + 0.5, y + 0.5), by compositing bottom to top.
  */
 function cssGlows(
@@ -39,7 +39,7 @@ function cssGlows(
   y: number,
 ): Rgb {
   let out: Rgb = base;
-  for (const g of [...glows].reverse()) {
+  for (const g of glows) {
     const d = Math.hypot(
       (x + 0.5 - (g.at[0] / 100) * box.width) / ((g.size[0] / 100) * box.width),
       (y + 0.5 - (g.at[1] / 100) * box.height) /
@@ -56,10 +56,10 @@ function cssGlows(
 }
 
 describe("glows gradient", () => {
-  it("emits one elliptical percent-sized radial per glow, first on top, over the base", () => {
+  it("emits one elliptical percent-sized radial per glow, last on top, over the base", () => {
     const g = gradient(spec);
     expect(g.css).toBe(
-      "background: radial-gradient(ellipse 60% 120% at 20% 30%, #ef4444, transparent 70%), radial-gradient(ellipse 30% 70% at 80% 70%, rgba(16, 171, 186, 0.5), transparent 70%), #0a0a0a;",
+      "background: radial-gradient(ellipse 30% 70% at 80% 70%, rgba(16, 171, 186, 0.5), transparent 70%), radial-gradient(ellipse 60% 120% at 20% 30%, #ef4444, transparent 70%), #0a0a0a;",
     );
     expect(() => cssLayers(g.css)).not.toThrow();
     expect(g.fill).toBe("url(#vis1-g)");
@@ -68,9 +68,9 @@ describe("glows gradient", () => {
     );
     expect(g.defs).toContain('<rect width="100" height="50" fill="#0a0a0a"/>');
     expect((g.defs.match(/<radialGradient /g) ?? []).length).toBe(2);
-    // later glows are drawn first in SVG, so the first one ends up on top
-    expect(g.defs.indexOf('fill="url(#vis1-g-p1)"')).toBeLessThan(
-      g.defs.indexOf('fill="url(#vis1-g-p0)"'),
+    // SVG draws in order, so the last glow is painted last: on top
+    expect(g.defs.indexOf('fill="url(#vis1-g-p0)"')).toBeLessThan(
+      g.defs.indexOf('fill="url(#vis1-g-p1)"'),
     );
     expect(g.defs).toContain(
       'gradientTransform="translate(20 15) scale(60 60)"',
@@ -114,6 +114,64 @@ describe("glows gradient", () => {
     });
     expect(() => cssLayers(stacked.css)).not.toThrow();
     expect(stacked.css).toContain("linear-gradient(#0a0a0a, #0a0a0a)");
+  });
+
+  it("paints the same top glow in CSS and SVG: two overlapping glows, last wins", () => {
+    const overlap: GlowsSpec = {
+      kind: "glows",
+      base: "#000000",
+      glows: [
+        { size: [50, 50], at: [50, 50], color: "#ff0000" },
+        { size: [50, 50], at: [50, 50], color: "#0000ff" },
+      ],
+      size: { width: 40, height: 40 },
+    };
+    // CSS: the first layer is the top one, and it is the last glow
+    expect(gradient(overlap).css).toMatch(
+      /^background: radial-gradient\(ellipse 50% 50% at 50% 50%, #0000ff, /,
+    );
+    // SVG: the centre pixel is the last glow's colour
+    const [r, , b] = pixelAt(rasterize(gradientSvg(overlap)), 20, 20);
+    expect(r).toBeLessThan(30);
+    expect(b).toBeGreaterThan(200);
+  });
+
+  it("clamps a tiny glow to half a pixel in CSS and SVG alike", () => {
+    const tiny: GlowsSpec = {
+      ...spec,
+      glows: [{ size: [0.01, 0.01], at: [50, 50], color: "#ff0000" }],
+    };
+    const g = gradient(tiny);
+    // 0.5 px on a 100 x 50 box is 0.5% wide and 1% tall
+    expect(g.css).toContain("ellipse 0.5% 1% at 50% 50%");
+    expect(g.defs).toContain("translate(50 25) scale(0.5 0.5)");
+    // and a size that is already large enough is left alone
+    expect(gradient(spec).defs).toContain("scale(60 60)");
+  });
+
+  it("takes at most 64 glows", () => {
+    const glow = { size: [10, 10], at: [50, 50], color: "#fff" } as const;
+    expect(() =>
+      gradient({ ...spec, glows: Array.from({ length: 64 }, () => glow) }),
+    ).not.toThrow();
+    expect(() =>
+      gradient({ ...spec, glows: Array.from({ length: 65 }, () => glow) }),
+    ).toThrow("glows takes at most 64 glows, got 65");
+  });
+
+  it("counts as a pattern source in the fluted cost budget: 64 reeds pass, 65 do not", () => {
+    const fluted = (reeds: number) =>
+      gradient({ kind: "fluted", source: spec, reeds });
+    expect(() => fluted(64)).not.toThrow();
+    expect(() => fluted(65)).toThrow(VisError);
+  });
+
+  it("rejects a sparse glow list instead of skipping the holes", () => {
+    const sparse = [spec.glows[0]];
+    sparse[2] = spec.glows[1]; // index 1 is a hole
+    expect(() => gradient({ ...spec, glows: sparse as never })).toThrow(
+      "glow 1 must be an object",
+    );
   });
 
   it("converts an oklch glow colour through the colour pipeline", () => {

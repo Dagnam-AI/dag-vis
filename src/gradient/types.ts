@@ -115,7 +115,7 @@ export interface GlowPoint {
 
 export interface GlowsSpec extends GradientBase {
   kind: "glows";
-  /** Strongest first: the first glow is drawn on top. Each fades to transparent at 70%. */
+  /** Bottom first: later glows paint over earlier ones. Each fades to transparent at 70%. */
   glows: readonly GlowPoint[];
   /** The solid colour under the glows. */
   base: string;
