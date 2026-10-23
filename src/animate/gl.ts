@@ -22,6 +22,15 @@ void main() {
 }
 `;
 
+/**
+ * Lifecycle: `destroy()` releases the effect's GPU objects (programs, and
+ * whatever a hook's `teardown` deletes); the canvas keeps its context, so the
+ * same canvas can host a new effect afterwards (React StrictMode mounts twice
+ * on one node; switching effects reuses it). Nothing here calls
+ * `WEBGL_lose_context.loseContext()`: a lost context stays lost for that
+ * canvas and the next effect would fail. Remove the canvas to release the
+ * context; the React wrapper gives each mount its own canvas.
+ */
 export function getGl(
   canvas: HTMLCanvasElement,
   premultipliedAlpha: boolean,
@@ -67,7 +76,13 @@ export function createProgram(
   fragment: string,
 ): WebGLProgram {
   const vs = compile(gl, gl.VERTEX_SHADER, vertex, "vertex");
-  const fs = compile(gl, gl.FRAGMENT_SHADER, fragment, "fragment");
+  let fs: WebGLShader;
+  try {
+    fs = compile(gl, gl.FRAGMENT_SHADER, fragment, "fragment");
+  } catch (error) {
+    gl.deleteShader(vs);
+    throw error;
+  }
   const program = gl.createProgram();
   gl.attachShader(program, vs);
   gl.attachShader(program, fs);
@@ -96,7 +111,10 @@ export interface GlProgram {
   i1(name: string, x: number): void;
 }
 
-/** Uniform setters by name with cached locations. */
+/**
+ * Uniform setters by name with cached locations. WebGL writes uniforms to the
+ * currently bound program, so call `gl.useProgram(program)` before using them.
+ */
 export function uniformSetters(
   gl: WebGL2RenderingContext,
   program: WebGLProgram,
@@ -151,6 +169,8 @@ export function glRenderer(spec: GlEffectSpec): FrameRenderer {
   let live = false;
   let program: GlProgram | undefined;
   let dpr = 1;
+  // The latest requested frame, remembered even when it was skipped, so a restore can repaint it.
+  let lastT = 0;
 
   const build = (): GlProgram =>
     uniformSetters(gl, createProgram(gl, FULLSCREEN_VERT, spec.fragment));
@@ -158,16 +178,13 @@ export function glRenderer(spec: GlEffectSpec): FrameRenderer {
     e.preventDefault();
     program = undefined;
   };
-  const onRestored = (): void => {
-    program = build();
-  };
 
-  return {
+  const renderer: FrameRenderer = {
     init(c) {
       canvas = c;
       gl = getGl(c, spec.premultipliedAlpha);
-      program = build();
       live = true;
+      program = build();
       c.addEventListener("webglcontextlost", onLost);
       c.addEventListener("webglcontextrestored", onRestored);
     },
@@ -175,6 +192,7 @@ export function glRenderer(spec: GlEffectSpec): FrameRenderer {
       dpr = d;
     },
     draw(t) {
+      lastT = t;
       if (!program || gl.isContextLost()) return;
       const { width, height } = canvas;
       gl.useProgram(program.program);
@@ -200,11 +218,17 @@ export function glRenderer(spec: GlEffectSpec): FrameRenderer {
       live = false;
       canvas.removeEventListener("webglcontextlost", onLost);
       canvas.removeEventListener("webglcontextrestored", onRestored);
+      // The program is the only GL object this renderer owns; the canvas keeps its context (see getGl).
       if (program) gl.deleteProgram(program.program);
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
       program = undefined;
     },
   };
+  // A loss clears the drawing buffer and a non-looping handle never redraws on its own.
+  const onRestored = (): void => {
+    program = build();
+    renderer.draw(lastT);
+  };
+  return renderer;
 }
 
 /** Hook form used by the field plan's `src/animate/field.ts`: the runtime owns the context. */
@@ -217,6 +241,11 @@ export interface GlHooks {
     width: number,
     height: number,
   ): void;
+  /**
+   * Delete everything setup created. Runs on destroy even when setup threw
+   * partway (first use or after a restore), so it must tolerate partial setup.
+   * Do not lose the context: the canvas outlives the effect.
+   */
   teardown?(gl: WebGL2RenderingContext): void;
 }
 
@@ -231,19 +260,17 @@ export function createGlRuntime(
   let gl: WebGL2RenderingContext;
   let live = false;
   let ready = false;
+  // The latest requested frame, remembered even when it was skipped, so a restore can repaint it.
+  let lastT = 0;
   const onLost = (e: Event): void => {
     e.preventDefault();
     ready = false;
   };
-  const onRestored = (): void => {
-    hooks.setup(gl);
-    ready = true;
-  };
   const renderer: FrameRenderer = {
     init(c) {
       gl = getGl(c, true);
-      hooks.setup(gl);
       live = true;
+      hooks.setup(gl);
       ready = true;
       c.addEventListener("webglcontextlost", onLost);
       c.addEventListener("webglcontextrestored", onRestored);
@@ -252,6 +279,7 @@ export function createGlRuntime(
       // Device size is read from the canvas on every frame.
     },
     draw(t) {
+      lastT = t;
       if (!ready || gl.isContextLost()) return;
       gl.viewport(0, 0, canvas.width, canvas.height);
       hooks.render(gl, t, canvas.width, canvas.height);
@@ -263,9 +291,14 @@ export function createGlRuntime(
       canvas.removeEventListener("webglcontextlost", onLost);
       canvas.removeEventListener("webglcontextrestored", onRestored);
       hooks.teardown?.(gl);
-      gl.getExtension("WEBGL_lose_context")?.loseContext();
       ready = false;
     },
+  };
+  // A loss clears the drawing buffer and a non-looping handle never redraws on its own.
+  const onRestored = (): void => {
+    hooks.setup(gl);
+    ready = true;
+    renderer.draw(lastT);
   };
   return createRuntime<EffectOptions>(canvas, o, validateCommon, renderer);
 }

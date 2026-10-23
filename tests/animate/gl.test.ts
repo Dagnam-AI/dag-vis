@@ -94,13 +94,29 @@ describe("getGl / createProgram", () => {
     expect(first(fake).calls.at(-1)).toBe("drawArrays 4 0 3");
   });
 
-  it("reports a lost context when a shader cannot even be created", () => {
+  it("a canvas whose context was lost fails visibly instead of drawing nothing", () => {
+    fake = installFakeGl();
+    const canvas = document.createElement("canvas");
+    const gl = getGl(canvas, true);
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    expect(() =>
+      createProgram(getGl(canvas, true), FULLSCREEN_VERT, FRAG),
+    ).toThrow(/could not create the vertex shader/);
+    expect(gl).toBe(first(fake)); // the same context object comes back for the same canvas
+  });
+
+  it("frees the vertex shader when only the fragment stage fails to compile", () => {
     fake = installFakeGl();
     const gl = getGl(document.createElement("canvas"), true);
-    first(fake).shaderCreateFails = true;
+    first(fake).compileOk = false;
+    first(fake).compileFailsOn = "fragment";
     expect(() => createProgram(gl, FULLSCREEN_VERT, FRAG)).toThrow(
-      /could not create the vertex shader/,
+      /fragment shader failed to compile/,
     );
+    expect(first(fake).calls.filter((c) => c === "deleteShader")).toHaveLength(
+      2,
+    );
+    expect(first(fake).calls).not.toContain("createProgram");
   });
 
   it("reports compile and link failures with the info log and frees the objects", () => {
@@ -138,8 +154,8 @@ describe("glRenderer", () => {
     fake.restore();
   });
 
-  function setup(blend: boolean) {
-    const canvas = document.createElement("canvas");
+  function setup(blend: boolean, existing?: HTMLCanvasElement) {
+    const canvas = existing ?? document.createElement("canvas");
     canvas.width = 20;
     canvas.height = 10;
     const uploads: string[] = [];
@@ -188,25 +204,27 @@ describe("glRenderer", () => {
     );
   });
 
-  it("stops drawing on webglcontextlost (preventDefault) and rebuilds on restored", () => {
+  it("stops drawing on webglcontextlost (preventDefault) and rebuilds and repaints on restored", () => {
     const { canvas, r, uploads } = setup(false);
     r.init(canvas);
     r.resize(1);
+    r.draw(0.5);
+    expect(uploads).toEqual(["0.5 20 10 1"]);
     const gl = first(fake);
     const lost = new Event("webglcontextlost", { cancelable: true });
     canvas.dispatchEvent(lost);
     expect(lost.defaultPrevented).toBe(true);
-    gl.lost = true;
-    r.draw(1);
-    expect(uploads).toEqual([]);
-    gl.lost = false;
+    r.draw(1); // the fake still reports a live context: only the event stops this draw
+    expect(uploads).toEqual(["0.5 20 10 1"]);
     canvas.dispatchEvent(new Event("webglcontextrestored"));
     expect(gl.programs).toBe(2);
+    // The loss cleared the buffer and nothing is looping: the restore repaints the latest requested frame.
+    expect(uploads).toEqual(["0.5 20 10 1", "1 20 10 1"]);
     r.draw(2);
-    expect(uploads).toEqual(["2 20 10 1"]);
+    expect(uploads.at(-1)).toBe("2 20 10 1");
     gl.lost = true; // a lost context that fired no event is still skipped
     r.draw(3);
-    expect(uploads).toEqual(["2 20 10 1"]);
+    expect(uploads).toHaveLength(3);
   });
 
   it("dispose after a failed init (no WebGL2) does not throw", () => {
@@ -227,20 +245,39 @@ describe("glRenderer", () => {
     canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
     r.dispose();
     expect(first(fake).calls).not.toContain("deleteProgram");
-    expect(first(fake).calls.at(-1)).toBe("loseContext");
+    expect(first(fake).calls).not.toContain("loseContext");
   });
 
-  it("draw() before init is a no-op and dispose releases the program, listeners and context", () => {
+  it("draw() before init is a no-op and dispose releases the program and listeners, not the canvas's context", () => {
     const { canvas, r, uploads } = setup(false);
     r.draw(0);
     expect(uploads).toEqual([]);
     r.init(canvas);
     r.dispose();
     const gl = first(fake);
-    expect(gl.calls.slice(-2)).toEqual(["deleteProgram", "loseContext"]);
+    expect(gl.calls.at(-1)).toBe("deleteProgram");
+    expect(gl.calls).not.toContain("loseContext");
+    expect(gl.lost).toBe(false);
     canvas.dispatchEvent(new Event("webglcontextrestored"));
     expect(gl.programs).toBe(1); // listener removed → no rebuild
     r.dispose(); // idempotent
+  });
+
+  it("create, destroy, create again on the SAME canvas draws again (React StrictMode, effect switching)", () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 20;
+    canvas.height = 10;
+    const first1 = setup(false, canvas);
+    first1.r.init(canvas);
+    first1.r.draw(1);
+    first1.r.dispose();
+    const second = setup(false, canvas);
+    second.r.init(canvas);
+    second.r.draw(2);
+    expect(first1.uploads).toEqual(["1 20 10 1"]);
+    expect(second.uploads).toEqual(["2 20 10 1"]);
+    expect(fake.gls).toHaveLength(1); // one context per canvas, reused
+    expect(first(fake).lost).toBe(false);
   });
 });
 
@@ -282,15 +319,19 @@ describe("createGlRuntime (hook form for animate/field.ts)", () => {
     canvas.dispatchEvent(lost);
     expect(lost.defaultPrevented).toBe(true);
     h.renderAt(0.5); // nothing while lost
+    expect(log).toHaveLength(2);
     canvas.dispatchEvent(new Event("webglcontextrestored"));
-    h.renderAt(0.5);
+    // Setup again, then a repaint of the latest requested frame (the handle is not looping).
     expect(log.slice(2)).toEqual(["setup", "render 0.5 1 1"]);
+    h.renderAt(0.25);
+    expect(log.at(-1)).toBe("render 0.25 1 1");
     first(fake).lost = true; // lost without an event
     h.renderAt(0.75);
-    expect(log).toHaveLength(4);
+    expect(log).toHaveLength(5);
+    first(fake).lost = false;
     h.destroy();
     expect(log.at(-1)).toBe("teardown");
-    expect(first(fake).calls.at(-1)).toBe("loseContext");
+    expect(first(fake).calls).not.toContain("loseContext");
   });
 
   it("destroy after a failed init (no WebGL2) does not throw", () => {
@@ -323,6 +364,47 @@ describe("createGlRuntime (hook form for animate/field.ts)", () => {
     });
     h.renderAt(0);
     h.destroy();
-    expect(first(fake).calls.at(-1)).toBe("loseContext");
+    expect(first(fake).calls).not.toContain("loseContext");
+  });
+
+  it("create, destroy, create again on the SAME canvas renders again (React StrictMode, effect switching)", () => {
+    const canvas = document.createElement("canvas");
+    const log: string[] = [];
+    const hooks = (tag: string) => ({
+      setup: () => log.push(`${tag} setup`),
+      render: () => log.push(`${tag} render`),
+      teardown: () => log.push(`${tag} teardown`),
+    });
+    const a = createGlRuntime(canvas, hooks("a"));
+    a.renderAt(0);
+    a.destroy();
+    const b = createGlRuntime(canvas, hooks("b"));
+    b.renderAt(0);
+    expect(log).toEqual([
+      "a setup",
+      "a render",
+      "a teardown",
+      "b setup",
+      "b render",
+    ]);
+    expect(fake.gls).toHaveLength(1);
+    expect(first(fake).lost).toBe(false);
+  });
+
+  it("teardown still runs when setup threw, so it must tolerate partial setup", () => {
+    const canvas = document.createElement("canvas");
+    const log: string[] = [];
+    const h = createGlRuntime(canvas, {
+      setup: () => {
+        throw new VisError("bad shader");
+      },
+      render: () => log.push("render"),
+      teardown: () => log.push("teardown"),
+    });
+    expect(() => {
+      h.renderAt(0);
+    }).toThrow(/bad shader/);
+    h.destroy();
+    expect(log).toEqual(["teardown"]);
   });
 });
