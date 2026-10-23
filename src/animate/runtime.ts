@@ -103,6 +103,8 @@ export function createRuntime<O extends EffectOptions>(
   let hidden = false;
   let scheduled = 0;
   let virtual = 0;
+  // The time of the frame last drawn: what a resize or update must repaint.
+  let lastT = 0;
   let lastNow = 0;
   let lastDraw = Number.NEGATIVE_INFINITY;
   let ro: ResizeObserver | undefined;
@@ -139,7 +141,7 @@ export function createRuntime<O extends EffectOptions>(
       for (const { contentRect: r } of entries) {
         applySize(Math.max(1, r.width), Math.max(1, r.height));
         // The resize cleared the canvas; a non-looping handle must repaint itself.
-        if (staticOnly || !running) renderer.draw(loopTime(virtual, opts.loop));
+        if (staticOnly || !running) renderer.draw(loopTime(lastT, opts.loop));
       }
     });
     ro.observe(parent);
@@ -147,6 +149,7 @@ export function createRuntime<O extends EffectOptions>(
 
   function renderAt(t: number): void {
     ensureInit();
+    lastT = t;
     renderer.draw(loopTime(t, opts.loop));
   }
 
@@ -179,6 +182,8 @@ export function createRuntime<O extends EffectOptions>(
 
   function watch(): void {
     if (!opts.autoPause) return;
+    // Read the tab state now: the listener is gone while stopped, so a stale flag would freeze the loop.
+    hidden = document.hidden;
     document.addEventListener("visibilitychange", onVisibility);
     if (typeof IntersectionObserver === "undefined") return;
     io = new IntersectionObserver((entries) => {
@@ -217,14 +222,19 @@ export function createRuntime<O extends EffectOptions>(
   }
 
   function update(patch: Patch<O>): void {
-    merge(opts, patch as Patch<ResolvedOptions<O>>);
-    validate(opts);
-    if (inited && staticOnly) renderer.draw(loopTime(virtual, opts.loop));
+    // Validate a merged copy so a rejected patch leaves the live options untouched.
+    const next = merge({ ...opts }, patch as Patch<ResolvedOptions<O>>);
+    validate(next);
+    Object.assign(opts, next);
+    if (staticOnly) renderer.draw(loopTime(lastT, opts.loop));
+    // autoPause: false (or any option) may lift a pause nothing else will end.
+    else if (running && scheduled === 0) resume();
   }
 
   function destroy(): void {
     if (destroyed) return;
     stop();
+    staticOnly = false;
     ro?.disconnect();
     ro = undefined;
     if (inited) renderer.dispose();

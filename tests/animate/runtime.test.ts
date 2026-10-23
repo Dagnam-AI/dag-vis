@@ -258,7 +258,11 @@ describe("createRuntime", () => {
     expect(dom.pending()).toBe(0);
     dom.resize(10, 10);
     expect(r.calls.at(-1)).toBe("draw 0.016");
-    handle.stop(); // idempotent
+    const drawn = r.calls.length;
+    handle.stop(); // idempotent: no extra draw, nothing rescheduled
+    expect(handle.running).toBe(false);
+    expect(dom.pending()).toBe(0);
+    expect(r.calls).toHaveLength(drawn);
   });
 
   it("destroy() disposes once and makes start()/renderAt() throw", () => {
@@ -287,6 +291,96 @@ describe("createRuntime", () => {
     handle.renderAt(0);
     expect(r.calls).toContain("resize 1");
     expect(canvas.width).toBe(1);
+  });
+
+  it("a rejected update() leaves the options and the running loop untouched", () => {
+    const canvas = mount();
+    const { handle, r, opts } = make(canvas);
+    handle.start();
+    dom.frame(16);
+    expect(() => {
+      handle.update({ speed: Number.POSITIVE_INFINITY });
+    }).toThrow(VisError);
+    expect(() => {
+      handle.update({ speed: 3, size: -1 });
+    }).toThrow(VisError);
+    expect(opts.speed).toBe(1);
+    expect(opts.size).toBe(1);
+    dom.frame(16);
+    expect(r.calls.filter((c) => c.startsWith("draw"))).toEqual([
+      "draw 0.016",
+      "draw 0.032",
+    ]);
+  });
+
+  it("a resize after renderAt(t) redraws t, not the loop clock", () => {
+    const canvas = mount();
+    const { handle, r } = make(canvas);
+    handle.renderAt(5);
+    dom.resize(10, 10); // the observer's notification clears the canvas
+    expect(r.calls.filter((c) => c.startsWith("draw"))).toEqual([
+      "draw 5.000",
+      "draw 5.000",
+    ]);
+  });
+
+  it("restarting under reduced motion repaints the static frame, never the old loop time", () => {
+    const canvas = mount();
+    const { handle, r } = make(canvas);
+    handle.start();
+    dom.frame(500);
+    handle.stop();
+    (globalThis as unknown as Record<string, unknown>).matchMedia = () => ({
+      matches: true,
+    });
+    handle.start();
+    dom.resize(5, 5);
+    expect(r.calls.filter((c) => c.startsWith("draw"))).toEqual([
+      "draw 0.500",
+      "draw 0.000",
+      "draw 0.000",
+    ]);
+  });
+
+  it("update() after destroy() never draws, even under reduced motion", () => {
+    dom.restore();
+    dom = installFakeDom({ reducedMotion: true });
+    const canvas = mount();
+    const { handle, r } = make(canvas);
+    handle.start();
+    handle.destroy();
+    handle.update({ speed: 2 });
+    expect(r.calls.at(-1)).toBe("dispose");
+  });
+
+  it("start() after a stop() while hidden reads document.hidden again and runs", () => {
+    const canvas = mount();
+    const { handle } = make(canvas);
+    handle.start();
+    dom.frame(16);
+    dom.hidden(true);
+    handle.stop();
+    dom.hidden(false); // no listener is attached while stopped
+    handle.start();
+    expect(dom.pending()).toBe(1);
+  });
+
+  it("update({ autoPause: false }) while auto-paused restarts the loop", () => {
+    const canvas = mount();
+    const { handle, r } = make(canvas);
+    handle.start();
+    dom.frame(16);
+    dom.intersect(false);
+    dom.frame(16);
+    expect(dom.pending()).toBe(0);
+    dom.frame(1000);
+    handle.update({ autoPause: false });
+    expect(dom.pending()).toBe(1);
+    dom.frame(16);
+    expect(r.calls.filter((c) => c.startsWith("draw"))).toEqual([
+      "draw 0.016",
+      "draw 0.032",
+    ]);
   });
 
   it("destroy() before any init does not dispose", () => {
