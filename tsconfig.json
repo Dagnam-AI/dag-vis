@@ -24,6 +24,7 @@
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "vitest.config.ts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "playwright.fidelity.config.ts"
   ]
 }
