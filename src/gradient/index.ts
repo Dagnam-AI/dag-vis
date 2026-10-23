@@ -14,6 +14,7 @@ import { renderBanded } from "./banded.js";
 import { renderConic } from "./conic.js";
 import { renderFluted } from "./fluted.js";
 import { renderFreeform } from "./freeform.js";
+import { renderGlows } from "./glows.js";
 import { grainLayer } from "./grain.js";
 import { renderLayers } from "./layers.js";
 import { renderLinear } from "./linear.js";
@@ -65,6 +66,8 @@ function renderKind(spec: GradientSpec, ctx: Ctx): KindOutput {
       return renderLayers(spec, ctx);
     case "freeform":
       return renderFreeform(spec, ctx);
+    case "glows":
+      return renderGlows(spec, ctx);
     case "fluted":
       return renderFluted(spec, ctx);
     default:

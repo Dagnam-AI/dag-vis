@@ -104,6 +104,23 @@ export interface FreeformSpec extends GradientBase {
   base?: string;
 }
 
+export interface GlowPoint {
+  /** The ellipse's radii in percent of the box: [width, height], each 0.01..1000. */
+  size: readonly [number, number];
+  /** Centre in percent of the box, each 0..100. */
+  at: readonly [number, number];
+  /** Any colour the package parses (oklch included); its alpha is the glow's strength. */
+  color: string;
+}
+
+export interface GlowsSpec extends GradientBase {
+  kind: "glows";
+  /** Strongest first: the first glow is drawn on top. Each fades to transparent at 70%. */
+  glows: readonly GlowPoint[];
+  /** The solid colour under the glows. */
+  base: string;
+}
+
 export interface FlutedSpec extends GradientBase {
   kind: "fluted";
   source: GradientSpec;
@@ -141,6 +158,7 @@ export type GradientSpec =
   | BandedSpec
   | LayersSpec
   | FreeformSpec
+  | GlowsSpec
   | FlutedSpec;
 
 export interface GradientResult {
