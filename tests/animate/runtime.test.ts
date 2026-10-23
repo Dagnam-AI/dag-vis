@@ -155,7 +155,22 @@ describe("createRuntime", () => {
     expect(canvas.width).toBe(451); // round(300.4 × 1.5)
     expect(canvas.height).toBe(630);
     expect(canvas.style.height).toBe("420px");
-    expect(r.calls.at(-1)).toBe("resize 1.5");
+    // The resize cleared the canvas: the frame is redrawn in the same callback.
+    expect(r.calls.slice(-2)).toEqual(["resize 1.5", "draw 0.000"]);
+  });
+
+  it("a resize while running repaints the last drawn frame right after the clear, not a new time", () => {
+    const canvas = mount();
+    const { handle, r } = make(canvas, { loop: { duration: 2 } });
+    handle.start();
+    dom.frame(3000); // virtual 3 s, drawn as loop time 1
+    const before = r.calls.length;
+    dom.resize(40, 30);
+    // Same callback: resize, then the same frame again (no clock read, no rAF).
+    expect(r.calls.slice(before)).toEqual(["resize 2", "draw 1.000"]);
+    expect(handle.running).toBe(true);
+    dom.frame(16); // the loop carries on from the virtual clock
+    expect(r.calls.at(-1)).toBe("draw 1.016");
   });
 
   it("renderAt() initialises lazily, wraps with loop and never touches the clock", () => {

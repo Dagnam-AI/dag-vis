@@ -15,6 +15,13 @@ function first(fake: ReturnType<typeof installFakeGl>): FakeGl {
 const uniforms = (calls: string[]) =>
   calls.filter((c) => c.startsWith("uniform"));
 
+/** The resize repaints the frame first: the frame under test is the second half, and the two must match. */
+const lastFrame = (u: string[]): string[] => {
+  const half = u.length / 2;
+  expect(u.slice(0, half)).toEqual(u.slice(half));
+  return u.slice(half);
+};
+
 describe("createDither", () => {
   let dom: FakeDom;
   let fake: ReturnType<typeof installFakeGl>;
@@ -42,7 +49,7 @@ describe("createDither", () => {
     const gl = first(fake);
     expect(gl.attrs).toMatchObject({ premultipliedAlpha: true });
     expect(gl.calls).toContain(`disable ${gl.BLEND}`);
-    expect(uniforms(gl.calls)).toEqual([
+    expect(lastFrame(uniforms(gl.calls))).toEqual([
       "uniform2f resolution 200 100",
       "uniform1f time 0",
       `uniform1f waveSpeed ${DITHER_DEFAULTS.waveSpeed}`,

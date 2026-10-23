@@ -188,6 +188,7 @@ describe("createGlitch", () => {
     const h = createGlitch(canvas);
     h.start();
     dom.resize(45, 30); // 5 columns × 2 rows
+    ctx().calls.length = 0; // the resize repaint is not the frame under test
     dom.frame(0);
     const c = ctx();
     expect(c.calls).toContain("setTransform 2 0 0 2 0 0");
@@ -220,6 +221,7 @@ describe("createGlitch", () => {
     });
     h.start();
     dom.resize(20, 20);
+    ctx().calls.length = 0;
     dom.frame(0);
     expect(texts()).toHaveLength(2);
     for (const line of texts())

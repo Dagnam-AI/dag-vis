@@ -18,6 +18,13 @@ function first(fake: ReturnType<typeof installFakeGl>): FakeGl {
 const uniforms = (calls: string[]) =>
   calls.filter((c) => c.startsWith("uniform"));
 
+/** The resize repaints the frame first: the frame under test is the second half, and the two must match. */
+const lastFrame = (u: string[]): string[] => {
+  const half = u.length / 2;
+  expect(u.slice(0, half)).toEqual(u.slice(half));
+  return u.slice(half);
+};
+
 describe("createTerminal", () => {
   let dom: FakeDom;
   let fake: ReturnType<typeof installFakeGl>;
@@ -50,7 +57,7 @@ describe("createTerminal", () => {
     const offset = createRng(1).next() * 100;
     expect(gl.attrs).toMatchObject({ premultipliedAlpha: false });
     expect(gl.calls).toContain(`disable ${String(gl.BLEND)}`);
-    expect(uniforms(gl.calls)).toEqual([
+    expect(lastFrame(uniforms(gl.calls))).toEqual([
       `uniform1f iTime ${String(offset * TERMINAL_DEFAULTS.timeScale)}`,
       "uniform3f iResolution 200 100 2",
       "uniform1f uScale 1",

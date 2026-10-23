@@ -156,8 +156,9 @@ export function createRuntime<O extends EffectOptions>(
     ro = new ResizeObserver((entries) => {
       for (const { contentRect: r } of entries) {
         applySize(Math.max(1, r.width), Math.max(1, r.height));
-        // The resize cleared the canvas; a non-looping handle must repaint itself.
-        if (staticOnly || !running) renderer.draw(loopTime(lastT, opts.loop));
+        // Resizing the backing store cleared the canvas, and the observer runs after the frame callbacks
+        // but before paint: always repaint the last drawn frame, or a running effect shows blank frames.
+        renderer.draw(loopTime(lastT, opts.loop));
       }
     });
     ro.observe(parent);

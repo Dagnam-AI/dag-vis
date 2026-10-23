@@ -18,6 +18,13 @@ function first(fake: ReturnType<typeof installFakeGl>): FakeGl {
 const uniforms = (calls: string[]) =>
   calls.filter((c) => c.startsWith("uniform"));
 
+/** The resize repaints the frame first: the frame under test is the second half, and the two must match. */
+const lastFrame = (u: string[]): string[] => {
+  const half = u.length / 2;
+  expect(u.slice(0, half)).toEqual(u.slice(half));
+  return u.slice(half);
+};
+
 describe("createPixelBlast", () => {
   let dom: FakeDom;
   let fake: ReturnType<typeof installFakeGl>;
@@ -52,7 +59,7 @@ describe("createPixelBlast", () => {
     expect(gl.calls).toContain(
       `blendFuncSeparate ${String(gl.SRC_ALPHA)} ${String(gl.ONE_MINUS_SRC_ALPHA)} ${String(gl.ONE)} ${String(gl.ONE_MINUS_SRC_ALPHA)}`,
     );
-    expect(uniforms(gl.calls)).toEqual([
+    expect(lastFrame(uniforms(gl.calls))).toEqual([
       "uniform2f uResolution 200 100",
       `uniform1f uTime ${String(offset)}`,
       "uniform3f uColor 0.7058823529411765 0.592156862745098 0.8117647058823529",
