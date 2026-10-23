@@ -25,5 +25,5 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 - The root entry exports an explicit list of 31 names (pinned by `tests/index.test.ts`). The SVG builder, validators, stop pipeline, geometry helpers (`fitAspect`, `focalScale`, `focalTransform`), text caps and Inter metrics are internal; names can be added after 0.1.0 but never removed.
 - First release. `./react` is declared in `exports` but its entry point is not built yet; it lands with the animation engine.
 - `@resvg/resvg-js` is an optional peer dependency, needed only for PNG output (`@dagnam/vis/node`, the CLI).
-- Contributing needs Node 22.12 or newer; the package itself supports Node 20 or newer.
+- Contributing needs Node 22.12 or newer; the package itself needs Node 22 or newer (Node 20 is end-of-life, and CI only tests 22).
 - Releases support plain `vis/vX.Y.Z` tags only: a prerelease suffix would publish to the `latest` dist-tag, so the release workflow rejects any other tag format. It also refuses (as a guard against accidental tags, not an attacker) a tagged commit that is not on `main`; a tag ruleset on `vis/v*` and the protected `npm` Environment (the publish job runs in it) provide the actual protection, and npm's trusted publisher must name workflow `release.yml` and environment `npm`, see the README.
