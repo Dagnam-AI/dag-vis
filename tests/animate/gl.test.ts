@@ -39,8 +39,9 @@ describe("getGl / createProgram", () => {
       antialias: false,
       depth: false,
       stencil: false,
-      powerPreference: "high-performance",
     });
+    // No powerPreference: the browser's default, so a discrete GPU is not woken for a background.
+    expect(first(fake).attrs).not.toHaveProperty("powerPreference");
     expect(gl).toBe(first(fake));
   });
 

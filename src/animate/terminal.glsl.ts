@@ -1,7 +1,7 @@
 /**
  * FaultyTerminal: the landing page's `faulty-terminal.tsx` ogl fragment,
  * verbatim in GLSL ES 3.00. The uv comes from gl_FragCoord instead of ogl's
- * Triangle varying (identical values). The mouse and page-load branches are
+ * Triangle varying (the same pixel-centre coordinates up to float rounding). The mouse and page-load branches are
  * removed: the landing page disables both.
  */
 export const TERMINAL_FRAG = `#version 300 es

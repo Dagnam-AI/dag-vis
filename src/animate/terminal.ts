@@ -1,5 +1,5 @@
 import { VisError, createRng } from "../core/index.js";
-import { colourOf, namedVec3, validatePalette } from "./colour.js";
+import { namedVec3, validatePalette } from "./colour.js";
 import { glRenderer } from "./gl.js";
 import {
   COMMON_DEFAULTS,
@@ -20,7 +20,8 @@ export interface TerminalOptions extends EffectOptions {
    */
   tint?: string;
   scale?: number;
-  gridMul?: [number, number];
+  /** Glyph grid multiplier `[x, y]`; copied, and a readonly tuple (the exported default) is accepted. */
+  gridMul?: readonly [number, number];
   digitSize?: number;
   /** Today's internal time multiplier (0.3). `speed` scales on top of it. */
   timeScale?: number;
@@ -65,13 +66,7 @@ const ditherValue = (d: number | boolean): number =>
 
 /** `tint`, else `colors[0]`, else the default, named `tint` in the error. */
 const tintVec = (o: Resolved): [number, number, number] =>
-  namedVec3(
-    "tint",
-    colourOf(
-      { ...o, ...(o.tint !== undefined && { color: o.tint }) },
-      FALLBACK_TINT,
-    ),
-  );
+  namedVec3("tint", o.tint ?? o.colors?.[0] ?? FALLBACK_TINT);
 
 function validate(o: Resolved): void {
   validatePalette(o);

@@ -263,8 +263,7 @@ export function createGlitch(
   // The cells for one tick, rebuilt when the tick or any input that shapes them changes.
   let cache: { sig: readonly unknown[]; cells: Cell[] } | undefined;
 
-  const renderer = canvas2dRenderer((ctx, w, h, dpr, rawT) => {
-    const t = Number.isFinite(rawT) ? rawT : 0;
+  const renderer = canvas2dRenderer((ctx, w, h, dpr, t) => {
     const cols = Math.ceil(w / CELL_W);
     const count = cols * Math.ceil(h / CELL_H);
     // Looping: stretch the tick so a whole number of them fills the loop and the seam is seamless.

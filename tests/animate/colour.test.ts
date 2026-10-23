@@ -60,6 +60,15 @@ describe("validatePalette", () => {
     }).not.toThrow();
   });
 
+  it.each([
+    ["a Set", new Set(["#fff"])],
+    ["a string", "#fff"],
+  ])("rejects %s: only an array can be copied and kept honest", (_name, v) => {
+    expect(() => {
+      validatePalette({ colors: v as never });
+    }).toThrow(/^colors must be an array/);
+  });
+
   it("names the failing entry", () => {
     expect(() => {
       validatePalette({ colors: ["#fff", "nope"] });

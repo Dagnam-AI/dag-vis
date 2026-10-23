@@ -2,7 +2,7 @@
 import type {} from "../../demo/global.js";
 import type * as Animate from "../../src/animate/index.js";
 
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { expect, test } from "@playwright/test";
 
@@ -129,17 +129,19 @@ test("every effect runs live, destroys cleanly, and a fresh effect draws on the 
     });
   });
   expect(r.map((x) => x.name)).toEqual([...EFFECTS]);
+  // Soft: one run reports every failing effect, not just the first.
   for (const x of r) {
-    expect(x.runningBefore, `${x.name} was running`).toBe(true);
-    expect(x.runningAfter, `${x.name} stopped`).toBe(false);
-    expect(x.usable, `${x.name} canvas keeps its context`).toBe(true);
-    expect(x.afterDestroy, `${x.name} rejects use`).toMatch(/destroyed/);
+    expect.soft(x.runningBefore, `${x.name} was running`).toBe(true);
+    expect.soft(x.runningAfter, `${x.name} stopped`).toBe(false);
+    expect.soft(x.usable, `${x.name} canvas keeps its context`).toBe(true);
+    expect.soft(x.afterDestroy, `${x.name} rejects use`).toMatch(/destroyed/);
   }
 
   // The E1 contract: destroy -> recreate on the SAME canvas draws again. The
   // gallery does not expose the factories, so import the module vite serves
-  // (/@fs/ + absolute path, since vite's root is demo/).
-  const animate = `/@fs${resolve("src/animate/index.ts")}`;
+  // (/@fs/ + absolute path, since vite's root is demo/), anchored on this file
+  // rather than on the working directory.
+  const animate = `/@fs${fileURLToPath(new URL("../../src/animate/index.ts", import.meta.url))}`;
   const again = await page.evaluate(async (url) => {
     const m = (await import(/* @vite-ignore */ url)) as typeof Animate;
     const make = {
@@ -168,9 +170,9 @@ test("every effect runs live, destroys cleanly, and a fresh effect draws on the 
   }, animate);
   expect(again.map((x) => x.name)).toEqual([...EFFECTS]);
   for (const x of again)
-    expect(x.coverage, `${x.name} draws on its old canvas`).toBeGreaterThan(
-      0.01,
-    );
+    expect
+      .soft(x.coverage, `${x.name} draws on its old canvas`)
+      .toBeGreaterThan(0.01);
   expect(errors).toEqual([]);
 });
 

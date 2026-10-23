@@ -174,6 +174,20 @@ describe("createRuntime", () => {
     expect(dom.pending()).toBe(0);
   });
 
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    "renderAt(%s) throws a VisError naming t and draws nothing",
+    (t) => {
+      const { handle, r } = make(mount());
+      expect(() => {
+        handle.renderAt(t);
+      }).toThrow(VisError);
+      expect(() => {
+        handle.renderAt(t);
+      }).toThrow(/^t must be a finite number, got /);
+      expect(r.calls).toEqual([]);
+    },
+  );
+
   it("a detached canvas keeps its own width/height and dpr 1", () => {
     const canvas = document.createElement("canvas");
     canvas.width = 640;
@@ -417,6 +431,13 @@ describe("own (callers cannot mutate validated arrays and objects)", () => {
       loop: undefined,
     });
     expect("colors" in own({ speed: 1 })).toBe(false);
+  });
+  it("copies every array-valued option, not only colors", () => {
+    const gridMul = [2, 1];
+    const copy = own({ gridMul, speed: 1 });
+    expect(copy.gridMul).toEqual([2, 1]);
+    expect(copy.gridMul).not.toBe(gridMul);
+    expect(copy.speed).toBe(1);
   });
   it("createRuntime copies colors and loop at creation and on update", () => {
     const colors = ["#000000"];

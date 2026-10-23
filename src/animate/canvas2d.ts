@@ -20,7 +20,10 @@ export function canvas2dRenderer(draw: Draw2d): FrameRenderer {
   return {
     init(canvas) {
       const c = canvas.getContext("2d");
-      if (!c) throw new VisError("Canvas 2D is not available on this canvas");
+      if (!c)
+        throw new VisError(
+          "Canvas 2D is not available on this canvas (it may already hold a WebGL context)",
+        );
       ctx = c;
     },
     resize(d) {

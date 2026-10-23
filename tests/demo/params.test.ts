@@ -32,6 +32,11 @@ describe("demo URL parameters", () => {
     expect(parse("?w=16&h=16")).toMatchObject({ ok: true, w: 16, h: 16 });
   });
 
+  it("normalises -0 to 0 for the seed", () => {
+    const p = parse("?seed=-0");
+    expect(p.ok && Object.is(p.seed, 0)).toBe(true);
+  });
+
   it.each([
     ["?seed=abc", "Invalid ?seed=abc: expected an integer"],
     ["?seed=1.5", "Invalid ?seed=1.5: expected an integer"],
@@ -44,6 +49,11 @@ describe("demo URL parameters", () => {
     ["?t=-1", "Invalid ?t=-1: expected a number of seconds >= 0"],
     ["?t=", "Invalid ?t=: expected a number of seconds >= 0"],
     ["?t=Infinity", "Invalid ?t=Infinity: expected a number of seconds >= 0"],
+    [
+      // 400 digits is a well-formed number that Number() turns into Infinity.
+      `?t=${"9".repeat(400)}`,
+      `Invalid ?t=${"9".repeat(400)}: expected a number of seconds >= 0`,
+    ],
     ["?w=-5", "Invalid ?w=-5: expected an integer from 16 to 4096"],
     ["?w=abc", "Invalid ?w=abc: expected an integer from 16 to 4096"],
     ["?w=15", "Invalid ?w=15: expected an integer from 16 to 4096"],

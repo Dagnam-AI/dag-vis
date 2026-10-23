@@ -23,6 +23,10 @@ void main() {
 `;
 
 /**
+ * A canvas keeps the context it first created: if it already holds one, that
+ * context's attributes (including `premultipliedAlpha`) win over the ones asked
+ * for here.
+ *
  * Lifecycle: `destroy()` releases the effect's GPU objects (programs, and
  * whatever a hook's `teardown` deletes); the canvas keeps its context, so the
  * same canvas can host a new effect afterwards (React StrictMode mounts twice
@@ -41,7 +45,6 @@ export function getGl(
     antialias: false,
     depth: false,
     stencil: false,
-    powerPreference: "high-performance",
   });
   if (!gl) throw new VisError("WebGL2 is not available on this canvas");
   return gl;

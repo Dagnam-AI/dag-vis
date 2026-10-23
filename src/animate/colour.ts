@@ -42,6 +42,10 @@ export const colourOf = (
 
 /** Validate every palette entry, naming `colors[i]` in the error. */
 export function validatePalette(o: { colors?: string[] }): void {
+  // Typed unknown: a JS caller can pass a Set or a string, which `own` cannot copy.
+  const colors: unknown = o.colors;
+  if (colors !== undefined && !Array.isArray(colors))
+    throw new VisError("colors must be an array of colours");
   o.colors?.forEach((c, i) => namedVec3(`colors[${String(i)}]`, c));
 }
 

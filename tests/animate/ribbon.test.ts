@@ -228,11 +228,11 @@ describe("createRibbon", () => {
     expect(points().length).toBeGreaterThan(0);
   });
 
-  it("treats a non-finite t as phase 0 instead of throwing in the render callback", () => {
+  it("rejects a non-finite t and treats an overflowing t x drift as phase 0", () => {
     const h = sized({ lines: 2 });
     const zero = shot(h, 0);
-    expect(shot(h, Number.NaN)).toEqual(zero);
-    expect(shot(h, Number.POSITIVE_INFINITY)).toEqual(zero);
+    expect(() => shot(h, Number.NaN)).toThrow(/^t must be a finite number/);
+    expect(() => shot(h, Number.POSITIVE_INFINITY)).toThrow(VisError);
     const huge = sized({ lines: 2, drift: 1e300 });
     expect(shot(huge, 1e300)).toEqual(zero);
   });

@@ -178,6 +178,22 @@ describe("createDither", () => {
     }).toThrow(VisError);
   });
 
+  it("a rejected update leaves the uniforms of the next frame unchanged", () => {
+    const h = createDither(canvas, { colorNum: 4, waveSpeed: 0.5 });
+    h.renderAt(0);
+    const gl = first(fake);
+    const frame = () => {
+      gl.calls.length = 0;
+      h.renderAt(0);
+      return uniforms(gl.calls);
+    };
+    const before = frame();
+    expect(() => {
+      h.update({ colorNum: Number.NaN, waveSpeed: 9 });
+    }).toThrow(VisError);
+    expect(frame()).toEqual(before);
+  });
+
   it("destroy() deletes its program but keeps the context, so the same canvas can host a new dither (E1)", () => {
     const h = createDither(canvas);
     h.start();

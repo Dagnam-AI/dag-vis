@@ -129,6 +129,25 @@ describe("createTerminal", () => {
     );
   });
 
+  it("the exported default tuple is a valid gridMul (readonly tuples type-check)", () => {
+    const h = createTerminal(canvas, { gridMul: TERMINAL_DEFAULTS.gridMul });
+    h.renderAt(0);
+    expect(last("uniform2f uGridMul")).toBe("uniform2f uGridMul 2 1");
+  });
+
+  it("keeps its own copy of gridMul: a caller mutating the array changes nothing", () => {
+    const grid: [number, number] = [3, 4];
+    const h = createTerminal(canvas, { gridMul: grid });
+    grid[0] = 0; // would be invalid, and would bypass validation by reference
+    h.renderAt(0);
+    expect(last("uniform2f uGridMul")).toBe("uniform2f uGridMul 3 4");
+    const patch: [number, number] = [5, 6];
+    h.update({ gridMul: patch });
+    patch[1] = -1;
+    h.renderAt(0);
+    expect(last("uniform2f uGridMul")).toBe("uniform2f uGridMul 5 6");
+  });
+
   it("update({ timeScale, gridMul }) is read on the next frame", () => {
     const h = createTerminal(canvas, { seed: 2 });
     h.update({ timeScale: 1, gridMul: [3, 4] });

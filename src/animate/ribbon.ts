@@ -116,7 +116,7 @@ export function createRibbon(
     const h = Math.min(rawH, MAX_DIMENSION);
     // 2π per loop: the runtime wrapped t into [0, duration), so frames 0 and duration are the same.
     const raw = o.loop ? (2 * Math.PI * t) / o.loop.duration : t * o.drift;
-    // A non-finite t (or an overflowing t × drift) would throw inside ribbonCurves.
+    // An overflowing t × drift would throw inside ribbonCurves (the runtime already rejects a non-finite t).
     const phase = Number.isFinite(raw) ? raw : 0;
     const curves = ribbonCurves(
       {

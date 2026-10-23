@@ -33,7 +33,10 @@ export function parseParams(
   if (!/^-?\d+$/.test(seedRaw) || !Number.isSafeInteger(Number(seedRaw)))
     return fail("seed", seedRaw, "an integer");
   const tRaw = q.get("t");
-  if (tRaw !== null && !/^(\d+\.?\d*|\.\d+)$/.test(tRaw))
+  if (
+    tRaw !== null &&
+    !(/^(\d+\.?\d*|\.\d+)$/.test(tRaw) && Number.isFinite(Number(tRaw)))
+  )
     return fail("t", tRaw, "a number of seconds >= 0");
   const wRaw = q.get("w") ?? "320";
   const hRaw = q.get("h") ?? "480";
@@ -53,7 +56,7 @@ export function parseParams(
   return {
     ok: true,
     t: tRaw === null ? null : Number(tRaw),
-    seed: Number(seedRaw),
+    seed: Number(seedRaw) + 0, // "-0" parses to -0; + 0 normalises it
     effect,
     w: Number(wRaw),
     h: Number(hRaw),

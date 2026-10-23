@@ -340,12 +340,12 @@ describe("createGlitch", () => {
     expect(["0, 0, 0)", "255, 255, 255)"]).toContain(fill(first[0] ?? ""));
   });
 
-  it("treats negative and non-finite t as the first frame", () => {
+  it("treats a negative t as the first frame and rejects a non-finite one", () => {
     const h = oneCell({ seed: 5 });
     const zero = shot(h, 0);
     expect(shot(h, -4)).toEqual(zero);
-    expect(shot(h, Number.NaN)).toEqual(zero);
-    expect(shot(h, Number.POSITIVE_INFINITY)).toEqual(zero);
+    expect(() => shot(h, Number.NaN)).toThrow(/^t must be a finite number/);
+    expect(() => shot(h, Number.POSITIVE_INFINITY)).toThrow(VisError);
   });
 
   it("loop makes frame 0 and frame duration identical, and distinct from the middle", () => {
@@ -475,17 +475,15 @@ describe("createGlitch", () => {
     expect(shot(h, 0)[0]).toBe("fillText A 0 0 rgb(255, 0, 0)");
     h.update({ characters: "Z" });
     expect(shot(h, 0)[0]).toBe("fillText Z 0 0 rgb(255, 0, 0)");
-    const h2 = oneCell({ seed: 1 });
-    const a = shot(h2, 100)[0];
+    // A whole grid, so seeds 1 and 2 cannot coincide by chance.
+    const h2 = createGlitch(canvas, { vignette: "none", seed: 1 });
+    h2.start();
+    dom.resize(200, 200);
+    const one = shot(h2, 100);
     h2.update({ seed: 2 });
-    h2.update({ glitchSpeed: 50 });
-    const seeds = new Set<string | undefined>();
-    for (let s = 2; s < 12; s += 1) {
-      h2.update({ seed: s });
-      seeds.add(shot(h2, 100)[0]);
-    }
-    seeds.add(a);
-    expect(seeds.size).toBeGreaterThan(1);
+    expect(shot(h2, 100)).not.toEqual(one);
+    h2.update({ seed: 1 });
+    expect(shot(h2, 100)).toEqual(one);
   });
 
   it("update({ glitchSpeed }) retimes the ticks and a resize regrids the cells", () => {

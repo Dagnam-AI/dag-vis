@@ -56,15 +56,18 @@ export function merge<T extends object>(target: T, patch: Patch<T>): T {
 }
 
 /**
- * Copies the array and object options (`colors`, `loop`) so a caller mutating
- * them after validation cannot bypass it. Applied by `createRuntime` to the
- * options it is given and to every `update()` patch.
+ * Copies every array-valued option (`colors`, `gridMul`, ...) and `loop` so a
+ * caller mutating them after validation cannot bypass it. Applied by
+ * `createRuntime` to the options it is given and to every `update()` patch.
  */
-export const own = <P extends Patch<EffectOptions>>(p: P): P => ({
-  ...p,
-  ...(Array.isArray(p.colors) && { colors: [...p.colors] }),
-  ...(p.loop && { loop: { ...p.loop } }),
-});
+export const own = <P extends object>(p: P): P => {
+  const out = { ...p } as Record<string, unknown>;
+  for (const [key, value] of Object.entries(out))
+    if (Array.isArray(value)) out[key] = [...(value as unknown[])];
+  const { loop } = p as Patch<EffectOptions>;
+  if (loop) out.loop = { ...loop };
+  return out as P;
+};
 
 export function assertFinite(
   name: string,
@@ -124,13 +127,7 @@ export function createRuntime<O extends EffectOptions>(
   // The common fields, typed concretely (indexing the generic `opts` leaves them possibly undefined).
   const common = opts as unknown as ResolvedOptions<EffectOptions>;
   // The effect validated these a moment ago; from here the runtime owns its copies.
-  Object.assign(
-    opts,
-    own({
-      ...(common.colors && { colors: common.colors }),
-      ...(common.loop && { loop: common.loop }),
-    }),
-  );
+  Object.assign(opts, own(opts));
 
   const paused = (): boolean => opts.autoPause && (outOfView || hidden);
 
@@ -167,6 +164,8 @@ export function createRuntime<O extends EffectOptions>(
   }
 
   function renderAt(t: number): void {
+    if (!Number.isFinite(t))
+      throw new VisError(`t must be a finite number, got ${String(t)}`);
     ensureInit();
     lastT = t;
     renderer.draw(loopTime(t, opts.loop));
