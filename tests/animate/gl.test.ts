@@ -45,6 +45,26 @@ describe("getGl / createProgram", () => {
     expect(gl).toBe(first(fake));
   });
 
+  it("reuses the canvas context for the same alpha mode, and refuses the other one (M1)", () => {
+    fake = installFakeGl();
+    const canvas = document.createElement("canvas");
+    const gl = getGl(canvas, true);
+    expect(getGl(canvas, true)).toBe(gl);
+    expect(fake.gls).toHaveLength(1);
+    expect(() => getGl(canvas, false)).toThrow(VisError);
+    expect(() => getGl(canvas, false)).toThrow(
+      /^premultipliedAlpha: this canvas already has a context created with premultipliedAlpha true; use a fresh canvas/,
+    );
+  });
+
+  it("does not compare alpha modes on a lost context (it has no attributes)", () => {
+    fake = installFakeGl();
+    const canvas = document.createElement("canvas");
+    const gl = getGl(canvas, true);
+    first(fake).lost = true;
+    expect(getGl(canvas, false)).toBe(gl);
+  });
+
   it("throws VisError when WebGL2 is unavailable", () => {
     fake = installFakeGl({ webgl2: false });
     expect(() => getGl(document.createElement("canvas"), true)).toThrow(

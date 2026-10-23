@@ -47,6 +47,10 @@ export class FakeGl {
   isContextLost(): boolean {
     return this.lost;
   }
+  /** Like a browser: the attributes the context was created with, null once it is lost. */
+  getContextAttributes(): WebGLContextAttributes | null {
+    return this.lost ? null : (this.attrs ?? null);
+  }
   /** A lost context hands out null objects, so an effect created on a lost canvas fails visibly. */
   createShader(type: number): Shader | null {
     if (this.lost) return null;

@@ -23,9 +23,9 @@ void main() {
 `;
 
 /**
- * A canvas keeps the context it first created: if it already holds one, that
- * context's attributes (including `premultipliedAlpha`) win over the ones asked
- * for here.
+ * A canvas keeps the context it first created, so a second effect on the same
+ * canvas must use the same `premultipliedAlpha` (dither and pixel blast: true,
+ * terminal: false); the other mode throws a VisError, and needs a fresh canvas.
  *
  * Lifecycle: `destroy()` releases the effect's GPU objects (programs, and
  * whatever a hook's `teardown` deletes); the canvas keeps its context, so the
@@ -47,6 +47,13 @@ export function getGl(
     stencil: false,
   });
   if (!gl) throw new VisError("WebGL2 is not available on this canvas");
+  // A canvas keeps the context it first created; compositing with the wrong alpha mode would
+  // silently give a too bright or fringed picture. A lost context has no attributes to compare.
+  const existing = gl.getContextAttributes()?.premultipliedAlpha;
+  if (existing !== undefined && existing !== premultipliedAlpha)
+    throw new VisError(
+      `premultipliedAlpha: this canvas already has a context created with premultipliedAlpha ${String(existing)}; use a fresh canvas`,
+    );
   return gl;
 }
 

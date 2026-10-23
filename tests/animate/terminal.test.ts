@@ -6,6 +6,7 @@ import {
   TERMINAL_DEFAULTS,
   createTerminal,
 } from "../../src/animate/terminal.js";
+import { createDither } from "../../src/animate/dither.js";
 import { installFakeDom, type FakeDom } from "./fake-dom.js";
 import { installFakeGl, type FakeGl } from "./fake-gl.js";
 
@@ -153,6 +154,19 @@ describe("createTerminal", () => {
     patch[1] = -1;
     h.renderAt(0);
     expect(last("uniform2f uGridMul")).toBe("uniform2f uGridMul 5 6");
+  });
+
+  it("refuses a canvas whose context another effect created with the other alpha mode", () => {
+    const d = createDither(canvas);
+    d.renderAt(0);
+    d.destroy();
+    expect(() => {
+      createTerminal(canvas).renderAt(0);
+    }).toThrow(/^premultipliedAlpha: /);
+    // the same alpha mode (a second dither) is fine
+    expect(() => {
+      createDither(canvas).renderAt(0);
+    }).not.toThrow();
   });
 
   it("update({ timeScale, gridMul }) is read on the next frame", () => {

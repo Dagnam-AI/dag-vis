@@ -149,7 +149,9 @@ h.destroy(); // releases the effect's GPU objects and observers
   `update({ colors })` and `update({ seed })` take effect on a running effect (seed-derived values are resolved on
   every frame). `update()` cannot clear `loop` or `colors`; recreate the handle to turn either off.
 - **`destroy()`** deletes the effect's GPU objects and removes its listeners but does not call `WEBGL_lose_context`:
-  the canvas keeps its context, so recreating an effect on the same canvas works. To release the context itself,
+  the canvas keeps its context, so recreating an effect on the same canvas works as long as it needs the same alpha
+  mode (`createDither` and `createPixelBlast` are premultiplied, `createTerminal` is not; the other mode throws a
+  `VisError`, use a fresh canvas; a 2D effect cannot share a canvas with a WebGL one). To release the context itself,
   remove the canvas and drop every reference to it, including `handle.canvas`; give each mount its own canvas
   (`VisBackground` does).
 - **`fps`** is a cap on the display rate: `fps: 60` on a 120 Hz display draws every second frame (60 fps). Raise it to
