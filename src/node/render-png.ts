@@ -16,10 +16,20 @@ import {
 import { MAX_CLIP_MASKS, checkMarkup } from "./markup-guard.js";
 import { messageOf } from "./util.js";
 
-/** The bundled Inter faces (SIL OFL 1.1, see ./fonts/OFL.txt), resolved beside this module in src/ and dist/. */
+/**
+ * The bundled faces, resolved beside this module in src/ and dist/, Inter first:
+ * Inter (SIL OFL 1.1, ./fonts/OFL.txt), Unbounded 400 (SIL OFL 1.1,
+ * ./fonts/OFL-Unbounded.txt) and Moonhouse (NimaVisual, bundled unmodified at the
+ * package owner's instruction, terms in ./fonts/moonhouse/LICENSE-NOTE.txt). The
+ * last two are what `ogCard`'s social layout is set in. To drop Moonhouse, delete
+ * its entry here and the ./fonts/moonhouse directory (and the social layout loses
+ * its display face).
+ */
 export const FONT_FILES: readonly string[] = [
   "Inter-Regular.ttf",
   "Inter-Bold.ttf",
+  "Unbounded-Regular.ttf",
+  "moonhouse/moonhouse.ttf",
 ].map((name) => fileURLToPath(new URL(`./fonts/${name}`, import.meta.url)));
 
 /** Longest SVG text (UTF-16 units) `renderPng` accepts. */
@@ -37,8 +47,8 @@ export interface RenderPngOptions {
   background?: string;
   /**
    * Extra fonts, absolute paths to existing .ttf/.otf files, appended to the
-   * bundled Inter. The default is Inter only, so PNGs are identical on every
-   * machine. Inter has no CJK or emoji glyphs (they draw as missing-glyph
+   * bundled fonts (`FONT_FILES`). The default is the bundled fonts only, so PNGs
+   * are identical on every machine. Inter has no CJK or emoji glyphs (they draw as missing-glyph
    * boxes): to render those, pass a font that has them here and name its
    * family in the SVG's `font-family`.
    */
@@ -129,7 +139,7 @@ function parseFontFiles(v: unknown): string[] {
 }
 
 /**
- * Rasterise an SVG string to a PNG with the bundled Inter (plus any
+ * Rasterise an SVG string to a PNG with the bundled fonts (plus any
  * `fontFiles`) and no system fonts, so output is identical on every machine.
  *
  * The intent is that only SVG produced by this package's own generators, from

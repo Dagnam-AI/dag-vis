@@ -16,6 +16,8 @@ listing=$(tar -tzf "$tarball")
 
 for f in \
   dist/node/fonts/Inter-Regular.ttf dist/node/fonts/Inter-Bold.ttf dist/node/fonts/OFL.txt \
+  dist/node/fonts/Unbounded-Regular.ttf dist/node/fonts/OFL-Unbounded.txt \
+  dist/node/fonts/moonhouse/moonhouse.ttf dist/node/fonts/moonhouse/LICENSE-NOTE.txt NOTICE \
   bin/dag-vis.mjs dist/index.js dist/index.d.ts dist/node/index.js dist/node/index.d.ts \
   LICENSE README.md package.json; do
   echo "$listing" | grep -qx "package/$f" || { echo "::error::$f missing from the tarball"; exit 1; }

@@ -34,10 +34,11 @@
   },
   "files": [
     "dist",
-    "bin"
+    "bin",
+    "NOTICE"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && mkdir -p dist/node/fonts && cp src/node/fonts/* dist/node/fonts/",
+    "build": "tsc -p tsconfig.build.json && mkdir -p dist/node/fonts && cp -R src/node/fonts/. dist/node/fonts/",
     "prepublishOnly": "npm run build",
     "lint": "eslint .",
     "format": "prettier --write .",

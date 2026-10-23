@@ -29,10 +29,12 @@ import {
 } from "./png-helpers.js";
 
 describe("FONT_FILES", () => {
-  it("point at the bundled Inter Regular and Bold next to the module, under the OFL", () => {
+  it("point at the bundled Inter Regular and Bold (first), Unbounded and Moonhouse next to the module, Inter under the OFL", () => {
     expect(FONT_FILES.map((p) => p.split("/").pop())).toEqual([
       "Inter-Regular.ttf",
       "Inter-Bold.ttf",
+      "Unbounded-Regular.ttf",
+      "moonhouse.ttf",
     ]);
     for (const p of FONT_FILES) expect(existsSync(p)).toBe(true);
     const ofl = readFileSync(

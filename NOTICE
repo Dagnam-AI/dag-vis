@@ -1,0 +1,22 @@
+@dagnam/vis bundles three fonts so that PNGs are drawn the same on every
+machine. They ship in dist/node/fonts/ with their licence texts.
+
+Inter 4.1
+  Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
+  Licence: SIL Open Font License 1.1, dist/node/fonts/OFL.txt
+  Files: Inter-Regular.ttf, Inter-Bold.ttf
+
+Unbounded (static instance, wght 400, Latin subset)
+  Copyright 2022 The Unbounded Project Authors (https://github.com/googlefonts/unbounded)
+  Licence: SIL Open Font License 1.1, dist/node/fonts/OFL-Unbounded.txt
+  File: Unbounded-Regular.ttf
+
+Moonhouse
+  Copyright (c) 2013 by NimaVisual. All rights reserved.
+  Licence: the font's own embedded licence, dist/node/fonts/moonhouse/LICENSE-NOTE.txt
+  File: moonhouse/moonhouse.ttf, byte for byte as received
+  Bundled at the package owner's instruction; its terms require written
+  permission from NimaVisual for redistribution; confirm or replace it before
+  relying on it. Removing it is one directory (src/node/fonts/moonhouse) and one
+  entry in FONT_FILES (src/node/render-png.ts); the social card's display text
+  then falls back to another face.
