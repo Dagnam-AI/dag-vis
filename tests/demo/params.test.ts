@@ -38,12 +38,16 @@ describe("demo URL parameters", () => {
   });
 
   it.each([
-    ["?seed=abc", "Invalid ?seed=abc: expected an integer"],
-    ["?seed=1.5", "Invalid ?seed=1.5: expected an integer"],
-    ["?seed=", "Invalid ?seed=: expected an integer"],
+    ["?seed=abc", "Invalid ?seed=abc: expected a safe integer"],
+    ["?seed=1.5", "Invalid ?seed=1.5: expected a safe integer"],
+    ["?seed=", "Invalid ?seed=: expected a safe integer"],
+    [
+      "?seed=9007199254740992",
+      "Invalid ?seed=9007199254740992: expected a safe integer",
+    ],
     [
       "?seed=99999999999999999999",
-      "Invalid ?seed=99999999999999999999: expected an integer",
+      "Invalid ?seed=99999999999999999999: expected a safe integer",
     ],
     ["?t=NaN", "Invalid ?t=NaN: expected a number of seconds >= 0"],
     ["?t=-1", "Invalid ?t=-1: expected a number of seconds >= 0"],

@@ -31,7 +31,7 @@ export function parseParams(
   const q = new URLSearchParams(search);
   const seedRaw = q.get("seed") ?? "1";
   if (!/^-?\d+$/.test(seedRaw) || !Number.isSafeInteger(Number(seedRaw)))
-    return fail("seed", seedRaw, "an integer");
+    return fail("seed", seedRaw, "a safe integer");
   const tRaw = q.get("t");
   if (
     tRaw !== null &&

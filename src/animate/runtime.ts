@@ -86,8 +86,9 @@ export function validateCommon(o: ResolvedOptions<EffectOptions>): void {
   assertFinite("speed", o.speed, 0);
   assertFinite("fps", o.fps, 0, false);
   assertFinite("maxDpr", o.maxDpr, 0, false);
-  if (!Number.isInteger(o.seed))
-    throw new VisError(`seed must be an integer, got ${String(o.seed)}`);
+  // Safe, not just integral: createRng (pixel, terminal) rejects larger ones on every frame.
+  if (!Number.isSafeInteger(o.seed))
+    throw new VisError(`seed must be a safe integer, got ${String(o.seed)}`);
   if (o.loop) assertFinite("loop.duration", o.loop.duration, 0, false);
   for (const c of o.colors ?? []) parseColor(c);
 }

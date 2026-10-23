@@ -14,7 +14,13 @@ import {
   type ResolvedOptions,
   type EffectOptions,
 } from "../../src/animate/runtime.js";
+import { createDither } from "../../src/animate/dither.js";
+import { createGlitch } from "../../src/animate/glitch.js";
+import { createPixelBlast } from "../../src/animate/pixel-blast.js";
+import { createRibbon } from "../../src/animate/ribbon.js";
+import { createTerminal } from "../../src/animate/terminal.js";
 import { installFakeDom, type FakeDom } from "./fake-dom.js";
+import { installFakeGl } from "./fake-gl.js";
 
 interface Opts extends EffectOptions {
   size?: number;
@@ -84,7 +90,10 @@ describe("helpers", () => {
     }).toThrow(VisError);
     expect(() => {
       validateCommon({ ...base, seed: 1.5 });
-    }).toThrow(/seed must be an integer/);
+    }).toThrow(/seed must be a safe integer/);
+    expect(() => {
+      validateCommon({ ...base, seed: 2 ** 53 });
+    }).toThrow(/seed must be a safe integer/);
     expect(() => {
       validateCommon({ ...base, loop: { duration: 0 } });
     }).toThrow(/loop.duration/);
@@ -474,5 +483,54 @@ describe("own (callers cannot mutate validated arrays and objects)", () => {
     const { opts } = make(mount());
     expect("colors" in opts).toBe(false);
     expect("loop" in opts).toBe(false);
+  });
+});
+
+// A seed that is an integer but not a safe one used to pass validation and then
+// throw inside the animation loop (createRng rejects it on every frame).
+describe("seed validation is up front, for every effect", () => {
+  const factories = {
+    dither: createDither,
+    pixel: createPixelBlast,
+    terminal: createTerminal,
+    glitch: createGlitch,
+    ribbon: createRibbon,
+  };
+  let dom: FakeDom;
+  let fake: ReturnType<typeof installFakeGl>;
+  beforeEach(() => {
+    dom = installFakeDom({ dpr: 1 });
+    fake = installFakeGl();
+  });
+  afterEach(() => {
+    fake.restore();
+    dom.restore();
+    document.body.innerHTML = "";
+  });
+
+  describe.each(Object.entries(factories))("%s", (_name, create) => {
+    it.each([2 ** 53, 2 ** 53 + 2, 1e16, -(2 ** 53)])(
+      "rejects seed %s when creating and when updating",
+      (seed) => {
+        expect(() => create(mount(), { seed })).toThrow(VisError);
+        expect(() => create(mount(), { seed })).toThrow(/seed/);
+        const h = create(mount());
+        expect(() => {
+          h.update({ seed });
+        }).toThrow(/seed/);
+        h.renderAt(0); // the live options are untouched by the rejected patch
+      },
+    );
+
+    it("accepts Number.MAX_SAFE_INTEGER and draws with it", () => {
+      const h = create(mount(), { seed: Number.MAX_SAFE_INTEGER });
+      expect(() => {
+        h.renderAt(1);
+      }).not.toThrow();
+      h.update({ seed: -Number.MAX_SAFE_INTEGER });
+      expect(() => {
+        h.renderAt(1);
+      }).not.toThrow();
+    });
   });
 });

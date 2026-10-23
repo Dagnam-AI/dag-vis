@@ -131,7 +131,7 @@ h.renderAt(2); // deterministic frame at t = 2 s (reads no clock); works without
 h.destroy(); // releases the effect's GPU objects and observers
 ```
 
-- **Common options**: `speed` (1 = today's motion), `seed` (an integer; the random choices of every effect but
+- **Common options**: `speed` (1 = today's motion), `seed` (a safe integer; the random choices of every effect but
   `createDither`, which has none; default 1), `fps` cap (60), `maxDpr` (2; read at the next resize, not by
   `update`), `autoPause` (IntersectionObserver plus `document.hidden`, default true), `loop: { duration }`
   (periodic `renderAt`: exact for `createRibbon` and `createGlitch`, which are seamless across the wrap; for
