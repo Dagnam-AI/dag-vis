@@ -1,5 +1,8 @@
-// Types `window.__vis` inside page.evaluate callbacks (type-only: erased at runtime).
+// Type-only imports (erased at runtime): `window.__vis` inside page.evaluate callbacks, and the animate module the destroy test loads.
 import type {} from "../../demo/global.js";
+import type * as Animate from "../../src/animate/index.js";
+
+import { resolve } from "node:path";
 
 import { expect, test } from "@playwright/test";
 
@@ -88,7 +91,7 @@ test("ribbon loops seamlessly: frame 0 equals frame duration, and just before it
   expect(f.nearEnd).toBeLessThan(f.middle);
 });
 
-test("every effect runs live, then destroys cleanly and leaves its canvas usable", async ({
+test("every effect runs live, destroys cleanly, and a fresh effect draws on the same canvas", async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -132,6 +135,42 @@ test("every effect runs live, then destroys cleanly and leaves its canvas usable
     expect(x.usable, `${x.name} canvas keeps its context`).toBe(true);
     expect(x.afterDestroy, `${x.name} rejects use`).toMatch(/destroyed/);
   }
+
+  // The E1 contract: destroy -> recreate on the SAME canvas draws again. The
+  // gallery does not expose the factories, so import the module vite serves
+  // (/@fs/ + absolute path, since vite's root is demo/).
+  const animate = `/@fs${resolve("src/animate/index.ts")}`;
+  const again = await page.evaluate(async (url) => {
+    const m = (await import(/* @vite-ignore */ url)) as typeof Animate;
+    const make = {
+      dither: m.createDither,
+      pixel: m.createPixelBlast,
+      terminal: m.createTerminal,
+      glitch: m.createGlitch,
+      ribbon: m.createRibbon,
+    };
+    return Object.entries(window.__vis.handles).map(([name, old]) => {
+      const fresh = make[name as keyof typeof make](old.canvas, { seed: 1 });
+      fresh.renderAt(2);
+      // Copy in the same task: the WebGL buffer is intact until compositing.
+      const c = document.createElement("canvas");
+      c.width = old.canvas.width;
+      c.height = old.canvas.height;
+      const ctx = c.getContext("2d");
+      if (!ctx) throw new Error("2d context unavailable");
+      ctx.drawImage(old.canvas, 0, 0);
+      const d = ctx.getImageData(0, 0, c.width, c.height).data;
+      let n = 0;
+      for (let i = 3; i < d.length; i += 4) if ((d[i] ?? 0) > 0) n += 1;
+      fresh.destroy();
+      return { name, coverage: n / (d.length / 4) };
+    });
+  }, animate);
+  expect(again.map((x) => x.name)).toEqual([...EFFECTS]);
+  for (const x of again)
+    expect(x.coverage, `${x.name} draws on its old canvas`).toBeGreaterThan(
+      0.01,
+    );
   expect(errors).toEqual([]);
 });
 

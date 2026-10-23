@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
 
       # The dev/CI toolchain needs Node >= 22.12 (vitest 5). The package's own
-      # `engines.node >=20` is for consumers, who run the built dist/.
+      # `engines.node >=22` is the floor for consumers, who run the built dist/.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
@@ -196,5 +196,14 @@ jobs:
         with:
           name: gallery-screenshots
           path: screenshots/
+          retention-days: 7
+          if-no-files-found: warn
+
+      # Traces of failing tests (playwright.config.ts: retain-on-failure).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: gallery-test-results
+          path: test-results/
           retention-days: 7
           if-no-files-found: warn
