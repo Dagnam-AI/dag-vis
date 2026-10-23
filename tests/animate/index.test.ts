@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as animate from "../../src/animate/index.js";
-import * as root from "../../src/index.js";
 import { installFakeGl } from "./fake-gl.js";
 
 describe("animate barrel", () => {
@@ -22,16 +21,9 @@ describe("animate barrel", () => {
       "loopTime",
     ]);
   });
-
-  it("is re-exported by name from the package root", () => {
-    for (const name of Object.keys(animate))
-      expect(root[name as keyof typeof root]).toBe(
-        animate[name as keyof typeof animate],
-      );
-  });
 });
 
-describe("importing the root", () => {
+describe("importing the animate entry", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -40,7 +32,7 @@ describe("importing the root", () => {
     const fake = installFakeGl();
     try {
       vi.resetModules();
-      const fresh = await import("../../src/index.js");
+      const fresh = await import("../../src/animate/index.js");
       expect(typeof fresh.createDither).toBe("function");
       expect(fake.gls).toHaveLength(0);
       expect(fake.ctx2ds).toHaveLength(0);
@@ -53,7 +45,7 @@ describe("importing the root", () => {
     for (const name of ["window", "document", "HTMLCanvasElement"])
       vi.stubGlobal(name, undefined);
     vi.resetModules();
-    const fresh = await import("../../src/index.js");
+    const fresh = await import("../../src/animate/index.js");
     expect(typeof fresh.createRibbon).toBe("function");
     expect(fresh.COMMON_DEFAULTS.fps).toBe(60);
   });

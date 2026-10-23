@@ -55,6 +55,16 @@ describe("repository structure", () => {
     }
   });
 
+  it("the root barrel imports nothing from animate, react or node", () => {
+    // Their types name HTMLCanvasElement or React, so the root would stop
+    // type-checking in a DOM-free consumer. They are separate entry points.
+    const text = readFileSync(join(SRC, "index.ts"), "utf8");
+    for (const layer of ["animate", "react", "node"])
+      expect(text, `src/index.ts imports ./${layer}`).not.toMatch(
+        new RegExp(`(from|import)\\s*\\(?\\s*"\\./${layer}(/|")`),
+      );
+  });
+
   it.each(sources)(
     "%s loads @resvg/resvg-js only from src/node/render-png.ts",
     (file) => {

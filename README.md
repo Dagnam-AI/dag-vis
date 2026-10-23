@@ -2,11 +2,12 @@
 
 Deterministic, parameterised [Dagnam.AI](https://dagnam.ai) visuals: brand tokens, gradients, patterns, social-preview (OG) cards, ribbons and favicon sets. Generators are pure functions that return SVG or CSS strings; a small Node layer turns them into PNGs.
 
-| import                             | what                                                                                | runtime deps                 |
-| ---------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------- |
-| `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), browser-safe         | none                         |
-| `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, the CLI (bundled Inter, Unbounded and Moonhouse fonts) | `@resvg/resvg-js` (optional) |
-| `@dagnam/vis/react`                | `<VisBackground>` (the animated effects) and `<Gradient>` for React 18 and 19       | `react` (optional peer)      |
+| import                             | what                                                                                        | runtime deps                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------- |
+| `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), browser-safe                 | none                         |
+| `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, the CLI (bundled Inter, Unbounded and Moonhouse fonts)         | `@resvg/resvg-js` (optional) |
+| `@dagnam/vis/animate`              | the animated effects (`createDither`, `createGlitch`, ...): WebGL2 / Canvas2D, browser only | none                         |
+| `@dagnam/vis/react`                | `<VisBackground>` (the animated effects) and `<Gradient>` for React 18 and 19               | `react` (optional peer)      |
 
 Seeded generators take `seed` (default `1`); all output is deterministic, so the same options and seed give byte-identical SVG and CSS (`logoSvg` and `animatedGradientCss` take no seed).
 
@@ -108,8 +109,9 @@ await favicons({ outDir: "public" }); // favicon.ico/svg, apple-touch-icon, PWA 
 ## Animated effects
 
 Framework-free WebGL2 and Canvas2D ports of the landing-page card backgrounds, plus an animated ribbon. They are
-exported from the package root (`createDither`, `createPixelBlast`, `createTerminal`, `createGlitch`,
-`createRibbon`, their `*_DEFAULTS`, `COMMON_DEFAULTS`, `loopTime` and the option types). Importing the root touches
+exported from `@dagnam/vis/animate`, not from the root (their types name `HTMLCanvasElement`, and the root
+type-checks without the DOM lib) (`createDither`, `createPixelBlast`, `createTerminal`, `createGlitch`,
+`createRibbon`, their `*_DEFAULTS`, `COMMON_DEFAULTS`, `loopTime` and the option types). Importing the entry touches
 no DOM global and creates no context: nothing happens until you call a factory and `start()` or `renderAt()`.
 
 Fidelity vs. the current landing cards: `npm run fidelity` (needs a sibling `mvp-frontend` with a current `yarn install`, else it stops at once with a message; starting Vite there rewrites one tracked generated file, byte-identical on a clean `main`, so set `FIDELITY_FRONTEND_DIR` to an archive copy to leave that checkout untouched). The landing Dither starts its own clock a load-dependent few frames after mount, so the run fits that lag per pass (7 captures of that one card) and prints it on the page; `FIDELITY_DITHER_LAG_FRAMES=<frames>` skips the fit and uses that value (a non-negative integer, anything else is an error).
@@ -117,7 +119,7 @@ Fidelity vs. the current landing cards: `npm run fidelity` (needs a sibling `mvp
 Every factory takes a `<canvas>` whose **parent** sets the size and returns an `EffectHandle`:
 
 ```ts
-import { createDither } from "@dagnam/vis";
+import { createDither } from "@dagnam/vis/animate";
 
 const h = createDither(canvas, {
   waveSpeed: 0.15,
@@ -219,7 +221,7 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
   `reduced ? null : <VisBackground ... />`.
 - **`<Gradient>`** gets its `<defs>` ids from `useId()` unless the spec sets an `idPrefix`, so several gradients on one
   page do not collide.
-- `react` (>= 18) is an optional peer; the root entry never imports it.
+- `react` (>= 18) is an optional peer; neither the root nor `./animate` imports it.
 
 ## CLI
 
