@@ -131,18 +131,27 @@ h.renderAt(2); // deterministic frame at t = 2 s (reads no clock); works without
 h.destroy(); // releases the effect's GPU objects and observers
 ```
 
-- **Common options**: `speed` (1 = today's motion), `seed` (all randomness; default 1), `fps` cap (60), `maxDpr` (2),
-  `autoPause` (IntersectionObserver plus `document.hidden`, default true), `loop: { duration }` (periodic
-  `renderAt`: exact for `ribbon`, a wrap for the others) and `colors` (a palette: `dither` and `pixel` read
-  `colors[0]` as `color`, `terminal` as `tint`, `glitch` and `ribbon` use all of it). Invalid values throw a
-  `VisError`.
+- **Common options**: `speed` (1 = today's motion), `seed` (an integer; the random choices of every effect but
+  `createDither`, which has none; default 1), `fps` cap (60), `maxDpr` (2; read at the next resize, not by
+  `update`), `autoPause` (IntersectionObserver plus `document.hidden`, default true), `loop: { duration }`
+  (periodic `renderAt`: exact for `createRibbon` and `createGlitch`, which are seamless across the wrap; for
+  `createDither`, `createPixelBlast` and `createTerminal`, `t` simply wraps, so they jump at the seam) and `colors`
+  (a palette array: `createDither` and `createPixelBlast` read `colors[0]` as `color`, `createTerminal` as `tint`,
+  `createGlitch` and `createRibbon` use all of it). Invalid values throw a `VisError`, and so does a non-finite `t`
+  passed to `renderAt`. Array options (`colors`, `gridMul`) and `loop` are copied when given, so mutating them
+  afterwards changes nothing.
+- **The handle**: `start()`, `stop()`, `update(patch)`, `renderAt(t)` and `destroy()`, plus the read-only `canvas`,
+  `running` and `duration` (the loop duration, `undefined` without a loop). `loopTime(t, loop)` is the wrap the
+  runtime applies to `t` before drawing: `t` modulo `loop.duration` into `[0, duration)`, and `t` unchanged without
+  a loop.
 - **Reduced motion**: with `prefers-reduced-motion: reduce`, `start()` draws one static frame.
 - **`update(patch)`** merges the defined keys (an `undefined` keeps the current value) and validates before applying.
   `update({ colors })` and `update({ seed })` take effect on a running effect (seed-derived values are resolved on
   every frame). `update()` cannot clear `loop` or `colors`; recreate the handle to turn either off.
 - **`destroy()`** deletes the effect's GPU objects and removes its listeners but does not call `WEBGL_lose_context`:
   the canvas keeps its context, so recreating an effect on the same canvas works. To release the context itself,
-  remove the canvas; give each mount its own canvas (the React wrapper does).
+  remove the canvas and drop every reference to it, including `handle.canvas`; give each mount its own canvas
+  (`VisBackground` does).
 - **`fps`** is a cap on the display rate: `fps: 60` on a 120 Hz display draws every second frame (60 fps). Raise it to
   follow such a display.
 
@@ -156,10 +165,13 @@ h.destroy(); // releases the effect's GPU objects and observers
 
 Per-effect notes:
 
-- **`createGlitch`**: for a full-screen canvas set `fps: 30` (a frame costs about 34 ms at 4K). The tick is a fixed
-  50 ms by default (`glitchSpeed`); with `loop` it is stretched to divide the loop evenly, and each cell changes
-  twice per loop so a short loop visibly moves. With `smooth`, the colour change between palette colours really is
-  a tween over a third of a second (the landing page's current tween is a no-op).
+- **`createGlitch`**: the cost grows with the canvas area (about 6 ms a frame at 1080p and 24 to 34 ms at 4K on
+  software Canvas2D), so set `fps: 30` for a full-screen canvas; that helps, but a 4K frame can still exceed the
+  33 ms that 30 fps allows. The tick is a fixed 50 ms by default (`glitchSpeed`); with `loop` it is stretched to
+  divide the loop evenly (in a loop well under a second it can differ a lot from `glitchSpeed`), and each cell
+  changes at least twice per loop so a short loop visibly moves (a one-tick loop changes once). With `smooth`, the
+  colour change between palette colours really is a tween over a third of a second (the landing page's own tween
+  moves one 5% step and then stalls, so its colour never reaches the new one).
 - **`createRibbon`**: draws one stroke, with the opacity applied to the whole ribbon like the static SVG, not per
   line.
 
@@ -170,7 +182,7 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
 
 <div className="relative h-64">
   <VisBackground
-    effect="dither" // "dither" | "pixel" | "terminal" | "glitch" | "ribbon"
+    effect="dither" // "dither" | "pixel" (createPixelBlast) | "terminal" | "glitch" | "ribbon"
     options={{ waveSpeed: 0.15, colors: ["#e64040"] }} // that effect's options, typed per effect
     className="absolute inset-0" // layout is yours: the wrapper only sets overflow: hidden
     onError={(e) => report(e)} // optional: no WebGL2, invalid options
