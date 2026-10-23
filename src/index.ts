@@ -94,3 +94,31 @@ export type {
   RibbonSvgOptions,
   Weight,
 } from "./scene/index.js";
+
+// animate (browser-only at call time; importing creates no context and
+// touches no DOM global)
+export {
+  COMMON_DEFAULTS,
+  DITHER_DEFAULTS,
+  GLITCH_DEFAULTS,
+  PIXEL_BLAST_DEFAULTS,
+  RIBBON_DEFAULTS,
+  TERMINAL_DEFAULTS,
+  createDither,
+  createGlitch,
+  createPixelBlast,
+  createRibbon,
+  createTerminal,
+  loopTime,
+} from "./animate/index.js";
+export type {
+  DitherOptions,
+  EffectHandle,
+  EffectOptions,
+  GlitchOptions,
+  GlitchVignette,
+  PixelBlastOptions,
+  PixelShape,
+  RibbonEffectOptions,
+  TerminalOptions,
+} from "./animate/index.js";

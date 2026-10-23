@@ -105,6 +105,62 @@ await favicons({ outDir: "public" }); // favicon.ico/svg, apple-touch-icon, PWA 
 
 `renderPng` is meant for SVG that this package's own generators produced from validated options; it is defence in depth, not a sandbox. It refuses file and network reads through `href` (`<image>` and `<feImage>` may only use raster `data:` URIs, that is `data:image/png`, `jpeg`, `jpg`, `gif` or `webp` with a comma, never `image/svg+xml`, `text/*`, an empty type or a bare `data:,`; every other element only `#id` references; so a `gradient` overlay image must be a raster `data:` URI to render to PNG), DTD entity declarations, a DOCTYPE with an internal subset, markup it cannot classify (an unterminated comment or tag, a stray `<`), SVG text over 5,000,000 characters, more than 5000 `<clipPath>`/`<mask>` elements (a `layers` spec of more than 19 fluted-256 layers reaches this), and any output over 16384 px a side or 64 megapixels. The href check is a single linear pass over the text (it skips comments, CDATA sections and processing instructions as units and still checks tag-like text inside them), not an XML parser: it is meant to err towards rejecting, but it can in principle disagree with resvg's parser. An independent differential fuzz of about 139,000 generated documents against bare resvg-js 2.6.2 found it accepting file reads (a quote opened in a comment hiding a real `<image>`, and an SVG nested in a `data:` URL whose `<feImage>` read a file), a `data:` URL that aborted the process, and a quadratic scan; all four are fixed, a small seeded version of that differential runs in the test suite, and the fuzz was re-run. That is evidence, not a proof. It cannot make `@resvg/resvg-js` safe against hostile input: deeply chained clipPaths or masks (a chain of 20,000 crashed resvg-js 2.6.2 on macOS arm64; 10,000 rendered), a huge `patternTransform` scale, raster bombs inside `data:` PNGs and expensive filters can crash the process, exhaust memory or run for a very long time, and rendering is synchronous native work that blocks the event loop. A gradient spec from an untrusted source is untrusted input to `renderPng` too, including `dag-vis gradient --spec <someone else's file> --out x.png`: `overlay.image` accepts any `data:` URI (a raster bomb), and a spec may have up to 64 nodes, which can stack heavy layers; render such specs in a separate process with limits. Never pass SVG you did not generate to `renderPng` in a server. If you must render untrusted SVG, do it in a separate process, container or worker with memory and CPU-time limits, and expect it to fail. The default fonts are the bundled Inter only; pass `fontFiles` for CJK or emoji.
 
+## Animated effects
+
+Framework-free WebGL2 and Canvas2D ports of the landing-page card backgrounds, plus an animated ribbon. They are
+exported from the package root (`createDither`, `createPixelBlast`, `createTerminal`, `createGlitch`,
+`createRibbon`, their `*_DEFAULTS`, `COMMON_DEFAULTS`, `loopTime` and the option types). Importing the root touches
+no DOM global and creates no context: nothing happens until you call a factory and `start()` or `renderAt()`.
+
+Every factory takes a `<canvas>` whose **parent** sets the size and returns an `EffectHandle`:
+
+```ts
+import { createDither } from "@dagnam/vis";
+
+const h = createDither(canvas, {
+  waveSpeed: 0.15,
+  waveAmplitude: 0.1,
+  pixelSize: 1,
+  color: "#e64040",
+});
+h.start(); // creates the GL context, sizes to the parent, runs renderAt(elapsed x speed)
+h.update({ speed: 0.5 });
+h.renderAt(2); // deterministic frame at t = 2 s (reads no clock); works without start()
+h.destroy(); // releases the effect's GPU objects and observers
+```
+
+- **Common options**: `speed` (1 = today's motion), `seed` (all randomness; default 1), `fps` cap (60), `maxDpr` (2),
+  `autoPause` (IntersectionObserver plus `document.hidden`, default true), `loop: { duration }` (periodic
+  `renderAt`: exact for `ribbon`, a wrap for the others) and `colors` (a palette: `dither` and `pixel` read
+  `colors[0]` as `color`, `terminal` as `tint`, `glitch` and `ribbon` use all of it). Invalid values throw a
+  `VisError`.
+- **Reduced motion**: with `prefers-reduced-motion: reduce`, `start()` draws one static frame.
+- **`update(patch)`** merges the defined keys (an `undefined` keeps the current value) and validates before applying.
+  `update({ colors })` and `update({ seed })` take effect on a running effect (seed-derived values are resolved on
+  every frame). `update()` cannot clear `loop` or `colors`; recreate the handle to turn either off.
+- **`destroy()`** deletes the effect's GPU objects and removes its listeners but does not call `WEBGL_lose_context`:
+  the canvas keeps its context, so recreating an effect on the same canvas works. To release the context itself,
+  remove the canvas; give each mount its own canvas (the React wrapper does).
+- **`fps`** is a cap on the display rate: `fps: 60` on a 120 Hz display draws every second frame (60 fps). Raise it to
+  follow such a display.
+
+| factory            | source today                      | notes                                                                                             |
+| ------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `createDither`     | `Dither` (three + postprocessing) | one pass; `pixelSize` in CSS px                                                                   |
+| `createPixelBlast` | `PixelBlast` non-liquid           | `shape`, `patternDensity`, `edgeFade`                                                             |
+| `createTerminal`   | `FaultyTerminal` (ogl)            | no mouse / page-load; only validated ranges are accepted (no negative `curvature`, `dither` 0..1) |
+| `createGlitch`     | `LetterGlitch` (Canvas2D)         | deterministic in `t`; vignette drawn on the canvas                                                |
+| `createRibbon`     | `scene.ribbon`                    | same `ribbonCurves`; phase 2pi per loop                                                           |
+
+Per-effect notes:
+
+- **`createGlitch`**: for a full-screen canvas set `fps: 30` (a frame costs about 34 ms at 4K). The tick is a fixed
+  50 ms by default (`glitchSpeed`); with `loop` it is stretched to divide the loop evenly, and each cell changes
+  twice per loop so a short loop visibly moves. With `smooth`, the colour change between palette colours really is
+  a tween over a third of a second (the landing page's current tween is a no-op).
+- **`createRibbon`**: draws one stroke, with the opacity applied to the whole ribbon like the static SVG, not per
+  line.
+
 ## CLI
 
 ```sh
