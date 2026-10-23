@@ -54,10 +54,10 @@ describe("createDither", () => {
     ]);
   });
 
-  it("maps the landing Free card props and scales time by speed", () => {
+  it("maps the landing Free card props (E3: 0.15 / 0.1) and scales time by speed", () => {
     const h = createDither(canvas, {
-      waveSpeed: 0.08,
-      waveAmplitude: 0.05,
+      waveSpeed: 0.15,
+      waveAmplitude: 0.1,
       colorNum: 4,
       pixelSize: 1,
       color: "#e64040",
@@ -67,8 +67,8 @@ describe("createDither", () => {
     dom.frame(500);
     const u = uniforms(first(fake).calls);
     expect(u).toContain("uniform1f time 1");
-    expect(u).toContain("uniform1f waveSpeed 0.08");
-    expect(u).toContain("uniform1f waveAmplitude 0.05");
+    expect(u).toContain("uniform1f waveSpeed 0.15");
+    expect(u).toContain("uniform1f waveAmplitude 0.1");
     expect(u).toContain("uniform1f pixelSize 2");
     expect(u.find((c) => c.startsWith("uniform3f waveColor"))).toBe(
       "uniform3f waveColor 0.9019607843137255 0.25098039215686274 0.25098039215686274",
@@ -88,6 +88,55 @@ describe("createDither", () => {
     expect(uniforms(first(fake).calls).at(-3)).toBe(
       "uniform3f waveColor 0 1 0",
     );
+  });
+
+  it("update({ colors }) takes effect: the colors[0] fallback is resolved at draw time (E4)", () => {
+    const waveColor = (): string | undefined =>
+      uniforms(first(fake).calls)
+        .filter((c) => c.startsWith("uniform3f waveColor"))
+        .at(-1);
+    const h = createDither(canvas, { colors: ["#ff0000"] });
+    h.start();
+    dom.frame(16);
+    expect(waveColor()).toBe("uniform3f waveColor 1 0 0");
+    h.update({ colors: ["#00ff00"] });
+    dom.frame(16);
+    expect(waveColor()).toBe("uniform3f waveColor 0 1 0");
+    // an explicit color still wins over the palette
+    h.update({ color: "#0000ff" });
+    dom.frame(16);
+    expect(waveColor()).toBe("uniform3f waveColor 0 0 1");
+    h.update({ colors: ["#ffffff"] });
+    dom.frame(16);
+    expect(waveColor()).toBe("uniform3f waveColor 0 0 1");
+  });
+
+  it("update({ colors }) also reaches a dither created with neither color nor colors", () => {
+    const h = createDither(canvas);
+    h.renderAt(0);
+    h.update({ colors: ["#ff0000"] });
+    h.renderAt(0);
+    expect(
+      uniforms(first(fake).calls)
+        .filter((c) => c.startsWith("uniform3f waveColor"))
+        .at(-1),
+    ).toBe("uniform3f waveColor 1 0 0");
+  });
+
+  it("names the offending option in a bad-colour error", () => {
+    expect(() => createDither(canvas, { color: "not-a-colour" })).toThrow(
+      /^color: invalid colour/,
+    );
+    expect(() =>
+      createDither(canvas, { color: [1, 0, 0] as unknown as string }),
+    ).toThrow(/^color: colour must be a string/);
+    expect(() => createDither(canvas, { colors: ["#fff", "nope"] })).toThrow(
+      /^colors\[1\]: invalid colour/,
+    );
+    const h = createDither(canvas);
+    expect(() => {
+      h.update({ colors: ["bad"] });
+    }).toThrow(/^colors\[0\]/);
   });
 
   it("renderAt is deterministic and honours loop", () => {
