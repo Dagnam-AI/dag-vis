@@ -80,7 +80,8 @@ describe("createRibbon", () => {
       { width: 200, height: 100, lines: 3, seed: 1 },
       0,
     );
-    expect(strokes()).toEqual(["stroke 2 0.5", "stroke 2 0.5", "stroke 2 0.5"]);
+    // one path, one stroke: overlapping lines are painted as a union, so the opacity applies once
+    expect(strokes()).toEqual(["stroke 2 0.5"]);
     // bottom-left to top-right, as the static ribbon's diagonal spine
     expect(ctx().calls).toContain("createLinearGradient 0 100 200 0");
     expect(stops()).toEqual([
@@ -99,6 +100,10 @@ describe("createRibbon", () => {
     const svg = ribbon({ width: 200, height: 100 });
     const curves = ribbonCurves({ width: 200, height: 100 }, 0);
     expect(drawn).toEqual(lines(curves));
+    // the static ribbon's stop colours are the animated defaults, not a copy of a literal
+    expect([...svg.matchAll(/stop-color="([^"]+)"/g)].map((m) => m[1])).toEqual(
+      [...RIBBON_DEFAULTS.colors],
+    );
     expect(svg).toContain('stroke-width="1"');
     expect(svg).toContain('opacity="0.8"');
     expect(RIBBON_DEFAULTS).toEqual({
@@ -116,6 +121,24 @@ describe("createRibbon", () => {
       "addColorStop linear 0.5 #7c3aed",
       "addColorStop linear 1 #10abba",
     ]);
+  });
+
+  it("applies the opacity once to the whole ribbon, as the static SVG's group opacity: one path, one stroke, after every segment", () => {
+    // 120 lines overlap heavily (up to 24+ at the nodes); per-line strokes would stack alpha there
+    const h = sized({ opacity: 0.8 });
+    ctx().calls.length = 0;
+    h.renderAt(0);
+    const calls = ctx().calls;
+    expect(calls.filter((c) => c === "beginPath")).toHaveLength(1);
+    expect(strokes()).toEqual(["stroke 1 0.8"]);
+    const stroke = calls.findIndex((c) => c.startsWith("stroke"));
+    expect(
+      calls.lastIndexOf(
+        calls.filter((c) => c.startsWith("lineTo")).at(-1) ?? "",
+      ),
+    ).toBeLessThan(stroke);
+    expect(calls.filter((c) => c.startsWith("moveTo"))).toHaveLength(120);
+    expect(stroke).toBe(calls.length - 1);
   });
 
   it("passes twist, amplitude, frequency and seed to ribbonCurves", () => {
@@ -233,7 +256,7 @@ describe("createRibbon", () => {
     h.update({ lines: 3, drift: 2 });
     ctx().calls.length = 0;
     h.renderAt(1);
-    expect(strokes()).toHaveLength(3);
+    expect(strokes()).toHaveLength(1);
     expect(points()).toEqual(
       lines(ribbonCurves({ width: 200, height: 100, lines: 3, seed: 2 }, 2)),
     );

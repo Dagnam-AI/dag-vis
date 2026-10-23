@@ -8,6 +8,7 @@ import {
   createRuntime,
   loopTime,
   merge,
+  own,
   validateCommon,
   type FrameRenderer,
   type ResolvedOptions,
@@ -400,5 +401,42 @@ describe("createRuntime", () => {
     expect(r.calls).toEqual(["init CANVAS", "resize 1"]);
     dom.frame(16);
     expect(r.calls.at(-1)).toBe("draw 0.016");
+  });
+});
+
+describe("own (callers cannot mutate validated arrays and objects)", () => {
+  it("copies colors and loop, keeps every other key, and leaves absent keys absent", () => {
+    const colors = ["#000000"];
+    const loop = { duration: 2 };
+    const copy = own({ speed: 2, colors, loop });
+    expect(copy).toEqual({ speed: 2, colors, loop });
+    expect(copy.colors).not.toBe(colors);
+    expect(copy.loop).not.toBe(loop);
+    expect(own({ colors: undefined, loop: undefined })).toEqual({
+      colors: undefined,
+      loop: undefined,
+    });
+    expect("colors" in own({ speed: 1 })).toBe(false);
+  });
+  it("createRuntime copies colors and loop at creation and on update", () => {
+    const colors = ["#000000"];
+    const loop = { duration: 2 };
+    const { handle, opts } = make(mount(), { colors, loop });
+    colors[0] = "nope";
+    loop.duration = -1;
+    expect(opts.colors).toEqual(["#000000"]);
+    expect(handle.duration).toBe(2);
+    const next = ["#ffffff"];
+    const nextLoop = { duration: 4 };
+    handle.update({ colors: next, loop: nextLoop });
+    next[0] = "nope";
+    nextLoop.duration = 0;
+    expect(opts.colors).toEqual(["#ffffff"]);
+    expect(handle.duration).toBe(4);
+  });
+  it("createRuntime leaves colors and loop absent when the effect has none", () => {
+    const { opts } = make(mount());
+    expect("colors" in opts).toBe(false);
+    expect("loop" in opts).toBe(false);
   });
 });

@@ -55,6 +55,17 @@ export function merge<T extends object>(target: T, patch: Patch<T>): T {
   return target;
 }
 
+/**
+ * Copies the array and object options (`colors`, `loop`) so a caller mutating
+ * them after validation cannot bypass it. Applied by `createRuntime` to the
+ * options it is given and to every `update()` patch.
+ */
+export const own = <P extends Patch<EffectOptions>>(p: P): P => ({
+  ...p,
+  ...(Array.isArray(p.colors) && { colors: [...p.colors] }),
+  ...(p.loop && { loop: { ...p.loop } }),
+});
+
 export function assertFinite(
   name: string,
   v: number,
@@ -112,6 +123,14 @@ export function createRuntime<O extends EffectOptions>(
 
   // The common fields, typed concretely (indexing the generic `opts` leaves them possibly undefined).
   const common = opts as unknown as ResolvedOptions<EffectOptions>;
+  // The effect validated these a moment ago; from here the runtime owns its copies.
+  Object.assign(
+    opts,
+    own({
+      ...(common.colors && { colors: common.colors }),
+      ...(common.loop && { loop: common.loop }),
+    }),
+  );
 
   const paused = (): boolean => opts.autoPause && (outOfView || hidden);
 
@@ -223,7 +242,7 @@ export function createRuntime<O extends EffectOptions>(
 
   function update(patch: Patch<O>): void {
     // Validate a merged copy so a rejected patch leaves the live options untouched.
-    const next = merge({ ...opts }, patch as Patch<ResolvedOptions<O>>);
+    const next = merge({ ...opts }, own(patch) as Patch<ResolvedOptions<O>>);
     validate(next);
     Object.assign(opts, next);
     if (staticOnly) renderer.draw(loopTime(lastT, opts.loop));

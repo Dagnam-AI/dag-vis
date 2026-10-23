@@ -10,7 +10,6 @@ import {
   validateCommon,
   type EffectHandle,
   type EffectOptions,
-  type Patch,
   type ResolvedOptions,
 } from "./runtime.js";
 
@@ -27,7 +26,7 @@ export interface RibbonEffectOptions extends EffectOptions {
   colors?: string[];
   /** Stroke width in CSS px, 0.001..64. */
   strokeWidth?: number;
-  /** Opacity of each line, 0..1. */
+  /** Opacity of the whole ribbon (applied once, not per line), 0..1. */
   opacity?: number;
   /** Phase advance in radians per second when not looping. */
   drift?: number;
@@ -93,13 +92,6 @@ function validate(o: ResolvedOptions<RibbonEffectOptions>): void {
     throw new VisError(`drift must be a finite number, got ${String(o.drift)}`);
 }
 
-/** Copies the array and object options so a caller mutating them later cannot bypass validation. */
-const own = <P extends Patch<RibbonEffectOptions>>(p: P): P => ({
-  ...p,
-  ...(Array.isArray(p.colors) && { colors: [...p.colors] }),
-  ...(p.loop && { loop: { ...p.loop } }),
-});
-
 export function createRibbon(
   canvas: HTMLCanvasElement,
   opts: RibbonEffectOptions = {},
@@ -111,7 +103,7 @@ export function createRibbon(
       // A fresh mutable palette: the frozen default is shared by every ribbon.
       colors: [...RIBBON_DEFAULTS.colors],
     },
-    own(opts),
+    opts,
   );
   validate(o);
 
@@ -148,25 +140,17 @@ export function createRibbon(
     ctx.lineWidth = o.strokeWidth;
     ctx.globalAlpha = o.opacity;
     ctx.lineJoin = "round";
-    for (const curve of curves) {
-      ctx.beginPath();
+    // One path, one stroke: overlapping segments are painted as a union, so the
+    // opacity applies once to the whole ribbon, as the static SVG's group opacity
+    // does. (Every line shares one gradient, so one stroke style colours them all.)
+    ctx.beginPath();
+    for (const curve of curves)
       curve.forEach(([x, y], i) => {
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
-      ctx.stroke();
-    }
+    ctx.stroke();
   });
 
-  const handle = createRuntime<RibbonEffectOptions>(
-    canvas,
-    o,
-    validate,
-    renderer,
-  );
-  const update = handle.update.bind(handle);
-  handle.update = (patch) => {
-    update(own(patch));
-  };
-  return handle;
+  return createRuntime<RibbonEffectOptions>(canvas, o, validate, renderer);
 }

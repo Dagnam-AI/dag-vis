@@ -9,7 +9,6 @@ import {
   validateCommon,
   type EffectHandle,
   type EffectOptions,
-  type Patch,
   type ResolvedOptions,
 } from "./runtime.js";
 
@@ -247,13 +246,6 @@ function buildCells(count: number, tick: number, f: Frame): Cell[] {
   });
 }
 
-/** Copies the array and object options so a caller mutating them later cannot bypass validation. */
-const own = <P extends Patch<GlitchOptions>>(p: P): P => ({
-  ...p,
-  ...(Array.isArray(p.colors) && { colors: [...p.colors] }),
-  ...(p.loop && { loop: { ...p.loop } }),
-});
-
 export function createGlitch(
   canvas: HTMLCanvasElement,
   opts: GlitchOptions = {},
@@ -265,7 +257,7 @@ export function createGlitch(
       // A fresh mutable palette: the frozen default is shared by every glitch.
       colors: [...GLITCH_DEFAULTS.colors],
     },
-    own(opts),
+    opts,
   );
   validate(o);
   // The cells for one tick, rebuilt when the tick or any input that shapes them changes.
@@ -325,10 +317,5 @@ export function createGlitch(
     drawVignette(ctx, o.vignette, w, h);
   });
 
-  const handle = createRuntime<GlitchOptions>(canvas, o, validate, renderer);
-  const update = handle.update.bind(handle);
-  handle.update = (patch) => {
-    update(own(patch));
-  };
-  return handle;
+  return createRuntime<GlitchOptions>(canvas, o, validate, renderer);
 }
