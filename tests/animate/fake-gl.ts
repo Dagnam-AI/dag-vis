@@ -32,6 +32,8 @@ export class FakeGl {
   /** null simulates a driver that returns no info log. */
   infoLog: string | null = "fake";
   lost = false;
+  /** true makes createShader return null, as a lost context does. */
+  shaderCreateFails = false;
   programs = 0;
   readonly attrs: WebGLContextAttributes | undefined;
 
@@ -45,7 +47,8 @@ export class FakeGl {
   isContextLost(): boolean {
     return this.lost;
   }
-  createShader(type: number): Shader {
+  createShader(type: number): Shader | null {
+    if (this.shaderCreateFails) return null;
     this.calls.push(
       `createShader ${type === this.VERTEX_SHADER ? "vertex" : "fragment"}`,
     );
