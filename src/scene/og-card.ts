@@ -12,9 +12,11 @@ import {
   parseSeed,
   within,
 } from "../core/validate.js";
+import type { GradientSpec } from "../gradient/index.js";
 import { brandBackgroundLayers } from "./brand-background.js";
 import type { BrandBackgroundOptions } from "./brand-background.js";
-import { FONT_FAMILY, cleanText, wrapText } from "./text.js";
+import { socialCard } from "./og-social-card.js";
+import { FONT_FAMILY, cleanText, optionalText, wrapText } from "./text.js";
 
 /** Overrides for the brand background layers; the card sets size, seed and id. */
 export type OgBackground = Partial<
@@ -26,7 +28,7 @@ export interface OgCardOptions {
   width?: number;
   /** Px, 16..16384. Default 630. */
   height?: number;
-  /** Required. Whitespace and newlines collapse; at most 3 lines (2 with a subtitle), then "…". */
+  /** Required. Whitespace and newlines collapse; at most 3 lines (2 with a subtitle), then "…". With `cover`: uppercase, in Moonhouse, 92 px stepping down to 52 to fit 3 lines. */
   title: string;
   /** At most 2 lines. Omitted when blank. */
   subtitle?: string;
@@ -42,25 +44,39 @@ export interface OgCardOptions {
   seed?: number;
   /** `<defs>` id namespace (a letter or `_`, then up to 59 letters, digits, `_` or `-`). Default `"vis" + seed`. */
   idPrefix?: string;
+  /**
+   * Selects the SOCIAL layout (the per-post og:image): this gradient spec, drawn
+   * at 1200x630, is the background; pass `coverSpec({ theme: "dark", variant:
+   * "banner", ... })`. The social layout takes only `title`, `excerpt`, `seed`,
+   * `idPrefix` and `cover` (and a `width` of 1200, `height` of 630 and `theme` of
+   * "dark", which are all it draws); `subtitle`, `eyebrow`, `footer` and
+   * `background` throw. Its text is set in Moonhouse and Unbounded, which the PNG
+   * pipeline bundles.
+   */
+  cover?: GradientSpec;
+  /** The social layout's second text: at most 2 lines, omitted when blank. Needs `cover`. */
+  excerpt?: string;
 }
 
 const MIN_SIDE = 16;
 /** Inter's cap height as a fraction of the em. */
 const CAP = 0.7275;
 
-/** `v` as clean text, or undefined when it is undefined or blank once cleaned. */
-function optionalText(name: string, v: unknown): string | undefined {
-  if (v === undefined) return undefined;
-  const t = cleanText(name, v);
-  return t === "" ? undefined : t;
-}
-
-/** A social-preview card: logo + wordmark, wrapped title, accent rule, subtitle, footer. */
+/**
+ * A social-preview card: logo + wordmark, wrapped title, accent rule, subtitle,
+ * footer; or, with `cover`, the social layout (title, excerpt and a Dagnam.AI bar
+ * over the cover's art).
+ */
 export function ogCard(opts: OgCardOptions): string {
   const input: unknown = opts;
   if (typeof input !== "object" || input === null)
     throw new VisError(
       `options must be an object, got ${describeValue(input)}`,
+    );
+  if (opts.cover !== undefined) return socialCard(opts);
+  if (opts.excerpt !== undefined)
+    throw new VisError(
+      "excerpt is only supported with cover: it is the social layout's second text",
     );
   const width = bounded(
     "width",

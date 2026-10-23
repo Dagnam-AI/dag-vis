@@ -31,7 +31,7 @@ const SEGMENTER = new Intl.Segmenter("en", { granularity: "grapheme" });
 const INVISIBLE =
   /[\u{ad}\u{200b}\u{2060}\u{feff}\u{fffe}\u{ffff}\u{202a}-\u{202e}\u{2066}-\u{2069}\ud800-\udfff]/gu;
 /** Take no space: variation selectors, ZWJ/ZWNJ, fillers, ... (Unicode Default_Ignorable_Code_Point). */
-const ZERO_WIDTH = /\p{Default_Ignorable_Code_Point}/u;
+export const ZERO_WIDTH = /\p{Default_Ignorable_Code_Point}/u;
 /**
  * Em-wide in any CJK font and in emoji fonts: ideographs, kana, hangul,
  * pictographs, CJK symbols and full-width forms.
@@ -54,6 +54,13 @@ export function cleanText(name: string, v: unknown): string {
       `${name} must be at most ${MAX_TEXT_LENGTH} characters, got ${v.length}`,
     );
   return v.replace(INVISIBLE, "").replace(BREAKING, " ").trim();
+}
+
+/** `v` as clean text, or undefined when it is undefined or blank once cleaned. */
+export function optionalText(name: string, v: unknown): string | undefined {
+  if (v === undefined) return undefined;
+  const t = cleanText(name, v);
+  return t === "" ? undefined : t;
 }
 
 interface Font {
@@ -149,7 +156,8 @@ export function measureText(
   return px(span(cleanText("text", text), font.weight), font);
 }
 
-function graphemes(s: string): string[] {
+/** `s` split into grapheme clusters. */
+export function graphemes(s: string): string[] {
   return Array.from(SEGMENTER.segment(s), (g) => g.segment);
 }
 
