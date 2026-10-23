@@ -41,6 +41,8 @@ export type {
   FlutedSpec,
   FreeformPoint,
   FreeformSpec,
+  GlowPoint,
+  GlowsSpec,
   GradientBase,
   GradientResult,
   GradientSpec,
@@ -73,6 +75,8 @@ export {
   FONT_FAMILY,
   brandBackground,
   brandBackgroundLayers,
+  coverLayers,
+  coverSpec,
   measureText,
   ogCard,
   ribbon,
@@ -81,6 +85,9 @@ export {
 } from "./scene/index.js";
 export type {
   BrandBackgroundOptions,
+  CoverGlow,
+  CoverInput,
+  CoverLayers,
   OgBackground,
   OgCardOptions,
   RibbonOptions,

@@ -7,6 +7,11 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+### Added
+
+- Gradients: the `glows` kind (elliptical glows sized and placed in percent of the box, fading to transparent at 70%, over a base colour; first glow on top; CSS and SVG agree).
+- Covers: `coverSpec` and `coverLayers` (plus the `CoverInput`, `CoverLayers`, `CoverGlow`, `GlowsSpec` and `GlowPoint` types): deterministic generated covers, one look per family, nudged per item.
+
 ## [0.1.0] - 2026-10-21
 
 ### Added
