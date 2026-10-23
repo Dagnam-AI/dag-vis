@@ -38,7 +38,7 @@ describe("<VisBackground>", () => {
   };
   const released = (gl: FakeGl): boolean => gl.calls.includes("deleteProgram");
 
-  it("renders a positioned wrapper, creates its canvas in an effect and starts the effect", () => {
+  it("renders a wrapper with no inline position, creates its canvas in an effect and starts the effect", () => {
     const { container } = render(
       <VisBackground effect="dither" className="bg" style={{ opacity: 0.4 }} />,
     );
@@ -342,6 +342,74 @@ describe("<VisBackground> failure containment", () => {
     );
     expect(container.querySelectorAll("canvas")).toHaveLength(0);
     expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries when a corrected value of the same key replaces invalid creation options", () => {
+    fake = installFakeGl();
+    const onError = vi.fn();
+    const view = (waveSpeed: number): ReactElement => (
+      <VisBackground
+        effect="dither"
+        options={{ waveSpeed }}
+        onError={onError}
+      />
+    );
+    const { rerender, container } = render(view(-1));
+    expect(container.querySelectorAll("canvas")).toHaveLength(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+    rerender(view(-2));
+    expect(container.querySelectorAll("canvas")).toHaveLength(0);
+    expect(onError).toHaveBeenCalledTimes(2);
+    rerender(view(0.1));
+    expect(container.querySelectorAll("canvas")).toHaveLength(1);
+    expect(fake.gls).toHaveLength(1);
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(dom.pending()).toBe(1);
+    // Recovered: later value changes update the live effect instead of recreating it.
+    rerender(view(0.2));
+    act(() => {
+      dom.frame(16);
+    });
+    expect(fake.gls).toHaveLength(1);
+    expect(fake.gls[0]?.calls).toContain("uniform1f waveSpeed 0.2");
+  });
+
+  it("mounts once when the correction also changes the key set", () => {
+    fake = installFakeGl();
+    const onError = vi.fn();
+    const { rerender, container } = render(
+      <VisBackground
+        effect="dither"
+        options={{ waveSpeed: -1 }}
+        onError={onError}
+      />,
+    );
+    rerender(
+      <VisBackground
+        effect="dither"
+        options={{ waveSpeed: 0.1, colors: ["#ff0000"] }}
+        onError={onError}
+      />,
+    );
+    expect(container.querySelectorAll("canvas")).toHaveLength(1);
+    expect(fake.gls).toHaveLength(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+    // Still invalid after a key-set change: one more report, not two.
+    const again = render(
+      <VisBackground
+        effect="dither"
+        options={{ waveSpeed: -1 }}
+        onError={onError}
+      />,
+    );
+    again.rerender(
+      <VisBackground
+        effect="dither"
+        options={{ waveSpeed: -3, colors: ["#ff0000"] }}
+        onError={onError}
+      />,
+    );
+    expect(onError).toHaveBeenCalledTimes(3);
   });
 
   it("keeps the live effect and reports an invalid update", () => {

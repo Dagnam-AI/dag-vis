@@ -193,9 +193,11 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
 - **Options.** A changed value is applied with `update()` on the running effect (`seed` re-phases, `colors`
   recolours); equal re-renders do nothing. Adding or removing an option key (turning `loop` on or off, dropping
   `colors`) recreates the effect, because `update()` cannot clear a value.
-- **Failures stay local.** If WebGL2 is missing or an option is invalid, the canvas is removed, the wrapper stays
-  empty and `onError` is called (`console.error` without it); the rest of the page keeps rendering. An unknown `effect`
-  name is a programmer error and throws a `VisError` while rendering.
+- **Failures stay local.** Invalid options (or a missing WebGL2) when the effect is created leave no canvas, call
+  `onError` once (`console.error` without it) and keep the rest of the page rendering; changing the options retries.
+  An invalid update keeps the canvas and the last valid options and calls `onError` once. An `onError` that itself
+  throws is not contained. An unknown `effect` name (or `fit`) is a programmer error and throws a `VisError` while
+  rendering.
 - **Reduced motion.** The wrapper follows the runtime: under `prefers-reduced-motion: reduce` it draws one static
   frame. To draw nothing at all (what the landing page does today), do not mount it:
   `reduced ? null : <VisBackground ... />`.

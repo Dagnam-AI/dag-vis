@@ -11,7 +11,7 @@ describe("server rendering", () => {
     expect(typeof document).toBe("undefined");
   });
 
-  it("renders <VisBackground> to an empty, wrapper (the canvas is added by an effect)", () => {
+  it("renders <VisBackground> to an empty wrapper with only overflow hidden (the canvas is added by an effect)", () => {
     const html = renderToString(
       <VisBackground
         effect="dither"

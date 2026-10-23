@@ -58,6 +58,13 @@ const FACTORIES: Record<VisEffect, Factory> = {
   ribbon: createRibbon,
 };
 
+interface Live {
+  handle: EffectHandle;
+  canvas: HTMLCanvasElement;
+  /** The options key last applied to the handle. */
+  key: string;
+}
+
 const WRAPPER: CSSProperties = { overflow: "hidden" };
 
 /** The option keys that carry a value: `update()` cannot take one away again (undefined keeps the current value). */
@@ -83,8 +90,11 @@ const definedKeys = (options: object): string =>
  *   cannot clear `loop`, `colors`, `tint` ... once set.
  * - Under `prefers-reduced-motion: reduce` the effect draws one static frame
  *   and never animates; skip mounting the component to draw nothing at all.
- * - A runtime failure (no WebGL2, invalid options) never escapes the effect:
- *   the canvas is removed, the wrapper stays empty and `onError` is called.
+ * - Failures are contained, not thrown: invalid options (or no WebGL2) when
+ *   the effect is CREATED leave no canvas and call `onError` once (a later
+ *   change of the options retries); an invalid UPDATE keeps the canvas and the
+ *   last valid options and calls `onError` once. An `onError` callback that
+ *   itself throws is not contained.
  * - An unknown `effect` name is a programmer error and throws a `VisError`
  *   while rendering (also on the server), like a bad prop type would.
  * - Server rendering emits an empty wrapper; all DOM work happens in effects.
@@ -106,7 +116,9 @@ export function VisBackground({
   const containerRef = useRef<HTMLDivElement>(
     null,
   ) as RefObject<HTMLDivElement>;
-  const handleRef = useRef<EffectHandle | null>(null);
+  const liveRef = useRef<Live | null>(null);
+  // The options key of the last failed creation; a different key retries.
+  const failedRef = useRef<string | null>(null);
   const onErrorRef = useRef(onError);
   const optionsKey = JSON.stringify(options);
   const shape = definedKeys(options);
@@ -114,21 +126,7 @@ export function VisBackground({
     (onErrorRef.current ?? console.error)(error);
   };
 
-  // The effects below run in this order within one commit, so they see the latest callback.
-  useEffect(() => {
-    onErrorRef.current = onError;
-  }, [onError]);
-
-  // A run that also recreates the effect finds `handleRef` cleared by the cleanup below.
-  useEffect(() => {
-    try {
-      handleRef.current?.update(options);
-    } catch (error) {
-      report(error); // the runtime validates first, so the live effect keeps its options
-    }
-  }, [optionsKey]);
-
-  useEffect(() => {
+  const mount = (): void => {
     const canvas = document.createElement("canvas");
     canvas.setAttribute("aria-hidden", "true");
     canvas.style.display = "block";
@@ -141,16 +139,46 @@ export function VisBackground({
     } catch (error) {
       handle?.destroy();
       canvas.remove();
+      failedRef.current = optionsKey;
       report(error);
       return;
     }
-    handleRef.current = handle;
-    return () => {
-      handleRef.current = null;
-      handle.destroy();
-      canvas.remove();
-    };
+    failedRef.current = null;
+    liveRef.current = { handle, canvas, key: optionsKey };
+  };
+  const unmount = (): void => {
+    const live = liveRef.current;
+    liveRef.current = null;
+    live?.handle.destroy();
+    live?.canvas.remove();
+  };
+
+  // The effects run in this order within one commit, so they see the latest callback.
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    mount();
+    return unmount;
   }, [effect, shape]);
+
+  // Runs on mount too, where `live.key` already equals `optionsKey` and there is nothing to do.
+  useEffect(() => {
+    const live = liveRef.current;
+    if (!live) {
+      // The effect failed to create. This commit's own creation attempt (if any) has just
+      // recorded its key, so only options that changed since the failure retry.
+      if (failedRef.current !== optionsKey) mount();
+    } else if (live.key !== optionsKey) {
+      live.key = optionsKey;
+      try {
+        live.handle.update(options);
+      } catch (error) {
+        report(error); // the runtime validates first, so the live effect keeps its options
+      }
+    }
+  }, [optionsKey]);
 
   return (
     <div

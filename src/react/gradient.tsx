@@ -1,5 +1,6 @@
 import { useId, type CSSProperties } from "react";
 
+import { VisError } from "../core/index.js";
 import { gradientSvg, type GradientSpec } from "../gradient/index.js";
 
 export interface GradientProps {
@@ -32,6 +33,7 @@ const ASPECT = {
  * numbers are parsed and escaped), never from caller-supplied HTML. When the
  * spec has no `idPrefix`, one is derived from `useId()` (stable between server
  * and client), so several gradients in one document never share `<defs>` ids.
+ * An unknown `fit` is a programmer error and throws a `VisError` while rendering.
  */
 export function Gradient({
   spec,
@@ -42,6 +44,10 @@ export function Gradient({
   className,
   style,
 }: GradientProps) {
+  if (!Object.hasOwn(ASPECT, fit))
+    throw new VisError(
+      `fit must be one of ${Object.keys(ASPECT).join(", ")}, got ${JSON.stringify(fit)}`,
+    );
   const id = useId();
   const idPrefix = spec.idPrefix ?? `vis-${id.replace(/[^\w-]/g, "")}`;
   const svg = gradientSvg(

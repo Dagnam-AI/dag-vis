@@ -4,6 +4,7 @@ import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { VisError } from "../../src/core/index.js";
 import { gradientSvg, type GradientSpec } from "../../src/gradient/index.js";
 import { Gradient } from "../../src/react/index.js";
 
@@ -154,6 +155,20 @@ describe("<Gradient>", () => {
       root.unmount();
     });
     host.remove();
+    error.mockRestore();
+  });
+
+  it("throws a VisError for an invalid fit, including inherited keys and non-strings", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {
+      /* React logs the render error */
+    });
+    for (const bad of ["cover", "toString", "__proto__", 5, null])
+      expect(() =>
+        render(<Gradient spec={SPEC} fit={bad as "slice"} />),
+      ).toThrow(/fit must be one of slice, meet, none/);
+    expect(() => render(<Gradient spec={SPEC} fit={"x" as "slice"} />)).toThrow(
+      VisError,
+    );
     error.mockRestore();
   });
 });
