@@ -41,19 +41,50 @@ function assertFrontendInstalled(dir: string): void {
     throw new Error(
       `Fidelity: ${modules} is missing ${missing.join(", ")} (imported by the landing). ${fix}`,
     );
-  const version = (file: string): unknown =>
-    (JSON.parse(readFileSync(file, "utf8")) as { version?: unknown }).version;
+  const contracts = join(modules, "@dagnam/contracts/package.json");
+  if (!existsSync(contracts))
+    throw new Error(
+      `Fidelity: ${modules} is missing @dagnam/contracts (imported by the landing). ${fix}`,
+    );
+  const installed = (
+    JSON.parse(readFileSync(contracts, "utf8")) as { version?: string }
+  ).version;
   const pinned = (
     JSON.parse(readFileSync(join(root, "package.json"), "utf8")) as {
       dependencies?: Record<string, string>;
     }
   ).dependencies?.["@dagnam/contracts"];
-  const installed = version(join(modules, "@dagnam/contracts/package.json"));
-  if (pinned !== undefined && installed !== pinned)
+  if (pinned === undefined || installed === undefined) return;
+  if (/^(link|workspace|file):/.test(pinned)) {
+    console.log(
+      `Fidelity: @dagnam/contracts is pinned as "${pinned}"; skipping the installed-version check.`,
+    );
+    return;
+  }
+  if (!satisfies(installed, pinned))
     throw new Error(
-      `Fidelity: ${root} has stale node_modules (@dagnam/contracts ${String(installed)} installed, ${pinned} pinned). ${fix}`,
+      `Fidelity: ${root} has stale node_modules (@dagnam/contracts ${installed} installed, ${pinned} pinned). ${fix}`,
     );
 }
+
+/** An exact version, ^x.y.z or ~x.y.z; any other spec is not compared (it passes). */
+function satisfies(installed: string, spec: string): boolean {
+  const num = (v: string): number[] =>
+    v.split(".").map((n) => Number.parseInt(n, 10));
+  const match = /^([\^~]?)(\d+\.\d+\.\d+)$/.exec(spec);
+  if (!match) return true;
+  const [i0 = 0, i1 = 0, i2 = 0] = num(installed);
+  const [p0 = 0, p1 = 0, p2 = 0] = num(match[2] ?? "");
+  const atLeast =
+    i0 > p0 || (i0 === p0 && (i1 > p1 || (i1 === p1 && i2 >= p2)));
+  if (match[1] === "") return installed === match[2];
+  if (!atLeast) return false;
+  if (match[1] === "~") return i0 === p0 && i1 === p1;
+  return p0 > 0
+    ? i0 === p0
+    : i0 === 0 && (p1 > 0 ? i1 === p1 : i1 === 0 && i2 === p2);
+}
+
 assertFrontendInstalled(frontendDir);
 
 export default defineConfig({

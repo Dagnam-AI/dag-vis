@@ -1,7 +1,8 @@
 // Type-only import (erased at runtime): `window.__vis` inside page.evaluate callbacks.
 import type {} from "../../demo/global.js";
 
-import { readFileSync } from "node:fs";
+import { copyFileSync, readFileSync } from "node:fs";
+import { loadavg } from "node:os";
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
@@ -11,6 +12,7 @@ import {
   writeReport,
   type FidelityRow,
   type FidelityVariant,
+  type LagFit,
   type PixelDiff,
 } from "./fidelity-report.js";
 
@@ -21,21 +23,35 @@ const GALLERY_ORIGIN = "http://localhost:5173";
 const DEAD_API_ORIGIN = "http://127.0.0.1:59999";
 const STEP_MS = 16;
 /**
- * Dither is aligned with a measured 3-frame (about 48 ms) R3F start lag that was
- * fitted against the gallery frame it is compared with: R3F starts its clock about
- * three rAF frames after its canvas is in the DOM, so capturing at mount + 2 s
- * showed t = 1.955 s. Without the lag the difference is about 15% of pixels
- * (14.7% at dpr 1, light, measured before the crop below), with it under 1%. The
- * constant is empirical (frame-counted: it may drift under load or on other GPUs)
- * and a wrong value shows up only as a higher dither number, never as a failure.
- * FIDELITY_DITHER_LAG_FRAMES overrides it to re-measure. The other effects start
- * within the first frame (PixelBlast's frame is flat across 1.99-2.01 s).
+ * R3F (the landing's Dither) starts its own clock a few rAF frames after its canvas
+ * is in the DOM, and how many depends on real-time events (ResizeObserver, lazy
+ * chunks, shader compile) and so on machine load: a fixed lag gave 0.8% on a quiet
+ * machine and 45% on a loaded one. So the lag is FITTED PER RUN: the dither card is
+ * captured at each of DITHER_LAGS frames after mount + 2 s (one 16 ms page-clock step
+ * each; the paused clock holds the frame still between steps), and the gallery test
+ * keeps the candidate with the lowest raw difference against the gallery frame.
+ * That is one integer fitted to the frame it is compared with: it cannot remove a
+ * texture or resolution difference (the dpr 2 floor stays), and the chosen lag, the
+ * figures at lag 0 and at the old fixed 3, and the best figure are all printed on the
+ * page, with a banner when the fit looks unreliable. The other effects start within
+ * their first frame and are captured once. FIDELITY_DITHER_LAG_FRAMES=<n> skips the
+ * fit and uses n frames; anything but a non-negative integer is an error.
  */
-const START_LAG_FRAMES: Record<string, number> = {
-  dither: Number(process.env.FIDELITY_DITHER_LAG_FRAMES ?? "3"),
-};
+function parseLag(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
+  if (!/^\d+$/.test(raw))
+    throw new Error(
+      `FIDELITY_DITHER_LAG_FRAMES must be a non-negative integer number of frames, got "${raw}"`,
+    );
+  return Number(raw);
+}
+const LAG_OVERRIDE = parseLag(process.env.FIDELITY_DITHER_LAG_FRAMES);
+const DITHER_LAGS =
+  LAG_OVERRIDE === undefined ? [0, 1, 2, 3, 4, 5, 6] : [LAG_OVERRIDE];
+const OLD_FIXED_LAG = 3;
+const LAG_DIR = "dither-lag";
 const DITHER_NOTE =
-  "Same frame in principle (no random phase in either), but aligned with a fitted start lag: START_LAG_FRAMES, a measured 3-frame (about 48 ms) R3F start lag fitted against this gallery frame itself. Without it the difference is about 15% of pixels. The constant is empirical (frame-counted, may drift under load or on other GPUs); a wrong value shows up only as a higher dither number.";
+  "Same frame in principle (no random phase in either), but R3F starts its clock a load-dependent number of frames after its canvas appears, so the landing capture is fitted: it was taken at several lags (16 ms page-clock steps) and the one closest to this gallery frame is shown. The fit is one integer fitted to the frame it is compared with; it cannot remove a texture or resolution difference. See the fit table below.";
 /** Landing card order (landing-content.ts PRICING.plans): Free=dither, Pro=pixel, Team=terminal, Enterprise=glitch. */
 const ROWS = [
   { effect: "dither", card: "Free", index: 0, note: DITHER_NOTE },
@@ -74,7 +90,7 @@ const VARIANTS: Variant[] = [
     title: "Light theme, dpr 1 (main pass)",
     colorScheme: "light",
     dpr: 1,
-    note: "The landing's default theme at integer dpr 1 (the runtime rounds its buffer up 1 px at fractional dpr).",
+    note: "The landing's default theme at integer dpr 1 (at a fractional dpr the @dagnam/vis runtime rounds its canvas buffer up by 1 px, which would shift every pixel against today's canvas, so only integer ratios are compared).",
   },
   {
     id: "light-2x",
@@ -93,9 +109,11 @@ const VARIANTS: Variant[] = [
 ];
 
 interface Captured {
-  /** Compared region in CSS px, whole pixels inside today's canvas box. */
+  /** Compared region in CSS px: today's canvas box snapped to whole device pixels. */
   width: number;
   height: number;
+  /** The canvas's bounding box as laid out (logged: a fractional origin matters for the crop). */
+  box: { x: number; y: number; width: number; height: number };
   /** The CSS size the gallery stage is built at (the canvas's rounded size). */
   stage: { width: number; height: number };
   wrapper: { opacity: number; classes: string; background: string };
@@ -118,9 +136,12 @@ function watch(page: Page, origins: string[], strictConsole: boolean): Watch {
   });
   page.on("console", (m) => {
     if (m.type() !== "error") return;
-    consoleErrors.push(m.text().slice(0, 300));
-    if (strictConsole)
-      problems.push(`console.error: ${m.text().slice(0, 300)}`);
+    const text = m.text().slice(0, 300);
+    consoleErrors.push(text);
+    // The landing's console is noisy by design (every aborted API call logs), so
+    // only a graphics failure there is fatal; the gallery tolerates no error.
+    if (strictConsole || /webgl|shader|context[ -]?lost/i.test(text))
+      problems.push(`console.error: ${text}`);
   });
   return {
     consoleErrors,
@@ -134,9 +155,13 @@ function watch(page: Page, origins: string[], strictConsole: boolean): Watch {
 }
 
 /**
- * Screenshots whole pixels inside the locator's box: the origin rounds up and the
- * far edge down, so the card border (today) and the page chrome (gallery) never
- * enter the capture. Passing `size` reuses today's region on the gallery side.
+ * Screenshots the locator's box on whole DEVICE pixels, with the same rule on both
+ * sides: each edge is rounded to the nearest device pixel, which is how Chrome snaps
+ * a layout box when it paints it (the landing canvas sits at y = 247.77 and is drawn
+ * at 248; its border row is above that). Flooring the origin would pull that border
+ * row into the capture, and ceiling it would shift the crop a pixel whenever the
+ * fraction is below .5. The gallery stage is placed at the page origin, where the
+ * rule is a no-op. Passing `size` reuses today's region on the gallery side.
  */
 async function shoot(
   page: Page,
@@ -146,10 +171,12 @@ async function shoot(
 ): Promise<{ width: number; height: number }> {
   const box = await target.boundingBox();
   if (!box) throw new Error(`${path}: no bounding box`);
-  const x = Math.ceil(box.x);
-  const y = Math.ceil(box.y);
-  const width = size?.width ?? Math.floor(box.x + box.width) - x;
-  const height = size?.height ?? Math.floor(box.y + box.height) - y;
+  const dpr = await page.evaluate(() => window.devicePixelRatio);
+  const snap = (v: number): number => Math.round(v * dpr) / dpr;
+  const x = snap(box.x);
+  const y = snap(box.y);
+  const width = size?.width ?? snap(box.x + box.width) - x;
+  const height = size?.height ?? snap(box.y + box.height) - y;
   await page.screenshot({ path, clip: { x, y, width, height } });
   return { width, height };
 }
@@ -194,6 +221,7 @@ async function diff(
 }
 
 const results: FidelityVariant[] = [];
+const RUN_START_LOAD = loadavg()[0] ?? 0;
 
 test.describe.configure({ mode: "serial" });
 
@@ -280,23 +308,35 @@ for (const variant of VARIANTS) {
           `Landing cards did not all mount in 90 s (mounted: ${Object.keys(mountedAt).join(", ") || "none"}). Console errors: ${watcher.consoleErrors.slice(-3).join(" | ") || "none"}`,
         );
 
-      const byMount = [...ROWS].sort(
-        (a, b) => (mountedAt[a.effect] ?? 0) - (mountedAt[b.effect] ?? 0),
-      );
-      for (const row of byMount) {
-        const target =
-          (mountedAt[row.effect] ?? 0) +
-          T * 1000 +
-          (START_LAG_FRAMES[row.effect] ?? 0) * STEP_MS;
-        if (target > now) {
-          await page.clock.runFor(target - now);
-          now = target;
+      // One capture event per effect at mount + 2 s; the dither card is captured at
+      // every candidate lag instead (the gallery test fits it), in time order.
+      const events = ROWS.flatMap((row) =>
+        (row.effect === "dither" ? DITHER_LAGS : [0]).map((lag) => ({
+          row,
+          lag,
+          at: (mountedAt[row.effect] ?? 0) + T * 1000 + lag * STEP_MS,
+        })),
+      ).sort((a, b) => a.at - b.at);
+      for (const { row, lag, at } of events) {
+        if (at > now) {
+          await page.clock.runFor(at - now);
+          now = at;
         }
         const card = cards.nth(row.index);
         const canvas = card.locator("canvas");
         const wrapper = canvas.locator(
           "xpath=ancestor::div[@aria-hidden='true'][1]",
         );
+        const base =
+          row.effect === "dither"
+            ? `${dir}/${LAG_DIR}/lag${String(lag)}`
+            : `${dir}/${row.effect}`;
+        if (!(row.effect in captured)) {
+          // Context first (card text included); the canvas shots then hide every
+          // sibling of the background wrapper, since a screenshot captures
+          // whatever is painted over the canvas box (the card's text and button).
+          await card.screenshot({ path: `${dir}/${row.effect}-card.png` });
+        }
         const info = await wrapper.evaluate((el) => {
           const host = el.closest(".bg-card");
           if (!host) throw new Error("effect wrapper is outside a .bg-card");
@@ -310,10 +350,6 @@ for (const variant of VARIANTS) {
             background: getComputedStyle(host).backgroundColor,
           };
         });
-        // Context first (card text included); the canvas shots then hide every
-        // sibling of the background wrapper, since a screenshot captures
-        // whatever is painted over the canvas box (the card's text and button).
-        await card.screenshot({ path: `${dir}/${row.effect}-card.png` });
         const hide = (on: boolean): Promise<void> =>
           wrapper.evaluate((el, hidden) => {
             for (const sibling of Array.from(
@@ -325,24 +361,21 @@ for (const variant of VARIANTS) {
             }
           }, on);
         await hide(true);
-        const region = await shoot(
-          page,
-          canvas,
-          `${dir}/${row.effect}-today-seen.png`,
-        );
+        const region = await shoot(page, canvas, `${base}-today-seen.png`);
         await wrapper.evaluate((el) => {
           el.style.setProperty("opacity", "1");
         });
-        await shoot(page, canvas, `${dir}/${row.effect}-today.png`, region);
+        await shoot(page, canvas, `${base}-today.png`, region);
         await wrapper.evaluate((el) => {
           el.style.removeProperty("opacity");
         });
         await hide(false);
         const box = await canvas.boundingBox();
         if (!box) throw new Error(`${row.effect}: canvas has no box`);
-        captured[row.effect] = {
+        captured[row.effect] ??= {
           width: region.width,
           height: region.height,
+          box,
           stage: {
             width: Math.round(box.width),
             height: Math.round(box.height),
@@ -350,12 +383,14 @@ for (const variant of VARIANTS) {
           wrapper: info,
         };
       }
+      // Errors that only appear after the effects have mounted and drawn count too.
+      watcher.check("Landing page (after capture)");
       const stubHits = await page.evaluate(() =>
         Number(Reflect.get(window, "__stubHits")),
       );
       expect(stubHits).toBeGreaterThan(0);
       console.log(
-        `[${variant.id}] mounted at fake ms: ${JSON.stringify(mountedAt)}; stub hits: ${String(stubHits)}; API calls aborted: ${String(apiCalls)}; external origins aborted: ${[...external].join(", ") || "none"}`,
+        `[${variant.id}] mounted at fake ms: ${JSON.stringify(mountedAt)}; canvas boxes: ${JSON.stringify(Object.fromEntries(Object.entries(captured).map(([k, c]) => [k, c.box])))}; stub hits: ${String(stubHits)}; API calls aborted: ${String(apiCalls)}; external origins aborted: ${[...external].join(", ") || "none"}`,
       );
     });
 
@@ -394,6 +429,40 @@ for (const variant of VARIANTS) {
           el.style.setProperty("background", bg);
         }, today.wrapper.background);
         await shoot(page, stage, `${dir}/${name}-vis.png`, region);
+        let fit: LagFit | undefined;
+        if (name === "dither") {
+          // Fit the start lag: keep the candidate capture closest to this frame.
+          const figures = [];
+          for (const lag of DITHER_LAGS)
+            figures.push({
+              lag,
+              diff: await diff(
+                page,
+                `${dir}/${LAG_DIR}/lag${String(lag)}-today.png`,
+                `${dir}/${name}-vis.png`,
+              ),
+            });
+          const score = (f: { diff: PixelDiff | null }): number[] => [
+            f.diff?.over8 ?? Infinity,
+            f.diff?.mean ?? Infinity,
+          ];
+          const best = figures.reduce((a, b) => {
+            const [a0 = 0, a1 = 0] = score(a);
+            const [b0 = 0, b1 = 0] = score(b);
+            return b0 < a0 || (b0 === a0 && b1 < a1) ? b : a;
+          });
+          for (const suffix of ["today", "today-seen"])
+            copyFileSync(
+              `${dir}/${LAG_DIR}/lag${String(best.lag)}-${suffix}.png`,
+              `${dir}/${name}-${suffix}.png`,
+            );
+          fit = {
+            chosen: best.lag,
+            oldFixed: OLD_FIXED_LAG,
+            override: LAG_OVERRIDE !== undefined,
+            figures,
+          };
+        }
         await stage.locator("canvas").evaluate((el, o) => {
           el.style.setProperty("opacity", String(o));
         }, today.wrapper.opacity);
@@ -404,6 +473,7 @@ for (const variant of VARIANTS) {
           effect: name,
           card: row.card,
           note: row.note,
+          ...(fit ? { fit } : {}),
           wrapper: `${today.wrapper.classes} (computed opacity ${String(today.wrapper.opacity)})`,
           size: `${String(region.width)}x${String(region.height)}`,
           raw: await diff(
@@ -423,16 +493,47 @@ for (const variant of VARIANTS) {
           `[${variant.id}] ${r.effect.padEnd(9)} raw: ${r.raw ? `${(r.raw.over8 * 100).toFixed(2)}% >8/255, mean ${r.raw.mean.toFixed(2)}` : "size mismatch"} | seen: ${r.seen ? `${(r.seen.over8 * 100).toFixed(2)}% >8/255, mean ${r.seen.mean.toFixed(2)}` : "size mismatch"}`,
         );
       }
+      watcher.check("Gallery page (after capture)");
+      // A banner, never a failure: this is a sign-off tool and the run completes.
+      const fit = rows.find((r) => r.effect === "dither")?.fit;
+      const reasons: string[] = [];
+      if (fit && !fit.override) {
+        const best = fit.figures.find((f) => f.lag === fit.chosen)?.diff;
+        if (fit.chosen < 1 || fit.chosen > 6)
+          reasons.push(
+            `the fitted dither lag is ${String(fit.chosen)}, outside 1..6`,
+          );
+        if (variant.dpr === 1 && (!best || best.over8 > 0.05))
+          reasons.push(
+            `the best dpr 1 dither figure is ${best ? `${(best.over8 * 100).toFixed(1)}%` : "unmeasurable"}, above 5%`,
+          );
+      }
+      if (fit)
+        console.log(
+          `[${variant.id}] dither lag fit: chosen ${String(fit.chosen)}${fit.override ? " (override)" : ""}; ${fit.figures.map((f) => `lag ${String(f.lag)}: ${f.diff ? `${(f.diff.over8 * 100).toFixed(2)}%` : "n/a"}`).join(", ")}${reasons.length > 0 ? `; BANNER: ${reasons.join("; ")}` : ""}`,
+        );
       results.push({
         id: variant.id,
         title: variant.title,
         note: variant.note,
+        dpr: variant.dpr,
+        load: loadavg()[0] ?? 0,
+        ...(reasons.length > 0
+          ? {
+              banner: `Alignment looks unreliable (${reasons.join("; ")}). Re-run when the machine is quiet.`,
+            }
+          : {}),
         rows,
       });
     });
   });
 }
 
-test("fidelity report page", () => {
-  writeReport(OUT, results, EXTRAS);
+test("fidelity report page", ({ browser }) => {
+  writeReport(OUT, results, EXTRAS, {
+    node: process.version,
+    chromium: browser.version(),
+    loadAtStart: RUN_START_LOAD,
+    loadAtEnd: loadavg()[0] ?? 0,
+  });
 });
