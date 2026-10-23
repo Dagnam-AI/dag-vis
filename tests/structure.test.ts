@@ -68,7 +68,7 @@ describe("repository structure", () => {
   it.each(sources)(
     "%s loads @resvg/resvg-js only from src/node/render-png.ts",
     (file) => {
-      // Dependency weight rule (spec section 8): the native rasteriser is an
+      // Dependency weight rule: the native rasteriser is an
       // optional peer, reachable only through the lazy import in render-png.ts,
       // so the browser entries never pull it in. Matches static `from "..."`,
       // dynamic `import("...")` and `require("...")` alike.

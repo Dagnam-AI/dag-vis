@@ -30,7 +30,7 @@ for (const name of EFFECTS) {
       [name, T],
     );
     expect(a).toBe(b);
-    // An artifact for the owner's sign-off, never compared against a baseline.
+    // An artifact for human sign-off, never compared against a baseline.
     await stage.screenshot({ path: `screenshots/${name}.png` });
   });
 }

@@ -61,7 +61,7 @@ describe("createDither", () => {
     ]);
   });
 
-  it("maps the landing Free card props (E3: 0.15 / 0.1) and scales time by speed", () => {
+  it("maps the landing Free card props (0.15 / 0.1) and scales time by speed", () => {
     const h = createDither(canvas, {
       waveSpeed: 0.15,
       waveAmplitude: 0.1,
@@ -97,7 +97,7 @@ describe("createDither", () => {
     );
   });
 
-  it("update({ colors }) takes effect: the colors[0] fallback is resolved at draw time (E4)", () => {
+  it("update({ colors }) takes effect: the colors[0] fallback is resolved at draw time", () => {
     const waveColor = (): string | undefined =>
       uniforms(first(fake).calls)
         .filter((c) => c.startsWith("uniform3f waveColor"))
@@ -201,7 +201,7 @@ describe("createDither", () => {
     expect(frame()).toEqual(before);
   });
 
-  it("destroy() deletes its program but keeps the context, so the same canvas can host a new dither (E1)", () => {
+  it("destroy() deletes its program but keeps the context, so the same canvas can host a new dither", () => {
     const h = createDither(canvas);
     h.start();
     h.destroy();

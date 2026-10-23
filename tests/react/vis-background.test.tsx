@@ -87,7 +87,7 @@ describe("<VisBackground>", () => {
     expect(released(fake.gls[0]!)).toBe(false);
   });
 
-  it("re-phases a live effect when only the seed changes (E5)", () => {
+  it("re-phases a live effect when only the seed changes", () => {
     const { rerender } = render(
       <VisBackground effect="pixel" options={{ seed: 1 }} />,
     );
@@ -127,7 +127,7 @@ describe("<VisBackground>", () => {
     for (const gl of fake.gls) expect(gl.calls).not.toContain("loseContext");
   });
 
-  it("recreates the effect when `loop` is turned off (update cannot clear it, E2)", () => {
+  it("recreates the effect when `loop` is turned off (update cannot clear it)", () => {
     const { rerender, container } = render(
       <VisBackground effect="dither" options={{ loop: { duration: 4 } }} />,
     );

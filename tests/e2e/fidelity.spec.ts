@@ -97,7 +97,7 @@ const VARIANTS: Variant[] = [
     title: "Light theme, dpr 2 (Retina)",
     colorScheme: "light",
     dpr: 2,
-    note: "Today's Dither forces dpr 1 on the landing (mvp-frontend dither.tsx), so its canvas is rendered at 1x and upscaled by the browser; @dagnam/vis renders at the device ratio (capped by maxDpr 2) with pixelSize scaled by dpr. A higher dither number here is that real difference, not tool noise. The dither lag was fitted at dpr 1 only.",
+    note: "Today's Dither forces dpr 1 on the landing (its dither component), so its canvas is rendered at 1x and upscaled by the browser; @dagnam/vis renders at the device ratio (capped by maxDpr 2) with pixelSize scaled by dpr. A higher dither number here is that real difference, not tool noise. The dither lag was fitted at dpr 1 only.",
   },
   {
     id: "dark-1x",
@@ -271,8 +271,8 @@ for (const variant of VARIANTS) {
       // The clock is paused from the start, so the page's time moves only when
       // this test advances it: each effect's own clock (THREE.Clock and
       // performance.now) is exact whatever the load and network delays were.
-      // (The brief's install-then-runFor leaves time flowing between mount and
-      // capture, which makes the elapsed time arbitrary.)
+      // (Installing the clock and then letting it run leaves time flowing between
+      // mount and capture, which makes the elapsed time arbitrary.)
       await page.clock.install({ time: 0 });
       await page.clock.pauseAt(1000);
       await page.goto(`${FRONTEND_ORIGIN}/`, { waitUntil: "commit" });

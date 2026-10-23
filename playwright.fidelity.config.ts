@@ -13,27 +13,31 @@ import { defineConfig, devices } from "@playwright/test";
 // needed. Neither server is ever reused: an existing process on a port may serve
 // another checkout, which would make the run meaningless; Playwright refuses to start.
 //
-// FIDELITY_FRONTEND_DIR: the mvp-frontend checkout to serve. It DEFAULTS to the real
-// sibling ../mvp-frontend, with two preconditions:
-//  (a) Starting Vite there rewrites the tracked generated file
-//      src/features/docs/docs-manifest.ts (its docs plugin writes it on every start;
-//      byte-identical on a clean, synced main, but still a write). When that checkout
-//      is dirty or shared with another session, point FIDELITY_FRONTEND_DIR at an
-//      archive copy (`git archive origin/main`, node_modules cloned or installed
-//      there) to leave it untouched. Vite also writes node_modules/.vite.
-//  (b) The checkout needs a current `yarn install`: with stale node_modules the
-//      landing page never mounts (the run would otherwise end in a bare 120 s
-//      timeout), so the check below fails fast instead.
+// FIDELITY_FRONTEND_DIR (REQUIRED, no default): a checkout of the app whose landing
+// page uses these effects. The tool never defaults to a directory outside this repo,
+// because starting that app's dev server WRITES into it (a tracked generated file its
+// docs plugin rewrites on every start, byte-identical only on a clean, synced main,
+// and node_modules/.vite). So do not point it at a checkout other people are using:
+// use an archive copy (`git archive` of main, node_modules cloned or installed there).
+// The copy needs a current `yarn install`: with stale node_modules the landing page
+// never mounts (the run would otherwise end in a bare 120 s timeout), so the check
+// below fails fast instead.
 const frontendPort = process.env.FIDELITY_FRONTEND_PORT ?? "5174";
-const frontendDir = process.env.FIDELITY_FRONTEND_DIR ?? "../mvp-frontend";
+const frontendDir = process.env.FIDELITY_FRONTEND_DIR;
+if (!frontendDir)
+  throw new Error(
+    "Fidelity: set FIDELITY_FRONTEND_DIR to a checkout or an archive copy of the app whose landing page uses these effects (with a current `yarn install`). Do not point it at a checkout other people are using: starting its dev server writes into it.",
+  );
 
 /** Read-only and cheap: what the landing imports must be installed, at the pinned version. */
 function assertFrontendInstalled(dir: string): void {
   const root = resolve(fileURLToPath(new URL(".", import.meta.url)), dir);
-  const fix = `Run \`yarn install\` in ${root} (or point FIDELITY_FRONTEND_DIR at a fresh copy).`;
+  const fix = `Run \`yarn install\` in ${root}, or point FIDELITY_FRONTEND_DIR at a checkout or an archive copy that has it (never at one other people are using).`;
   const modules = join(root, "node_modules");
   if (!existsSync(join(root, "package.json")))
-    throw new Error(`Fidelity: no mvp-frontend checkout at ${root}. ${fix}`);
+    throw new Error(`Fidelity: no app checkout at ${root}. ${fix}`);
+  if (!existsSync(modules))
+    throw new Error(`Fidelity: ${root} has no node_modules. ${fix}`);
   const missing = ["mermaid", "katex"].filter(
     (name) => !existsSync(join(modules, name)),
   );

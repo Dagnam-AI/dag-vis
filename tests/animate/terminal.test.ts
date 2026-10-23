@@ -102,7 +102,7 @@ describe("createTerminal", () => {
     expect(last("uniform1f uDither")).toBe("uniform1f uDither 0.5");
   });
 
-  it("update({ colors }) takes effect: the tint fallback is resolved at draw time (E4)", () => {
+  it("update({ colors }) takes effect: the tint fallback is resolved at draw time", () => {
     const h = createTerminal(canvas, { colors: ["#ff0000"] });
     h.renderAt(0);
     expect(last("uniform3f uTint")).toBe("uniform3f uTint 1 0 0");
@@ -127,7 +127,7 @@ describe("createTerminal", () => {
     expect(last("uniform3f uTint")).toBe("uniform3f uTint 1 0 0");
   });
 
-  it("update({ seed }) re-phases a live effect (E5)", () => {
+  it("update({ seed }) re-phases a live effect", () => {
     const h = createTerminal(canvas, { seed: 1 });
     h.renderAt(0);
     h.update({ seed: 9 });
@@ -260,7 +260,7 @@ describe("createTerminal", () => {
     }).toThrow(VisError);
   });
 
-  it("destroy() deletes its program but keeps the context, so the same canvas can host a new terminal (E1)", () => {
+  it("destroy() deletes its program but keeps the context, so the same canvas can host a new terminal", () => {
     const h = createTerminal(canvas);
     h.start();
     h.destroy();

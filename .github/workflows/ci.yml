@@ -212,7 +212,7 @@ jobs:
           test -s out/icons/favicon.ico && test -s out/icons/site.webmanifest
 
   gallery:
-    name: Gallery smoke in headless Chromium, screenshots for sign-off
+    name: Gallery smoke in headless Chromium, screenshots for review
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 15

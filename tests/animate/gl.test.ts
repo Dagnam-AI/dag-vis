@@ -302,7 +302,7 @@ describe("glRenderer", () => {
   });
 });
 
-describe("createGlRuntime (hook form for animate/field.ts)", () => {
+describe("createGlRuntime (hook form)", () => {
   let fake: ReturnType<typeof installFakeGl>;
   let dom: FakeDom;
   beforeEach(() => {

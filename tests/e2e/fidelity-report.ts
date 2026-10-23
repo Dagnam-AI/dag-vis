@@ -92,10 +92,10 @@ export function writeReport(
       <p class="meta">Landing wrapper: <code>${r.wrapper}</code></p>
       <h4>Raw canvas, no CSS opacity</h4>
       <p class="meta">${stat("raw", r.raw)}</p>
-      <div class="pair">${fig(`${v.id}/${r.effect}-today.png`, "today (mvp-frontend)")}${fig(`${v.id}/${r.effect}-vis.png`, "@dagnam/vis")}</div>
+      <div class="pair">${fig(`${v.id}/${r.effect}-today.png`, "today (landing)")}${fig(`${v.id}/${r.effect}-vis.png`, "@dagnam/vis")}</div>
       <h4>As seen: same CSS opacity over the same card background</h4>
       <p class="meta">${stat("as seen", r.seen)}</p>
-      <div class="pair">${fig(`${v.id}/${r.effect}-today-seen.png`, "today (mvp-frontend)")}${fig(`${v.id}/${r.effect}-vis-seen.png`, "@dagnam/vis")}</div>
+      <div class="pair">${fig(`${v.id}/${r.effect}-today-seen.png`, "today (landing)")}${fig(`${v.id}/${r.effect}-vis-seen.png`, "@dagnam/vis")}</div>
       <h4>Context: today's whole card</h4>
       <div class="pair">${fig(`${v.id}/${r.effect}-card.png`, "today, full card")}</div>
     </section>`;

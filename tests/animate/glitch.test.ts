@@ -470,7 +470,7 @@ describe("createGlitch", () => {
     expect(changed / (300 * 120)).toBeLessThan(0.06);
   });
 
-  it("update({ colors, characters, seed }) takes effect on the next frame (E4/E5)", () => {
+  it("update({ colors, characters, seed }) takes effect on the next frame", () => {
     const h = oneCell({ characters: "A", colors: ["#000000"] });
     expect(shot(h, 0)[0]).toBe("fillText A 0 0 rgb(0, 0, 0)");
     h.update({ colors: ["#ff0000"] });

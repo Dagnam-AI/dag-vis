@@ -237,7 +237,7 @@ describe("createRibbon", () => {
     expect(shot(huge, 1e300)).toEqual(zero);
   });
 
-  it("update(...) takes effect on the next frame: colors, seed, lines, drift (E4/E5)", () => {
+  it("update(...) takes effect on the next frame: colors, seed, lines, drift", () => {
     const h = sized({ lines: 2, colors: ["#000000", "#ffffff"] });
     h.update({ colors: ["#ff0000", "#00ff00"] });
     ctx().calls.length = 0;

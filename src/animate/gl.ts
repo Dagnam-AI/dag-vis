@@ -241,7 +241,7 @@ export function glRenderer(spec: GlEffectSpec): FrameRenderer {
   return renderer;
 }
 
-/** Hook form used by the field plan's `src/animate/field.ts`: the runtime owns the context. */
+/** Hook form for an effect that brings its own draw callback: the runtime owns the context. */
 export interface GlHooks {
   /** Compile programs, upload textures. Runs on first use and again after a context restore. */
   setup(gl: WebGL2RenderingContext): void;

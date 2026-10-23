@@ -28,7 +28,7 @@ interface Def {
 
 /**
  * `landing` is exactly the props the landing page passes today
- * (mvp-frontend the-pricing-section.tsx), in the new option names. Ribbon is
+ * (its pricing section), in the new option names. Ribbon is
  * not on the landing page; its preset is the brand red-to-white pair.
  *
  * The landing also wraps each effect in CSS opacity (BG_OPACITY: pixel/dither

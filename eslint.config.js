@@ -3,13 +3,13 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-// One-directional layering (spec section 4): core <- brand <- gradient/pattern
+// One-directional layering: core <- brand <- gradient/pattern
 // <- scene <- node, with animate (core, scene) and react (core, animate,
 // gradient) beside them as separate entry points. Each layer
 // lists what it must NOT import; tests/structure.test.ts asserts the same map
 // from the import graph, so a rule edited here without the test fails loudly.
 // `browserSafe` layers additionally may not touch Node built-ins, Node globals
-// or the native rasteriser (spec section 8, dependency weight rule). Both
+// or the native rasteriser (dependency weight rule). Both
 // constraints live in ONE no-restricted-imports entry per layer because eslint
 // keeps only the last matching config for a rule.
 const forbid = (layer, groups, browserSafe = true) => ({

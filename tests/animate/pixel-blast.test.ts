@@ -115,7 +115,7 @@ describe("createPixelBlast", () => {
     }
   });
 
-  it("update({ colors }) takes effect: the colors[0] fallback is resolved at draw time (E4)", () => {
+  it("update({ colors }) takes effect: the colors[0] fallback is resolved at draw time", () => {
     const h = createPixelBlast(canvas, { colors: ["#ff0000"] });
     h.renderAt(0);
     expect(colour()).toBe("uniform3f uColor 1 0 0");
@@ -208,7 +208,7 @@ describe("createPixelBlast", () => {
     }).toThrow(VisError);
   });
 
-  it("destroy() deletes its program but keeps the context, so the same canvas can host a new blast (E1)", () => {
+  it("destroy() deletes its program but keeps the context, so the same canvas can host a new blast", () => {
     const h = createPixelBlast(canvas);
     h.start();
     h.destroy();
