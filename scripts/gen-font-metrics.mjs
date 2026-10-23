@@ -102,8 +102,11 @@ function cmap(table) {
     const delta = table.getUint16(deltas + 2 * s);
     const range = table.getUint16(ranges + 2 * s);
     for (let cp = start; cp <= end && cp !== 0xffff; cp++) {
-      if (range === 0) glyphs.set(cp, (cp + delta) & 0xffff);
-      else {
+      if (range === 0) {
+        // A delta that lands on glyph 0 is .notdef, not a glyph for `cp`.
+        const gid = (cp + delta) & 0xffff;
+        if (gid !== 0) glyphs.set(cp, gid);
+      } else {
         const gid = table.getUint16(ranges + 2 * s + range + 2 * (cp - start));
         if (gid !== 0) glyphs.set(cp, (gid + delta) & 0xffff);
       }

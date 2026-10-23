@@ -48,7 +48,8 @@ export interface OgCardOptions {
    * Selects the SOCIAL layout (the per-post og:image): this gradient spec, drawn
    * at 1200x630, is the background; pass `coverSpec({ theme: "dark", variant:
    * "banner", ... })`. The social layout takes only `title`, `excerpt`, `seed`,
-   * `idPrefix` and `cover` (and a `width` of 1200, `height` of 630 and `theme` of
+   * `idPrefix` and `cover` (its `seed`, default 1, and `idPrefix` override any inside the
+   * spec; and a `width` of 1200, `height` of 630 and `theme` of
    * "dark", which are all it draws); `subtitle`, `eyebrow`, `footer` and
    * `background` throw. Its text is set in Moonhouse and Unbounded, which the PNG
    * pipeline bundles.

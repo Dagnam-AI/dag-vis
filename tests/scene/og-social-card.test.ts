@@ -254,6 +254,12 @@ describe("ogCard social layout", () => {
     expect(ogCard({ ...input, seed: 7 })).toContain("vis7-g");
   });
 
+  it("lets the card's seed and idPrefix override a seed and idPrefix inside the cover spec", () => {
+    const own = { ...cover, seed: 42, idPrefix: "mine" };
+    expect(ogCard({ ...input, cover: own })).toBe(ogCard(input));
+    expect(ogCard({ ...input, cover: own, seed: 7 })).toContain("vis7-g");
+  });
+
   it("escapes hostile text and stays well-formed", () => {
     const hostile = ']]></text><script>alert(1)</script> & "q" <b> é 日本 😀';
     const svg = ogCard({ title: hostile, excerpt: hostile, cover });
@@ -275,7 +281,7 @@ describe("ogCard social layout", () => {
     expectGolden("scene/og-card-social.svg", ogCard(input));
   });
 
-  it("accepts the card's own size, dark theme and rejects nothing else the brand card takes", () => {
+  it("accepts its own size and the dark theme when they are passed explicitly", () => {
     expect(ogCard({ ...input, width: 1200, height: 630, theme: "dark" })).toBe(
       ogCard(input),
     );
@@ -341,11 +347,17 @@ describe("ogCard social layout options", () => {
     bad({ title: "T", excerpt: null }, /^excerpt is only supported with cover/);
   });
 
-  it("leaves the brand card byte-identical without cover", () => {
+  it("leaves the brand card as it was without cover: it still matches the brand card's committed golden (og-card.test.ts's options)", () => {
     const base = {
       title: "Build AI Systems Visually",
       subtitle: "A simpler way to design and orchestrate modern AI workflows.",
+      footer: "Visual • Modular • Production-ready",
     };
-    expect(ogCard(base)).toBe(ogCard({ ...base, cover: undefined } as never));
+    // The golden predates the social layout and is only ever read here (it exists, so nothing is written).
+    expectGolden("scene/og-card-dark.svg", ogCard(base));
+    expectGolden(
+      "scene/og-card-dark.svg",
+      ogCard({ ...base, cover: undefined } as never),
+    );
   });
 });

@@ -39,7 +39,8 @@ function parsePair(
  * RADII, in percent of the box, so it follows the box's aspect ratio) and centred at
  * `at` (percent of the box). Later glows paint over earlier ones, as in `mesh` and
  * `layers` (so the CSS lists them last first). SVG and CSS agree: each glow is the same
- * ellipse and the same alpha ramp, with a radius of at least half a pixel in both.
+ * ellipse and the same alpha ramp, with a radius of at least half a pixel in both (in the
+ * CSS, exactly so only when the box it is applied to has the spec's `size`).
  */
 export function renderGlows(spec: GlowsSpec, ctx: Ctx): KindOutput {
   assertList("glows needs at least one glow", spec.glows);

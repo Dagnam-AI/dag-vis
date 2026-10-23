@@ -23,8 +23,8 @@ type Rgb = readonly [number, number, number];
  * What a browser paints for the CSS this kind emits: each glow is
  * `radial-gradient(ellipse W% H% at X% Y%, c, transparent 70%)`, i.e. the colour's alpha
  * falls linearly from the centre to 0 at 70% of the ellipse's radii (RGB constant),
- * listed top first (the LAST glow is the top one) over the base. Evaluated at pixel (x, y), whose centre is
- * (x + 0.5, y + 0.5), by compositing bottom to top.
+ * listed top first (the LAST glow is the top one) over the base. Evaluated at pixel
+ * (x, y), whose centre is (x + 0.5, y + 0.5), by compositing bottom to top.
  */
 function cssGlows(
   base: Rgb,
