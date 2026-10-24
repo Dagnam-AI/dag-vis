@@ -1,50 +1,59 @@
-import { existsSync, readFileSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { expectGolden } from "./golden.js";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "goldens");
-const SCRATCH = "_golden-helper";
-
+// The helper's own goldens live in a temporary folder, never under tests/goldens.
+let root = "";
+beforeEach(() => {
+  root = mkdtempSync(join(tmpdir(), "dag-vis-golden-"));
+});
 afterEach(() => {
   vi.unstubAllEnvs();
-  rmSync(join(ROOT, SCRATCH), { recursive: true, force: true });
+  rmSync(root, { recursive: true, force: true });
 });
 
 describe("expectGolden", () => {
   it("fails on a missing golden instead of creating it", () => {
     vi.stubEnv("UPDATE_GOLDENS", "");
     expect(() => {
-      expectGolden(`${SCRATCH}/missing.svg`, "<svg/>");
+      expectGolden("missing.svg", "<svg/>", root);
     }).toThrow(/does not exist: create it with UPDATE_GOLDENS=1/);
-    expect(existsSync(join(ROOT, SCRATCH, "missing.svg"))).toBe(false);
+    expect(existsSync(join(root, "missing.svg"))).toBe(false);
   });
 
   it("writes the golden only when UPDATE_GOLDENS is 1, then compares", () => {
     vi.stubEnv("UPDATE_GOLDENS", "1");
-    expectGolden(`${SCRATCH}/made.svg`, "<svg>a</svg>");
-    expect(readFileSync(join(ROOT, SCRATCH, "made.svg"), "utf8")).toBe(
+    expectGolden("sub/made.svg", "<svg>a</svg>", root);
+    expect(readFileSync(join(root, "sub", "made.svg"), "utf8")).toBe(
       "<svg>a</svg>",
     );
     vi.stubEnv("UPDATE_GOLDENS", "");
-    expectGolden(`${SCRATCH}/made.svg`, "<svg>a</svg>");
+    expectGolden("sub/made.svg", "<svg>a</svg>", root);
     expect(() => {
-      expectGolden(`${SCRATCH}/made.svg`, "<svg>b</svg>");
+      expectGolden("sub/made.svg", "<svg>b</svg>", root);
     }).toThrow();
-    expect(readFileSync(join(ROOT, SCRATCH, "made.svg"), "utf8")).toBe(
+    expect(readFileSync(join(root, "sub", "made.svg"), "utf8")).toBe(
       "<svg>a</svg>",
     );
   });
 
   it("does not regenerate for any other value of UPDATE_GOLDENS", () => {
     vi.stubEnv("UPDATE_GOLDENS", "1");
-    expectGolden(`${SCRATCH}/kept.svg`, "one");
+    expectGolden("kept.svg", "one", root);
     vi.stubEnv("UPDATE_GOLDENS", "true");
     expect(() => {
-      expectGolden(`${SCRATCH}/kept.svg`, "two");
+      expectGolden("kept.svg", "two", root);
     }).toThrow();
+  });
+
+  it("reads the repository's goldens by default and never creates a file there", () => {
+    vi.stubEnv("UPDATE_GOLDENS", "");
+    expect(() => {
+      expectGolden("_no-such-golden-ever.svg", "x");
+    }).toThrow(/does not exist/);
   });
 });
