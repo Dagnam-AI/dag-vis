@@ -136,7 +136,7 @@ jobs:
           graph("index.js", ["node", "animate", "react", "export"], 30);
           // The only third-party code the package ships, listed by name: a new
           // bare import anywhere else fails here until it is added on purpose.
-          graph("animate/index.js", ["node", "react"], 10, ["gifenc", "mp4-muxer", "webm-muxer"]);
+          graph("animate/index.js", ["node", "react"], 10, ["gifenc"]);
           EOF
           node root-graph.mjs
 
@@ -228,6 +228,25 @@ jobs:
           EOF
           npx tsc -p tsconfig.json
           echo "types ok (Node-only consumer, no DOM lib)"
+
+          # A DOM-free consumer with NO `types` field, in its own empty project:
+          # TypeScript then auto-includes every installed @types/* package. This
+          # fails (TS2304 on HTMLCanvasElement and friends) if the package ever
+          # pulls @types/dom-webcodecs back in through a dependency, as the
+          # muxers did before they were bundled into dist.
+          (
+            cd "$(mktemp -d)"
+            npm init -y >/dev/null
+            npm pkg set type=module >/dev/null
+            npm install "$tarball" typescript@5.9.3 >/dev/null
+            if ls node_modules/@types 2>/dev/null | grep -q .; then
+              echo "the package pulled in @types: $(ls node_modules/@types)"; exit 1
+            fi
+            echo 'import { gradient } from "@dagnam/vis"; export const css: string = gradient({ kind: "linear", stops: ["#ef4444", "#10abba"] }).css;' > index.ts
+            echo '{ "compilerOptions": { "module": "NodeNext", "moduleResolution": "NodeNext", "target": "ES2022", "lib": ["ES2022"], "strict": true, "noEmit": true, "skipLibCheck": false }, "files": ["index.ts"] }' > tsconfig.json
+            npx tsc -p tsconfig.json
+            echo "types ok (DOM-free consumer, no types field, no @types installed)"
+          )
 
           # A browser consumer (DOM lib) of the animate and react entries.
           npm install --save-dev react@19.3.1 @types/react@19.3.0 >/dev/null
