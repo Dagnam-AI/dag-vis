@@ -6,7 +6,7 @@ import tseslint from "typescript-eslint";
 // One-directional layering: core <- brand <- gradient/pattern
 // <- scene <- node (which also takes field and export), with field (core only), export (core only: the DOM-free
 // encoders, imported by animate and node), animate (core, scene, field, export)
-// and react (core, animate, gradient) beside them as separate entry points. The
+// and react (core, animate, field, gradient) beside them as separate entry points. The
 // root barrel, animate and node import field; the ALLOWED map and these lists widen
 // together when another layer does. Each layer
 // lists what it must NOT import; tests/structure.test.ts asserts the same map
@@ -146,8 +146,8 @@ export default tseslint.config(
   // animate -> core, scene (ribbonCurves), field (the live field effect), export
   // (the encoders). The structure test's ALLOWED map and these lists widen together.
   forbid("animate", ["brand", "gradient", "pattern", "react", "node"]),
-  // react -> core, animate, gradient.
-  forbid("react", ["brand", "pattern", "scene", "field", "export", "node"]),
+  // react -> core, animate, field (the FieldSpec type of <VisBackground effect="field">), gradient.
+  forbid("react", ["brand", "pattern", "scene", "export", "node"]),
   // node -> core, brand, gradient, pattern, scene, field (the CPU frames it exports), export.
   forbid("node", ["animate", "react"], false),
   {

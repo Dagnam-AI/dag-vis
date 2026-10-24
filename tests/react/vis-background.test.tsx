@@ -230,7 +230,7 @@ describe("<VisBackground>", () => {
         VisError,
       );
       expect(() => render(<VisBackground effect={bad as "dither"} />)).toThrow(
-        /effect must be one of dither, pixel, terminal, glitch, ribbon/,
+        /effect must be one of dither, pixel, terminal, glitch, ribbon, field/,
       );
     }
     error.mockRestore();

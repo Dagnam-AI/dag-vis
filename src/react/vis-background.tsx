@@ -3,6 +3,7 @@ import { useEffect, useRef, type CSSProperties, type RefObject } from "react";
 import { VisError } from "../core/index.js";
 import {
   createDither,
+  createField,
   createGlitch,
   createPixelBlast,
   createRibbon,
@@ -10,11 +11,13 @@ import {
   type DitherOptions,
   type EffectHandle,
   type EffectOptions,
+  type FieldOptions,
   type GlitchOptions,
   type PixelBlastOptions,
   type RibbonEffectOptions,
   type TerminalOptions,
 } from "../animate/index.js";
+import type { FieldSpec } from "../field/index.js";
 
 /** Options for one effect, where a key may be present-but-undefined (`{ loop: on ? {...} : undefined }`). */
 type Loose<T> = { [K in keyof T]?: T[K] | undefined };
@@ -25,6 +28,8 @@ export interface VisEffectOptions {
   terminal: TerminalOptions;
   glitch: GlitchOptions;
   ribbon: RibbonEffectOptions;
+  /** A field's seed and colours live in its `spec`; there is no `seed` or `colors` option. */
+  field: FieldOptions & { spec: FieldSpec };
 }
 export type VisEffect = keyof VisEffectOptions;
 
@@ -40,17 +45,17 @@ interface BackgroundBase {
 }
 
 export type VisBackgroundProps = {
-  [K in VisEffect]: BackgroundBase & {
-    effect: K;
-    options?: Loose<VisEffectOptions[K]>;
-  };
+  [K in VisEffect]: BackgroundBase & { effect: K } & (K extends "field"
+      ? { options: Loose<FieldOptions> & { spec: FieldSpec } }
+      : { options?: Loose<VisEffectOptions[K]> });
 }[VisEffect];
 
 type Factory = (
   canvas: HTMLCanvasElement,
   opts?: EffectOptions,
 ) => EffectHandle;
-const FACTORIES: Record<VisEffect, Factory> = {
+/** The five effects that take the shared options; `field` is created from its spec in `mount()`. */
+const FACTORIES: Record<Exclude<VisEffect, "field">, Factory> = {
   dither: createDither,
   pixel: createPixelBlast,
   terminal: createTerminal,
@@ -84,6 +89,12 @@ const definedKeys = (options: object): string =>
  * the wrapper and removed on cleanup, so StrictMode's mount, unmount, mount
  * and a switch of `effect` never reuse a canvas.
  *
+ * - `effect="field"` takes `options.spec` (a `FieldSpec`, required): its seed and
+ *   colours belong to the spec, so the shared `seed` and `colors` options do not
+ *   exist for it. A field's spec is fixed for the life of a handle, so a CHANGED
+ *   spec (by value) recreates the effect: the canvas is replaced and one frame of
+ *   flash is possible. An equal spec in a fresh object does nothing, and the
+ *   other options still go through `update()`.
  * - Changing an option VALUE calls `update()` on the live effect (`seed`
  *   re-phases it, `colors` recolours it); equal re-renders do nothing.
  * - Adding or removing an option KEY recreates the effect, because `update()`
@@ -106,12 +117,14 @@ export function VisBackground({
   style,
   onError,
 }: VisBackgroundProps) {
-  if (!Object.hasOwn(FACTORIES, effect))
+  if (effect !== "field" && !Object.hasOwn(FACTORIES, effect))
     throw new VisError(
-      `effect must be one of ${Object.keys(FACTORIES).join(", ")}, got ${JSON.stringify(effect)}`,
+      `effect must be one of ${[...Object.keys(FACTORIES), "field"].join(", ")}, got ${JSON.stringify(effect)}`,
     );
   // Values may be explicit `undefined` (ignored by the effects); the cast only drops that from the type.
-  const options = (given ?? {}) as EffectOptions;
+  // `spec` is typed as present for every effect: only `field` reads it, and a missing one
+  // (an untyped caller) reaches createField as undefined, which throws a VisError naming it.
+  const options = (given ?? {}) as EffectOptions & { spec: FieldSpec };
   // Rendered before any effect runs, so `current` is set whenever an effect reads it.
   const containerRef = useRef<HTMLDivElement>(
     null,
@@ -122,6 +135,8 @@ export function VisBackground({
   const onErrorRef = useRef(onError);
   const optionsKey = JSON.stringify(options);
   const shape = definedKeys(options);
+  // A field's spec cannot change on a live handle, so its identity is part of the mount key.
+  const specKey = effect === "field" ? JSON.stringify(options.spec) : "";
   const report = (error: unknown): void => {
     (onErrorRef.current ?? console.error)(error);
   };
@@ -134,7 +149,10 @@ export function VisBackground({
     containerRef.current.append(canvas);
     let handle: EffectHandle | undefined;
     try {
-      handle = FACTORIES[effect](canvas, options);
+      handle =
+        effect === "field"
+          ? createField(canvas, options.spec, options)
+          : FACTORIES[effect](canvas, options);
       handle.start();
     } catch (error) {
       handle?.destroy();
@@ -161,7 +179,7 @@ export function VisBackground({
   useEffect(() => {
     mount();
     return unmount;
-  }, [effect, shape]);
+  }, [effect, shape, specKey]);
 
   // Runs on mount too, where `live.key` already equals `optionsKey` and there is nothing to do.
   useEffect(() => {
