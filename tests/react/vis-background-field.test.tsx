@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, render } from "@testing-library/react";
-import { type ReactElement } from "react";
+import { StrictMode, type ReactElement } from "react";
 import {
   afterEach,
   beforeEach,
@@ -152,11 +152,55 @@ describe('<VisBackground effect="field">', () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
-  it("types the spec as required for the field effect", () => {
-    // @ts-expect-error `options.spec` is required for effect="field"
-    const noOptions = <VisBackground effect="field" />;
-    // @ts-expect-error a field takes no `seed` option: it belongs to the spec
-    const seeded = view({ spec: spec(1), seed: 1 });
-    expect([noOptions, seeded]).toHaveLength(2);
+  it("survives StrictMode's mount, unmount, mount with one live canvas and balanced create/destroy", () => {
+    const { container, unmount } = render(
+      <StrictMode>{view({ spec: spec(1) })}</StrictMode>,
+    );
+    expect(mocked).toHaveBeenCalledTimes(2);
+    expect(made[0]?.destroy).toHaveBeenCalledTimes(1);
+    expect(made[1]?.destroy).not.toHaveBeenCalled();
+    expect(made[0]?.canvas.isConnected).toBe(false);
+    const canvases = container.querySelectorAll("canvas");
+    expect(canvases).toHaveLength(1);
+    expect(canvases[0]).toBe(made[1]?.canvas);
+    expect(made[1]?.start).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(made[1]?.destroy).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("canvas")).toBeNull();
+  });
+
+  it("recreates exactly once more for a spec change under StrictMode", () => {
+    const { rerender, container } = render(
+      <StrictMode>{view({ spec: spec(1) })}</StrictMode>,
+    );
+    expect(mocked).toHaveBeenCalledTimes(2);
+    rerender(<StrictMode>{view({ spec: spec(2) })}</StrictMode>);
+    expect(mocked).toHaveBeenCalledTimes(3);
+    expect(mocked.mock.calls[2]?.[1]).toEqual(spec(2));
+    expect(made[1]?.destroy).toHaveBeenCalledTimes(1);
+    expect(made[2]?.destroy).not.toHaveBeenCalled();
+    const canvases = container.querySelectorAll("canvas");
+    expect(canvases).toHaveLength(1);
+    expect(canvases[0]).toBe(made[2]?.canvas);
+    for (const m of made) expect(m.update).not.toHaveBeenCalled();
+    // Created minus destroyed is the one live handle.
+    expect(made.filter((m) => m.destroy.mock.calls.length === 0)).toHaveLength(
+      1,
+    );
+  });
+
+  // Elements are built but never rendered: the errors come from VisBackgroundProps itself.
+  it("types the spec as required, and seed and colors as absent, for the field effect", () => {
+    const elements = [
+      // @ts-expect-error `options` is required for effect="field"
+      <VisBackground effect="field" />,
+      // @ts-expect-error `options.spec` is required for effect="field"
+      <VisBackground effect="field" options={{ speed: 1 }} />,
+      // @ts-expect-error a field takes no `seed` option: it belongs to the spec
+      <VisBackground effect="field" options={{ spec: spec(1), seed: 1 }} />,
+      // @ts-expect-error a field takes no `colors` option: the palette is in the spec
+      <VisBackground effect="field" options={{ spec: spec(1), colors: [] }} />,
+    ];
+    expect(elements).toHaveLength(4);
   });
 });
