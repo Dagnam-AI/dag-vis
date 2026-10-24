@@ -135,18 +135,108 @@ test("an invalid parameter shows one visible error and builds no cards", async (
   expect(await page.evaluate(() => window.__flow.error)).toContain("?w=641");
 });
 
-test("keyboard focus on an export button is visible", async ({ page }) => {
-  await open(page);
+/** Tab until an export button has focus (the page starts with a link before the first card). */
+async function tabToButton(page: Page): Promise<void> {
   for (let i = 0; i < 6; i++) {
     await page.keyboard.press("Tab");
     if (await page.evaluate(() => document.activeElement?.tagName === "BUTTON"))
-      break;
+      return;
   }
+  throw new Error("no button received focus");
+}
+
+test("keyboard focus on an export button is visible", async ({ page }) => {
+  await open(page);
+  await tabToButton(page);
   const outline = await page.evaluate(() => {
     const s = getComputedStyle(document.activeElement!);
-    return { style: s.outlineStyle, width: s.outlineWidth };
+    return {
+      tag: document.activeElement!.tagName,
+      style: s.outlineStyle,
+      width: s.outlineWidth,
+    };
   });
-  expect(outline).toEqual({ style: "solid", width: "2px" });
+  expect(outline).toEqual({ tag: "BUTTON", style: "solid", width: "2px" });
+});
+
+test("a keyboard export keeps focus on the pressed button", async ({
+  page,
+}) => {
+  await open(page, "?w=160&h=90");
+  await tabToButton(page);
+  await page.keyboard.press("Enter");
+  const first = card(page, NAMES[0] ?? "");
+  await expect(first.locator("a[download]")).toBeVisible();
+  const focused = await page.evaluate(() => ({
+    tag: document.activeElement?.tagName,
+    format: (document.activeElement as HTMLElement | null)?.dataset.format,
+    preset: document.activeElement?.closest("section")?.dataset.preset,
+  }));
+  expect(focused).toEqual({ tag: "BUTTON", format: "png", preset: NAMES[0] });
+});
+
+test("while scrolling at a laptop size the live cards are the ones most on screen", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await open(page);
+  for (const y of [0, 400, 600, 800, 1000]) {
+    await page.evaluate((top) => {
+      window.scrollTo(0, top);
+    }, y);
+    // Poll until the observer has caught up with the jump. Then no card may be paused while it shows
+    // more than a live one, and when 12 or fewer cards have half their area on screen, all of them are live.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const vw = document.documentElement.clientWidth;
+            const vh = document.documentElement.clientHeight;
+            const cards = Array.from(
+              document.querySelectorAll<HTMLElement>("section.card"),
+            ).map((c) => {
+              const r = c.getBoundingClientRect();
+              const w = Math.max(
+                0,
+                Math.min(r.right, vw) - Math.max(r.left, 0),
+              );
+              const h = Math.max(
+                0,
+                Math.min(r.bottom, vh) - Math.max(r.top, 0),
+              );
+              return {
+                name: c.dataset.preset ?? "?",
+                share: (w * h) / (r.width * r.height),
+                live: c.dataset.state === "live",
+              };
+            });
+            const { cap, live } = window.__flow.stats();
+            const half = cards.filter((c) => c.share >= 0.5);
+            const weakestLive = Math.min(
+              1,
+              ...cards.filter((c) => c.live).map((c) => c.share),
+            );
+            const bad = [
+              // a paused card showing clearly more than a live one
+              ...cards
+                .filter((c) => !c.live && c.share > weakestLive + 0.02)
+                .map((c) => `${c.name} paused at ${c.share.toFixed(2)}`),
+              // everything half visible is live whenever the cap allows it
+              ...(half.length <= cap
+                ? half
+                    .filter((c) => !c.live)
+                    .map((c) => `${c.name} half-visible`)
+                : []),
+            ];
+            return { bad, over: live > cap, halfVisible: half.length };
+          }),
+        { message: `scrollY ${String(y)}`, timeout: 15_000 },
+      )
+      .toMatchObject({ bad: [], over: false });
+  }
+  const s = await page.evaluate(() => window.__flow.stats());
+  expect(s.peak).toBeLessThanOrEqual(s.cap);
+  expect(s.leaked).toBe(0);
 });
 
 test("png export: a PNG of the export size, a link, bytes shown, and the old link revoked by the next export", async ({
@@ -209,7 +299,8 @@ test("export buttons are disabled while an export runs, on every card", async ({
       gif.click();
       return {
         busy: document.querySelectorAll("section.card[aria-busy]").length,
-        disabled: document.querySelectorAll("button:disabled").length,
+        disabled: document.querySelectorAll('button[aria-disabled="true"]')
+          .length,
         all: document.querySelectorAll("button").length,
       };
     });
@@ -240,9 +331,7 @@ test("a failed export is shown as visible text, never a dialog, and frees the bu
   expect(await page.evaluate(() => window.__flow.stats().leaked)).toBe(0);
 });
 
-test("gif export: a GIF header with the export size and frame count", async ({
-  page,
-}) => {
+test("gif export: a GIF header with the export size", async ({ page }) => {
   test.setTimeout(120_000);
   await open(page, "?w=160&h=90&fps=10&duration=1");
   const c = card(page, NAMES[2] ?? "");

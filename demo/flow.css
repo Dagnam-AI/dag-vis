@@ -68,7 +68,7 @@ code {
   inset: 0;
   display: grid;
   place-items: center;
-  color: #6c6c90;
+  color: #8c8cb0;
 }
 .actions {
   display: flex;
@@ -85,7 +85,8 @@ button {
   font: inherit;
   cursor: pointer;
 }
-button:disabled {
+button:disabled,
+button[aria-disabled="true"] {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -101,7 +102,7 @@ a:focus-visible {
   }
 }
 .result {
-  min-height: 2.9em;
+  min-height: 1.45em;
   margin: 8px 0 0;
   overflow-wrap: anywhere;
   color: #b8b8d8;

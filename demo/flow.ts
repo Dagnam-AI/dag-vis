@@ -36,6 +36,8 @@ interface Card {
   handle: Handle | null;
   /** The object URL of this card's last export, revoked by the next one or on page exit. */
   url: string | null;
+  /** Set when the live field could not start: the card keeps its error and is not retried. */
+  failed: boolean;
 }
 
 const grid = document.querySelector<HTMLElement>("#grid");
@@ -101,12 +103,14 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
     live.delete(c.name);
     c.canvas = null;
     c.handle = null;
-    setState(c, "idle");
+    if (!c.failed) setState(c, "idle");
   }
 
   function start(c: Card): void {
-    if (c.handle) return;
+    if (c.handle || c.failed) return;
     const canvas = el("canvas");
+    // Decorative: the card's heading is its text alternative.
+    canvas.setAttribute("aria-hidden", "true");
     c.stage.append(canvas);
     open.add(canvas);
     counts.created += 1;
@@ -127,29 +131,50 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
       setState(c, still ? "still" : "live");
     } catch (e) {
       release(canvas, handle);
+      c.failed = true;
       setState(c, "error");
       say(c, e instanceof Error ? e.message : String(e), true);
     }
   }
 
   const visible = new Set<Card>();
-  /** Frees what left the screen first, so the live count never passes the cap on the way. */
+  /** Pixels of the card inside the viewport. */
+  function shown(c: Card): number {
+    const r = c.root.getBoundingClientRect();
+    const w =
+      Math.min(r.right, document.documentElement.clientWidth) -
+      Math.max(r.left, 0);
+    const h =
+      Math.min(r.bottom, document.documentElement.clientHeight) -
+      Math.max(r.top, 0);
+    return Math.max(0, w) * Math.max(0, h);
+  }
+  /**
+   * Keeps the MAX_LIVE cards with the most pixels on screen (a sliver of a row loses to a full
+   * one), freeing what dropped out first so the live count never passes the cap on the way.
+   */
   function reconcile(): void {
-    let slots = MAX_LIVE;
-    const wanted = new Set<Card>();
-    for (const c of cards) if (visible.has(c) && slots-- > 0) wanted.add(c);
+    const area = new Map([...visible].map((c) => [c, shown(c)]));
+    const ranked = [...visible].sort(
+      (a, b) => (area.get(b) ?? 0) - (area.get(a) ?? 0),
+    );
+    const wanted = new Set(ranked.slice(0, MAX_LIVE));
     for (const c of cards) if (!wanted.has(c)) stop(c);
     for (const c of wanted) start(c);
   }
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      const c = byRoot.get(e.target);
-      if (!c) continue;
-      if (e.isIntersecting) visible.add(c);
-      else visible.delete(c);
-    }
-    reconcile();
-  });
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        const c = byRoot.get(e.target);
+        if (!c) continue;
+        if (e.isIntersecting) visible.add(c);
+        else visible.delete(c);
+      }
+      reconcile();
+      // A card's share on screen changes between its enter and leave events: observe every tenth.
+    },
+    { threshold: Array.from({ length: 11 }, (_, i) => i / 10) },
+  );
 
   async function runExport(
     c: Card,
@@ -157,7 +182,8 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
     ext: string,
   ): Promise<void> {
     exporting = true;
-    for (const b of buttons) b.disabled = true;
+    // aria-disabled, not disabled: the button that was pressed keeps keyboard focus.
+    for (const b of buttons) b.setAttribute("aria-disabled", "true");
     c.root.setAttribute("aria-busy", "true");
     if (c.url !== null) URL.revokeObjectURL(c.url);
     c.url = null;
@@ -166,14 +192,15 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
     const host = el("div");
     host.setAttribute("aria-hidden", "true");
     host.style.cssText = `position:fixed;top:0;left:-100000px;width:${String(p.w)}px;height:${String(p.h)}px;pointer-events:none`;
-    const canvas = el("canvas");
-    host.append(canvas);
-    document.body.append(host);
-    open.add(canvas);
-    counts.created += 1;
+    let canvas: HTMLCanvasElement | null = null;
     let handle: Handle | null = null;
     const notes: string[] = [];
     try {
+      canvas = el("canvas");
+      host.append(canvas);
+      document.body.append(host);
+      open.add(canvas);
+      counts.created += 1;
       handle = createField(canvas, c.spec, {
         loop: { duration: p.duration },
         maxDpr: 1,
@@ -211,11 +238,15 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
         true,
       );
     } finally {
-      release(canvas, handle);
-      host.remove();
-      c.root.removeAttribute("aria-busy");
-      exporting = false;
-      for (const b of buttons) b.disabled = unsupported(b.dataset.format);
+      // Nested, so a throwing release still unlocks the page.
+      try {
+        if (canvas) release(canvas, handle);
+      } finally {
+        host.remove();
+        c.root.removeAttribute("aria-busy");
+        exporting = false;
+        for (const b of buttons) b.removeAttribute("aria-disabled");
+      }
     }
   }
 
@@ -224,9 +255,13 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
     root.dataset.preset = name;
     root.dataset.state = "idle";
     const title = el("h2", undefined, name);
+    title.id = `preset-${name}`;
     title.append(el("span", "kind", spec.kind));
     const stage = el("div", "stage");
     const actions = el("div", "actions");
+    // The buttons repeat across cards: the preset's heading names each group.
+    actions.setAttribute("role", "group");
+    actions.setAttribute("aria-labelledby", title.id);
     const result = el("p", "result");
     result.setAttribute("role", "status");
     const card: Card = {
@@ -238,6 +273,7 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
       canvas: null,
       handle: null,
       url: null,
+      failed: false,
     };
     for (const { format, ext } of FORMATS) {
       const b = el("button", undefined, format);

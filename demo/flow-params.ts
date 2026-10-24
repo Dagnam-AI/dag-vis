@@ -22,6 +22,8 @@ const fail = (name: string, raw: string, expected: string): FlowParams => ({
 const SECONDS = /^(\d+\.?\d*|\.\d+)$/;
 const MAX_FPS = 60;
 const MAX_DURATION = 60;
+/** The CPU renderer rejects times beyond this, so a frozen card could never draw. */
+const MAX_T = 1e6;
 
 /**
  * Parses every URL parameter before anything is built. An absent parameter takes
@@ -31,14 +33,14 @@ const MAX_DURATION = 60;
 export function parseFlowParams(search: string): FlowParams {
   const q = new URLSearchParams(search);
   const tRaw = q.get("t");
-  if (tRaw !== null && !(SECONDS.test(tRaw) && Number.isFinite(Number(tRaw))))
-    return fail("t", tRaw, "a number of seconds >= 0");
-  const size: number[] = [];
-  for (const [name, fallback] of [
-    ["w", "640"],
-    ["h", "360"],
+  if (tRaw !== null && !(SECONDS.test(tRaw) && Number(tRaw) <= MAX_T))
+    return fail("t", tRaw, `a number of seconds from 0 to ${String(MAX_T)}`);
+  const wRaw = q.get("w") ?? "640";
+  const hRaw = q.get("h") ?? "360";
+  for (const [name, raw] of [
+    ["w", wRaw],
+    ["h", hRaw],
   ] as const) {
-    const raw = q.get(name) ?? fallback;
     const n = Number(raw);
     if (!/^\d+$/.test(raw) || n < SIZE_MIN || n > SIZE_MAX || n % 2 !== 0)
       return fail(
@@ -46,7 +48,6 @@ export function parseFlowParams(search: string): FlowParams {
         raw,
         `an even integer from ${String(SIZE_MIN)} to ${String(SIZE_MAX)}`,
       );
-    size.push(n);
   }
   const fpsRaw = q.get("fps") ?? "24";
   if (!/^\d+$/.test(fpsRaw) || Number(fpsRaw) < 1 || Number(fpsRaw) > MAX_FPS)
@@ -65,8 +66,8 @@ export function parseFlowParams(search: string): FlowParams {
   return {
     ok: true,
     t: tRaw === null ? null : Number(tRaw),
-    w: size[0] ?? 0,
-    h: size[1] ?? 0,
+    w: Number(wRaw),
+    h: Number(hRaw),
     fps: Number(fpsRaw),
     duration: Number(durRaw),
   };
