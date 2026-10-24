@@ -396,6 +396,48 @@ describe("flowSampler", () => {
     expect(Array.from(a)).toEqual(Array.from(b));
   });
 
+  it("rejects a NaN, infinite or huge u or v naming the parameter, and accepts the edge of the range", () => {
+    const out = new Float64Array(3);
+    const s = flowSampler(flow(), 64, 36);
+    s.prepare(timeCoords(0));
+    for (const bad of [Number.NaN, Infinity, -Infinity, 1e300, -1e12]) {
+      expect(() => {
+        s.sample(bad, 0.5, 0, 0, out);
+      }).toThrow(VisError);
+      expect(() => {
+        s.sample(bad, 0.5, 0, 0, out);
+      }).toThrow(/^u must be a finite number within ±/);
+      expect(() => {
+        s.sample(0.5, bad, 0, 0, out);
+      }).toThrow(/^v must be a finite number within ±/);
+    }
+    // The most extreme legal spec has the smallest range; its edge still samples.
+    const extreme = flowSampler(
+      flow({
+        shape: "aurora",
+        scale: 10,
+        warp: { octaves: 5, strength: 3, scale: 10 },
+      }),
+      64,
+      36,
+    );
+    extreme.prepare(timeCoords(0));
+    const limit = 2 ** 27 / (2 * (64 / 36) * 10 * 10 * 16);
+    for (const edge of [limit, -limit]) {
+      extreme.sample(edge, edge, 0, 0, out);
+      expect(Number.isFinite(out[0])).toBe(true);
+    }
+    expect(() => {
+      extreme.sample(limit * 1.01, 0.5, 0, 0, out);
+    }).toThrow(/^u must/);
+    expect(() => {
+      extreme.sample(0.5, -limit * 1.01, 0, 0, out);
+    }).toThrow(/^v must/);
+    // An ordinary spec accepts far-off pixels (a tiled or panned view).
+    s.sample(1000, -1000, 0, 0, out);
+    expect(Number.isFinite(out[0])).toBe(true);
+  });
+
   it("rejects a non-positive or non-finite size, naming the parameter", () => {
     const spec = flow();
     for (const bad of [0, -1, Number.NaN, Infinity, -Infinity])

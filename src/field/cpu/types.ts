@@ -4,7 +4,8 @@ import type { TimeCoords } from "../time.js";
  * One field kind on the CPU. `prepare` runs once per frame; `sample` runs once per
  * pixel and writes sRGB 0..1 into `out[0..2]` (not clamped: the
  * renderer clamps when it quantises). `sample` is a pure function of the last
- * prepared time and its own arguments, and it allocates nothing.
+ * prepared time and its own arguments, and it allocates nothing. A NaN, infinite or
+ * absurdly large `u`/`v` throws a VisError naming it (see each sampler for its range).
  */
 export interface Sampler {
   prepare(tc: TimeCoords): void;

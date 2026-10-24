@@ -13,8 +13,24 @@
  * swirl and wave shapes feed it into the warp, which amplifies it to several 1/255
  * (more than 30/255 at the extreme settings). `sinP` reduces the argument by a
  * Cody-Waite split of 2 pi, folds it into [-pi/2, pi/2] and sums the Taylor series to
- * x^11 (truncation below 6e-8), so it matches Math.sin to about 1e-6 for |x| up to
- * a few tens, whatever the driver does.
+ * x^11 (truncation below 6e-8): it stays within 2e-7 to 3e-7 of the sine of its float32
+ * argument up to |x| = 1e4, whatever the driver does. `cosP` is `sinP(x + pi/2)`, so
+ * the extra rounding of the sum puts it about twice as far off for large arguments
+ * (2.6e-6 at |x| <= 40, 5e-4 at 1e4); the arguments here stay below about 250, and the
+ * difference is invisible.
+ *
+ * CPU against shader agreement (every channel within 2/255) holds for the shipped
+ * presets and for the normal parameter ranges, not for every legal setting. The error
+ * that is left is float32 rounding of the coordinates, amplified by the three nested
+ * warps, so it grows with scale x aspect x warp scale x warp strength x octaves, and
+ * not with the trig. Measured on SwiftShader (headless Chromium, 32x18 to 64x16
+ * grids): at 16:9 with defaults every shape is within 0.011/255, and the legal
+ * extremes at 16:9 within 0.51/255 (noise, scale 10, warp scale 10), but swirl at 4:1
+ * with scale 10, warp strength 3 and octaves 5 reached 4.25/255 and aurora at 16:9
+ * with scale 10, warp scale 10, strength 3 and octaves 5 reached 3.01/255. A parity
+ * check that wants a guarantee should use presets or moderate settings, or include
+ * one such extreme case and allow about 5/255 for it. The same holds for any GPU that
+ * contracts or reorders float arithmetic differently from SwiftShader (not measured).
  */
 export const GLSL_FLOW = `
 uniform int uShape;

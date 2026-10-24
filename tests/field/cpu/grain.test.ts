@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { grainOffset } from "../../../src/field/cpu/grain.js";
-import { hash01 } from "../../../src/field/noise.js";
+import { hash01, hash4 } from "../../../src/field/noise.js";
 
 describe("grainOffset", () => {
   it("is zero-centred, bounded by amount*0.35/2, and deterministic", () => {
@@ -37,12 +37,41 @@ describe("grainOffset", () => {
   it("is exactly (hash - 0.5) * amount * 0.35 over (px, py, frame, tag, seed)", () => {
     const h = hash01(11, 22, 33, 0x9e37, 44);
     expect(grainOffset(11, 22, 33, 44, 0.8)).toBe((h - 0.5) * 0.8 * 0.35);
-    // A literal pin: any change to the hash stream or the 0x9e37 tag shows here.
-    expect(grainOffset(11, 22, 33, 44, 1)).toBeCloseTo(
-      (hash01(11, 22, 33, 0x9e37, 44) - 0.5) * 0.35,
-      15,
-    );
     expect(hash01(11, 22, 33, 0x9e37, 44)).not.toBe(hash01(11, 22, 33, 0, 44));
+  });
+
+  it("matches values computed once with an independent big-integer implementation", () => {
+    // hash4 / hash01 / grain for (px, py, frame, 0x9e37, seed), derived with Python integers
+    // (arbitrary precision, reduction mod 2^32 written out), then hard-coded: any change to
+    // the hash constants, the shifts or the 0x9e37 tag shows here.
+    const cases: [[number, number, number, number], number, number, number][] =
+      [
+        [
+          [11, 22, 33, 44],
+          1441369277,
+          0.3355949365068227,
+          -0.05754177222261205,
+        ],
+        [[0, 0, 0, 1], 84638435, 0.019706421298906207, -0.16810275254538282],
+        [
+          [-1, -7, -3, 4294967295],
+          2567528336,
+          0.5977992750704288,
+          0.03422974627465009,
+        ],
+        [
+          [2147483647, -2147483648, 99, 77],
+          2043652572,
+          0.47582494374364614,
+          -0.008461269689723848,
+        ],
+      ];
+    for (const [[px, py, frame, seed], h, h01, g] of cases) {
+      expect(hash4(px, py, frame, 0x9e37, seed)).toBe(h);
+      expect(hash01(px, py, frame, 0x9e37, seed)).toBe(h01);
+      expect(grainOffset(px, py, frame, seed, 1)).toBeCloseTo(g, 15);
+      expect(grainOffset(px, py, frame, seed, 0.5)).toBeCloseTo(g / 2, 15);
+    }
   });
 
   it("is a different stream for each of x, y, frame and seed", () => {

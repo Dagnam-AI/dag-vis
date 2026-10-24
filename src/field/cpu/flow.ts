@@ -31,6 +31,12 @@ function size(name: string, v: number): void {
     );
 }
 
+function uvError(name: string, v: number, limit: number): never {
+  throw new VisError(
+    `${name} must be a finite number within ±${limit}, got ${describeValue(v)}`,
+  );
+}
+
 /**
  * The `flow` field on the CPU, one pixel at a time: a shaped, rotated, domain-warped
  * fbm mapped through the palette ramp, then highlight, vignette and grain. The maths
@@ -38,6 +44,22 @@ function size(name: string, v: number): void {
  * only difference is that the shader's `sinP`/`cosP` replace Math.sin/Math.cos (see there).
  * `spec` comes from `resolveField`; it is copied here, so later changes to it do not
  * reach the sampler. `width` and `height` set the aspect ratio of the picture.
+ *
+ * `u` and `v` are picture coordinates (0..1 across the picture, pixel centres). A
+ * NaN, infinite or huge one throws a VisError naming `u` or `v`: the limit keeps the
+ * noise coordinates inside the noise's range (about 7e7 divided by aspect x scale x
+ * warp scale x 2^(octaves - 1)), which is far outside the picture for any normal
+ * spec. `px` and `py` are integer pixel coordinates (see `grainOffset`).
+ *
+ * CPU against shader agreement (every channel within 2/255) holds for the shipped
+ * presets and for the normal parameter ranges. It degrades as scale x aspect x warp
+ * scale x warp strength x octaves grows, because float32 rounding of the coordinates
+ * is amplified by the three nested warps. Measured on SwiftShader (headless
+ * Chromium): at 16:9 and defaults every shape is within 0.011/255; the worst legal
+ * settings reach about 4/255: swirl at 4:1, scale 10, warp strength 3, octaves 5 gave
+ * 4.25/255, and aurora at 16:9, scale 10, warp scale 10, strength 3, octaves 5 gave
+ * 3.01/255. A parity check that wants a guarantee should use presets or moderate
+ * settings, or include one such extreme case and allow about 5/255 for it.
  */
 export function flowSampler(
   spec: ResolvedFlow,
@@ -51,6 +73,12 @@ export function flowSampler(
   const shape = SHAPE_INDEX[spec.shape];
   const { octaves, strength, scale: warpScale } = spec.warp;
   const { scale, vignette, seed, grain, animatedGrain } = spec;
+  // |u|, |v| beyond this would push a noise coordinate past the noise's domain (2^28):
+  // x is at most 1.8 x aspect x scale x warp scale x |u| (aurora), times 2^(octaves - 1)
+  // inside fbm; the 2 leaves room for the warp offsets.
+  const uvLimit =
+    2 ** 27 /
+    (2 * Math.max(aspect, 1) * scale * warpScale * 2 ** (octaves - 1));
   const cosR = Math.cos(spec.rotation);
   const sinR = Math.sin(spec.rotation);
   const hl = spec.highlight && {
@@ -97,6 +125,9 @@ export function flowSampler(
       frame = animatedGrain ? tc.grainFrame : 0;
     },
     sample(u, v, px, py, out) {
+      // `!(<=)` so NaN fails too.
+      if (!(Math.abs(u) <= uvLimit)) uvError("u", u, uvLimit);
+      if (!(Math.abs(v) <= uvLimit)) uvError("v", v, uvLimit);
       let x = (u - 0.5) * aspect * scale;
       let y = (v - 0.5) * scale;
       const rx = x * cosR - y * sinR;

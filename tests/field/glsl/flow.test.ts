@@ -63,6 +63,20 @@ describe("GLSL_FLOW", () => {
     expect(GLSL_FLOW).toContain("float s = sinP(a);");
   });
 
+  it("pins the warp offsets, the nesting and the highlight falloff, whatever the whitespace", () => {
+    const g = GLSL_FLOW.replace(/\s+/g, "");
+    for (const k of [
+      "fbm(p+vec2(5.2,1.3),uTime,uOctaves,uSeed)",
+      "fbm(p+uStrength*q+vec2(1.7,9.2),uTime,uOctaves,uSeed)",
+      "fbm(p+uStrength*q+vec2(8.3,2.8),uTime,uOctaves,uSeed)",
+      "returnfbm(p+uStrength*r,uTime,uOctaves,uSeed)",
+      "floath=uHighlight.z*k*k;",
+      "floatk=1.0-smoothstep(0.0,uHighlight.w,",
+      "c=c*(1.0-h)+uHighlightColor*h;",
+    ])
+      expect(g).toContain(k);
+  });
+
   it("has balanced braces and parentheses", () => {
     const count = (c: string): number => GLSL_FLOW.split(c).length - 1;
     expect(count("{")).toBe(count("}"));
