@@ -198,6 +198,16 @@ describe("fluidPositions", () => {
       ]);
   });
 
+  it("writes into the given array and returns it, leaving the rest alone", () => {
+    const out = new Float32Array(8).fill(7);
+    const back = fluidPositions(spec, 0.7, fluidDrift(spec), out);
+    expect(back).toBe(out);
+    expect(Array.from(out.subarray(0, 4))).toEqual(
+      Array.from(Float32Array.from(fluidPositions(spec, 0.7))),
+    );
+    expect(Array.from(out.subarray(4))).toEqual([7, 7, 7, 7]);
+  });
+
   it.each([NaN, Infinity, -Infinity])("rejects theta = %s, naming it", (th) => {
     expect(() => fluidPositions(spec, th)).toThrow(VisError);
     expect(() => fluidPositions(spec, th)).toThrow(

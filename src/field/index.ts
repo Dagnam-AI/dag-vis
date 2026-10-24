@@ -23,3 +23,6 @@ export { FLOW_PRESET_NAMES, fieldPresets, flowPresets } from "./presets.js";
 export type { FlowPresetName } from "./presets.js";
 export { randomFlow } from "./random.js";
 export type { FlowMood, RandomFlowOptions } from "./random.js";
+// Internal GPU assembly for the live effect: not a root name, its output is not a stable contract.
+export { planGpu } from "./glsl/program.js";
+export type { GpuPlan, UniformValue, Uniforms } from "./glsl/program.js";

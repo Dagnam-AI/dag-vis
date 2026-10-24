@@ -51,19 +51,22 @@ export function fluidDrift(spec: ResolvedFluid): FluidDrift {
  * The one source of positions: the CPU sampler calls it, and the GPU packs its result
  * into the `uPos` uniform, so the shader never recomputes the drift. `theta` must be a
  * finite number (a VisError names it otherwise); pass the `drift` of `fluidDrift` to
- * avoid drawing it again.
+ * avoid drawing it again. Pass `out` (room for `n * 2` numbers, e.g. the GPU's
+ * `Float32Array`) to write the positions there instead of into a new array; it is
+ * returned, and numbers beyond `n * 2` are left alone.
  */
 export function fluidPositions(
   spec: ResolvedFluid,
   theta: number,
   drift: FluidDrift = fluidDrift(spec),
-): Float64Array {
+  out?: Float64Array | Float32Array,
+): Float64Array | Float32Array {
   if (typeof theta !== "number" || !Number.isFinite(theta))
     throw new VisError(
       `theta must be a finite number, got ${describeValue(theta)}`,
     );
   const n = spec.points.length;
-  const pos = new Float64Array(n * 2);
+  const pos = out ?? new Float64Array(n * 2);
   spec.points.forEach((p, i) => {
     pos[i * 2] =
       p.at[0] +
