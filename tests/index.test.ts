@@ -14,6 +14,15 @@ describe("@dagnam/vis root barrel", () => {
     expect(vis.ribbon(svgOpts)).toContain("<svg");
   });
 
+  it("exposes renderField with its option and frame types from the root", () => {
+    const opts: vis.RenderFieldOptions = { width: 2, height: 2 };
+    const frame: vis.FieldFrame = vis.renderField(
+      { kind: "flow", palette: ["#000", "#fff"] },
+      opts,
+    );
+    expect(frame.data).toHaveLength(16);
+  });
+
   it("imports in plain Node with no DOM and no canvas", async () => {
     // This file runs in the node environment: nothing below may exist.
     expect(typeof document).toBe("undefined");

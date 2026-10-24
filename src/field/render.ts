@@ -18,13 +18,13 @@ import {
 import { timeCoords } from "./time.js";
 
 /** One rendered frame: `data` is `width * height * 4` bytes, sRGB RGBA, row 0 on top. */
-export interface Frame {
+export interface FieldFrame {
   data: Uint8ClampedArray;
   width: number;
   height: number;
 }
 
-export interface RenderOptions {
+export interface RenderFieldOptions {
   /** Whole pixels, 1..16384. */
   width: number;
   /** Whole pixels, 1..16384. `width * height` is at most `MAX_FRAME_PIXELS`. */
@@ -77,8 +77,8 @@ export function makeSampler(
  */
 export function renderField(
   spec: FieldSpec | ResolvedField,
-  opts: RenderOptions,
-): Frame {
+  opts: RenderFieldOptions,
+): FieldFrame {
   assertOptions(opts);
   const width = integerIn("width", opts.width, 1, MAX_DIMENSION);
   const height = integerIn("height", opts.height, 1, MAX_DIMENSION);
