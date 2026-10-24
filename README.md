@@ -77,7 +77,7 @@ ribbon({ width: 1600, height: 900, lines: 120, mesh: true }); // the wave-mesh r
     field_preset === undefined ? undefined : parseFieldPreset(field_preset);
   ```
 
-- **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`; or `title`, `excerpt` and `cover` for the social card), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry).
+- **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`; or `title`, `excerpt` and `cover` for the social card), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry). The light theme of the brand card is white with near-black text and the deep mark red (`BRAND.mark`) for the logo, eyebrow, rule and `.AI`: crisp hairline curves and a tight glow at the right edge, no pink wash and no vignette; any `background` option overrides these defaults.
 - **Text and core helpers**: `measureText`, `wrapText`, `FONT_FAMILY`, `createRng`, `fmt`, colour helpers (`parseColor`, `toHex`, `toCss`, `mix`, `ramp`, `withAlpha`, `toVec3`), `VisError`. `measureText` and `wrapText` take at most 10,000 characters of text and `wrapText` returns at most 100 lines. The SVG builder, the validators, the stop pipeline, the geometry helpers and the font metrics are internal and not exported.
 
 ### Social card

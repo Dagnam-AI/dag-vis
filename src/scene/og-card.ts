@@ -2,6 +2,7 @@ import { LOGO } from "../brand/logo.js";
 import { MOONHOUSE } from "../brand/moonhouse-metrics.js";
 import { BRAND } from "../brand/tokens.js";
 import { UNBOUNDED } from "../brand/unbounded-metrics.js";
+import { parseColor, toHex } from "../core/color.js";
 import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { el, svgDoc, text } from "../core/svg.js";
@@ -128,15 +129,22 @@ export function ogCard(opts: OgCardOptions): string {
 
   const dark = theme === "dark";
   const fg = dark ? BRAND.foreground.dark : BRAND.foreground.light;
+  // On white the bright BRAND.red is a pale 3.8:1; the deep mark red is 6.0:1.
+  const red = dark ? BRAND.red : toHex(parseColor(BRAND.mark));
   const bg = within("background", () =>
     brandBackgroundLayers({
       ...(dark
         ? {}
         : {
+            // Crisp, not a wash: on white a wide glow or a band reads as pink fog and a
+            // vignette as grey, so the light card keeps the hairlines and the outline
+            // (a bit heavier than the dark card's) and only a tight glow at the right edge.
             base: BRAND.background.light,
-            band: 0.18,
-            glow: 0.25,
-            vignette: 0.12,
+            band: 0.04,
+            glow: 0.35,
+            glowRadius: 0.22,
+            hairlineWidth: 2.4,
+            vignette: 0,
           }),
       ...(overrides as OgBackground),
       width,
@@ -171,7 +179,7 @@ export function ogCard(opts: OgCardOptions): string {
       {
         transform: `translate(${fmt(pad)} ${fmt(pad)}) scale(${fmt(k)}) translate(${fmt(-LOGO.x)} ${fmt(-LOGO.y)})`,
       },
-      el("path", { d: LOGO.path, fill: BRAND.red }),
+      el("path", { d: LOGO.path, fill: red }),
     ),
   );
   const wordSize = 0.055 * u;
@@ -186,7 +194,7 @@ export function ogCard(opts: OgCardOptions): string {
         fill: fg,
       },
       "DAGNAM",
-      el("tspan", { fill: BRAND.red }, ".AI"),
+      el("tspan", { fill: red }, ".AI"),
     ),
   );
 
@@ -252,7 +260,7 @@ export function ogCard(opts: OgCardOptions): string {
           y: top + topBaseline(UNBOUNDED, eyebrowSize),
           ...sans(eyebrowSize, {
             "letter-spacing": eyebrowSpacing,
-            fill: BRAND.red,
+            fill: red,
           }),
         },
         text(line),
@@ -281,7 +289,7 @@ export function ogCard(opts: OgCardOptions): string {
       y: top,
       width: 0.085 * width,
       height: rule,
-      fill: BRAND.red,
+      fill: red,
     }),
   );
   top += rule + gap;
@@ -311,7 +319,7 @@ export function ogCard(opts: OgCardOptions): string {
         ...line
           .split("•")
           .flatMap((piece, i) => [
-            ...(i > 0 ? [el("tspan", { fill: BRAND.red }, "•")] : []),
+            ...(i > 0 ? [el("tspan", { fill: red }, "•")] : []),
             text(piece),
           ]),
       ),
