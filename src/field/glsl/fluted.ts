@@ -31,11 +31,12 @@ import { MAX_REEDS } from "../spec.js";
  * from 31x29 to 8192x2 and 1x8192, both directions, both sources, flow shapes swirl,
  * wave, aurora and noise, 2 to 256 reeds, refraction 0 to 1, shade 0 to 1, jitter 0 to 1,
  * grain on and off, looped and free-running time, widths that do not divide evenly,
- * and 19328 pixels whose centre is on an exact reed edge): every channel within 0.42/255, except
- * one deliberately extreme flow source (aurora at scale 10, warp scale 10, strength 3,
- * octaves 5) at 3.5/255, which is the flow source's own float32 limit and not the
- * reeds'. So the 2/255 agreement holds for the presets and the normal ranges, and the
- * reed edge never flips. Other GPUs are not measured; the integer reed lookup does not
+ * and 19328 pixels whose centre is on an exact reed edge): every channel within 0.42/255
+ * (a wider replay with a flow source of 1000x2 pixels and 120 reeds reached 0.56/255),
+ * except one deliberately extreme flow source (aurora at scale 10, warp scale 10,
+ * strength 3, octaves 5) at 3.5/255, which is the flow source's own float32 limit and
+ * not the reeds'. So the 2/255 agreement holds for the presets and the normal ranges,
+ * and the reed edge never flips. Other GPUs are not measured; the integer reed lookup does not
  * depend on the GPU's `floor`, division or `smoothstep` accuracy beyond ordinary
  * rounding.
  */

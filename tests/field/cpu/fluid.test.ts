@@ -436,7 +436,7 @@ describe("fluidSampler", () => {
     expect(grid(2)).not.toEqual(t0);
   });
 
-  it("without a loop the drift keeps going (no repetition after a short time)", () => {
+  it("without a loop the drift closes after 2π and is still moving before", () => {
     const s = fluidSampler(fluid({ drift: 0.2 }), 8, 8);
     s.prepare(timeCoords(0));
     const a = pixel(s, 0.2, 0.2);
@@ -457,17 +457,32 @@ describe("fluidSampler", () => {
     expect(pixel(s, 0.3, 0.6)).toEqual(a);
   });
 
-  it("samples at time 0 before the first prepare, and prepare's TimeCoords is copied", () => {
+  it("samples at time 0 before the first prepare", () => {
     const spec = fluid({ drift: 0.2 });
     const fresh = fluidSampler(spec, 8, 8);
     const prepared = fluidSampler(spec, 8, 8);
     prepared.prepare(timeCoords(0));
     expect(pixel(fresh, 0.2, 0.3)).toEqual(pixel(prepared, 0.2, 0.3));
+    prepared.prepare(timeCoords(2));
+    expect(pixel(prepared, 0.2, 0.3)).not.toEqual(pixel(fresh, 0.2, 0.3));
+  });
+
+  it("keeps what prepare read: later edits to the TimeCoords object change nothing", () => {
+    // Both fields prepare uses, theta (the drift) and grainFrame (the animated grain), are
+    // read at once, so a caller may reuse one TimeCoords object for the next frame.
+    const s = fluidSampler(
+      fluid({ drift: 0.2, grain: 1, animatedGrain: true }),
+      8,
+      8,
+    );
     const tc = timeCoords(2);
-    prepared.prepare(tc);
-    const at2 = pixel(prepared, 0.2, 0.3);
+    s.prepare(tc);
+    const at2 = pixel(s, 0.2, 0.3);
     tc.theta = 99;
-    expect(pixel(prepared, 0.2, 0.3)).toEqual(at2);
+    tc.grainFrame += 5;
+    expect(pixel(s, 0.2, 0.3)).toEqual(at2);
+    s.prepare(tc);
+    expect(pixel(s, 0.2, 0.3)).not.toEqual(at2);
   });
 
   it("does not see later changes to the spec", () => {

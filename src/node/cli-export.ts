@@ -100,12 +100,25 @@ function sizeFrom(opts: Options): [number, number] {
   return [pixels("w", w), pixels("h", h)];
 }
 
-/** Options that only make sense for one kind of output are refused for the other, not ignored. */
+/** The formats that read --quality: the lossy encoders. The others have nothing to tune. */
+const QUALITY_FORMATS: readonly string[] = [
+  "jpeg",
+  "webp",
+  "avif",
+  "mp4",
+  "webm",
+];
+
+/** Options that only make sense for some formats are refused for the others, not ignored. */
 function checkApplicable(
   { opts, flags }: { opts: Options; flags: ReadonlySet<string> },
   chosen: Chosen,
 ): void {
   const given = (name: string): boolean => opts.has(name) || flags.has(name);
+  if (given("quality") && !QUALITY_FORMATS.includes(chosen.format))
+    throw new VisError(
+      `--quality applies to jpeg, webp, avif, mp4 and webm, not ${chosen.format}`,
+    );
   if (chosen.animated) {
     if (given("t"))
       throw new VisError(

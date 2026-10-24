@@ -171,9 +171,11 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
         else visible.delete(c);
       }
       reconcile();
-      // A card's share on screen changes between its enter and leave events: observe every tenth.
     },
-    { threshold: Array.from({ length: 11 }, (_, i) => i / 10) },
+    {
+      // A card's share on screen changes between its enter and leave events: observe every tenth.
+      threshold: Array.from({ length: 11 }, (_, i) => i / 10),
+    },
   );
 
   async function runExport(

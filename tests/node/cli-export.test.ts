@@ -52,6 +52,8 @@ beforeAll(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  // Puts DAG_VIS_FFMPEG back to the stand-in after a test that stubbed it, pass or fail.
+  vi.unstubAllEnvs();
 });
 afterAll(() => {
   if (previous === undefined) delete process.env.DAG_VIS_FFMPEG;
@@ -275,15 +277,23 @@ describe("dag-vis export", () => {
       [...base, "--fps", "-5"],
       /--fps must be a plain decimal number/,
     );
-    await fails([...base, "--fps", "0"], /fps/);
-    await fails([...base, "--duration", "61"], /duration/);
+    await fails([...base, "--fps", "0"], "fps must be an integer in 1..60");
+    await fails(
+      [...base, "--duration", "61"],
+      "duration must be in (0, 60] seconds",
+    );
     await fails(
       [...base, "--duration", ""],
       /--duration must be a plain decimal number/,
     );
-    await fails([...base, "--quality", "2"], /quality/);
+    const video = ["export", "lunar", "--w", "8", "--h", "8"];
+    const mp4 = join(tmp(), "x.mp4");
     await fails(
-      [...base, "--quality", "0x1"],
+      [...video, "--out", mp4, "--quality", "2"],
+      "quality must be a number in 0..1, got 2",
+    );
+    await fails(
+      [...video, "--out", mp4, "--quality", "0x1"],
       /--quality must be a plain decimal number/,
     );
     expect(readdirSync(tmp())).toEqual([]);
@@ -458,6 +468,25 @@ describe("dag-vis export", () => {
     );
     const moving = ["export", "lunar", "--out", join(tmp(), "a.gif")];
     await fails([...moving, "--t", "1"], /--t applies to stills, not gif/);
+    for (const [out, format] of [
+      ["a.png", "png"],
+      ["a.svg", "svg"],
+      ["a.gif", "gif"],
+      ["a.apng", "apng"],
+      ["frames", "png-seq"],
+    ] as const)
+      await fails(
+        [
+          "export",
+          "lunar",
+          "--out",
+          join(tmp(), out),
+          ...(format === "png-seq" ? ["--format", "png-seq"] : []),
+          "--quality",
+          "0.5",
+        ],
+        `--quality applies to jpeg, webp, avif, mp4 and webm, not ${format}`,
+      );
     expect(readdirSync(tmp())).toEqual([]);
   });
 
@@ -505,18 +534,18 @@ describe("dag-vis export", () => {
     const odd = join(tmp(), "odd.mp4");
     await fails(
       ["export", "lunar", "--out", odd, "--w", "7", "--h", "4"],
-      /width|even/,
+      "width and height must be even for this format (4:2:0 chroma), got 7x4",
     );
     const bad = join(tmp(), "bad.json");
     writeFileSync(bad, JSON.stringify({ kind: "flow", palette: ["#000"] }));
     await fails(
       ["export", bad, "--out", join(tmp(), "x.png"), "--w", "8", "--h", "4"],
-      /palette/,
+      "palette must have 2..6 entries, got 1",
     );
     writeFileSync(bad, JSON.stringify({ kind: "nope" }));
     await fails(
       ["export", bad, "--out", join(tmp(), "x.png"), "--w", "8", "--h", "4"],
-      /nope|kind/,
+      "unknown gradient kind: nope",
     );
     await fails(
       [
@@ -529,7 +558,7 @@ describe("dag-vis export", () => {
         "--h",
         "4",
       ],
-      /static/,
+      "linear specs are static; animate a field or ribbon spec",
     );
     // the folder of --out is not created by export
     await fails(
@@ -543,7 +572,7 @@ describe("dag-vis export", () => {
         "--h",
         "4",
       ],
-      /could not write out/,
+      /^dag-vis: could not write out ".*missing/,
     );
     expect(existsSync(join(tmp(), "missing"))).toBe(false);
   });
@@ -563,7 +592,6 @@ describe("dag-vis export", () => {
       ],
       /ffmpeg not found/,
     );
-    vi.unstubAllEnvs();
   });
 
   it("sends a GIF speed warning to the injected stderr and still succeeds", async () => {
@@ -740,6 +768,8 @@ describe("usage text", () => {
       "--poster",
       "does not apply",
       "does not create the folder",
+      "applies to jpeg, webp, avif, mp4 and webm only",
+      "wider than 800 px",
     ])
       expect(USAGE).toContain(text);
   });

@@ -545,6 +545,38 @@ describe("flutedSampler", () => {
     for (const v of out) expect(Number.isFinite(v)).toBe(true);
   });
 
+  it("scales the coordinate limit by the aspect, wide pictures only (an aspect swap fails)", () => {
+    const out = new Float64Array(3);
+    const sampler = (width: number, height: number) => {
+      const s = flutedSampler(
+        fluted({ refraction: 1, shade: 0, jitter: 0 }),
+        width,
+        height,
+      );
+      s.prepare(timeCoords(0));
+      return s;
+    };
+    // 1600 x 16 is 100:1: the limit is 1e6 / 100 = 1e4.
+    const wide = sampler(1600, 16);
+    expect(() => {
+      wide.sample(2e4, 0.5, 0, 0, out);
+    }).toThrow(/^u must be/);
+    expect(() => {
+      wide.sample(0.5, -2e4, 0, 0, out);
+    }).toThrow(/^v must be/);
+    expect(() => {
+      wide.sample(5e3, -5e3, 0, 0, out);
+    }).not.toThrow();
+    // 16 x 1600 is tall: the limit stays 1e6, so the same coordinates are fine.
+    const tall = sampler(16, 1600);
+    expect(() => {
+      tall.sample(2e4, -2e4, 0, 0, out);
+    }).not.toThrow();
+    expect(() => {
+      tall.sample(2e6, 0.5, 0, 0, out);
+    }).toThrow(/^u must be/);
+  });
+
   it("before the first prepare samples at time 0", () => {
     const spec = fluted({ jitter: 1 });
     const fresh = flutedSampler(spec, 16, 16);

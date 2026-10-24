@@ -43,12 +43,13 @@ export const USAGE = `Dagnam visuals from the command line (dag-vis <command> [o
   dag-vis presets
   dag-vis sheet --out f.png [--tile 300x170 --gap 32 --columns 4]
 
-An --out must end in .svg or .png (any case), or the command exits 1 and writes
-nothing; .png is rasterised with the bundled Inter fonts (needs
-@resvg/resvg-js), .svg is written as is. Files are written
-atomically (a temp file renamed over the target, so an existing file is
-replaced even if read-only, and the new one gets the default mode) and missing
-parent directories are created. favicons --out is a directory. Numbers are plain decimals (600, 0.5); --focus is x,y in 0..1.
+For og, background, gradient and pattern an --out must end in .svg or .png (any
+case), or the command exits 1 and writes nothing; .png is rasterised with the
+bundled Inter fonts (needs @resvg/resvg-js), .svg is written as is. favicons
+--out is a directory. These commands and sheet write atomically (a temp file
+renamed over the target, so an existing file is replaced even if read-only, and
+the new one gets the default mode) and create missing parent directories.
+Numbers are plain decimals (600, 0.5); --focus is x,y in 0..1.
 Options take "--name value" or "--name=value" (use the second form for a value
 that starts with "--"). A spec is a JSON object in a file of at most 1 MiB. To
 rasterise a gradient spec whose overlay has an image, give the image as a
@@ -64,14 +65,17 @@ wallpaper|4k|header or --w and --h in whole pixels (default og, 1200x630).
 Animations take --fps (1..60, default 30), --duration in seconds (default 6),
 --loop (a seamless loop), --alpha (webm and apng) and --poster FILE (frame 0 as
 a PNG). Stills take --t, the second to draw; --loop with --duration picks the
-frame an animation of that length shows. --quality is 0..1 (default 0.8).
-jpg, webp and avif stills and apng, mp4 and webm animations need ffmpeg on the
-PATH (or its path in DAG_VIS_FFMPEG). An option that does not apply to the
-chosen format is an error. export writes through a temp file and a rename and
-does not create the folder of --out; sheet --out must end in .png and creates
-missing folders like the commands above. presets prints one name and kind per
-line, in the order of the sheet, which draws every preset in a grid.
-Warnings (a GIF faster than 50 fps) go to stderr and the exit status stays 0.
+frame an animation of that length shows. --quality is 0..1 (default 0.8) and
+applies to jpeg, webp, avif, mp4 and webm only. jpg, webp and avif stills and
+apng, mp4 and webm animations need ffmpeg on the PATH (or its path in
+DAG_VIS_FFMPEG); png, svg, gif and png-seq do not. An option that does not apply
+to the chosen format is an error. export writes through a temp file and a
+rename and does not create the folder of --out (png-seq creates its own
+folder); sheet --out must end in .png and creates missing folders like the
+commands above. presets prints one name and kind per line, in the order of the
+sheet, which draws every preset in a grid.
+Warnings (a GIF wider than 800 px or faster than 50 fps) go to stderr and the
+exit status stays 0.
 Exit status 0 on success, 1 on any error (one line on stderr).
 `;
 

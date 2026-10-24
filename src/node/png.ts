@@ -3,11 +3,9 @@ import { deflateSync } from "node:zlib";
 import { VisError } from "../core/errors.js";
 import { MAX_DIMENSION, describeValue, integerIn } from "../core/validate.js";
 import { crc32 } from "../export/crc32.js";
+import { MAX_FRAME_PIXELS } from "../field/index.js";
 
 const SIGNATURE = Buffer.from("89504e470d0a1a0a", "hex");
-
-/** Most pixels one PNG may hold: the same cap `renderField` applies to a frame. */
-const MAX_PIXELS = 2 ** 25;
 
 function chunk(type: string, body: Uint8Array): Buffer {
   const typed = Buffer.concat([Buffer.from(type, "latin1"), body]);
@@ -21,9 +19,10 @@ function chunk(type: string, body: Uint8Array): Buffer {
 /**
  * 8-bit RGBA PNG (straight alpha), filter type 0 on every row, deflated with
  * `node:zlib`. No dependency. `width` and `height` are whole pixels in
- * 1..16384 and at most 2^25 pixels together; `rgba` must hold exactly
- * `width * height * 4` bytes. The bytes are a pure function of the arguments
- * for one Node/zlib version.
+ * 1..16384 and at most `MAX_FRAME_PIXELS` (2^25, the cap `renderField`
+ * applies) pixels together; `rgba` must hold exactly `width * height * 4`
+ * bytes. The bytes are a pure function of the arguments for one Node/zlib
+ * version.
  */
 export function encodePng(
   rgba: Uint8Array | Uint8ClampedArray,
@@ -32,9 +31,9 @@ export function encodePng(
 ): Buffer {
   integerIn("width", width, 1, MAX_DIMENSION);
   integerIn("height", height, 1, MAX_DIMENSION);
-  if (width * height > MAX_PIXELS)
+  if (width * height > MAX_FRAME_PIXELS)
     throw new VisError(
-      `width x height must be at most ${MAX_PIXELS} pixels, got ${width} x ${height}`,
+      `width x height must be at most ${MAX_FRAME_PIXELS} pixels, got ${width} x ${height}`,
     );
   if (!(rgba instanceof Uint8Array) && !(rgba instanceof Uint8ClampedArray))
     throw new VisError(
