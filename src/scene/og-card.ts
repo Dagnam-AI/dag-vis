@@ -1,5 +1,7 @@
 import { LOGO } from "../brand/logo.js";
+import { MOONHOUSE } from "../brand/moonhouse-metrics.js";
 import { BRAND } from "../brand/tokens.js";
+import { UNBOUNDED } from "../brand/unbounded-metrics.js";
 import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { el, svgDoc, text } from "../core/svg.js";
@@ -16,7 +18,14 @@ import type { GradientSpec } from "../gradient/index.js";
 import { brandBackgroundLayers } from "./brand-background.js";
 import type { BrandBackgroundOptions } from "./brand-background.js";
 import { socialCard } from "./og-social-card.js";
-import { FONT_FAMILY, cleanText, optionalText, wrapText } from "./text.js";
+import {
+  DISPLAY_FAMILY,
+  SANS_FAMILY,
+  middleBaseline,
+  topBaseline,
+  wrapFont,
+} from "./text-fonts.js";
+import { cleanText, optionalText } from "./text.js";
 
 /** Overrides for the brand background layers; the card sets size, seed and id. */
 export type OgBackground = Partial<
@@ -28,13 +37,13 @@ export interface OgCardOptions {
   width?: number;
   /** Px, 16..16384. Default 630. */
   height?: number;
-  /** Required. Whitespace and newlines collapse; at most 3 lines (2 with a subtitle), then "…". With `cover`: uppercase, in Moonhouse, 92 px stepping down to 52 to fit 3 lines. */
+  /** Required. Whitespace and newlines collapse; at most 3 lines (2 with a subtitle), then "…", wrapped to even lines. Set in Unbounded 400. With `cover`: uppercase, in Moonhouse, 92 px stepping down to 52 to fit 3 lines. */
   title: string;
-  /** At most 2 lines. Omitted when blank. */
+  /** At most 2 lines, wrapped to even lines, in Unbounded. Omitted when blank. */
   subtitle?: string;
-  /** Small uppercase label above the title; one line. Omitted when blank. */
+  /** Small uppercase label above the title, in Unbounded; one line. Omitted when blank. */
   eyebrow?: string;
-  /** One line along the bottom. Omitted when blank. */
+  /** One line along the bottom, in Unbounded; a "•" in it is drawn in the brand red. Omitted when blank. */
   footer?: string;
   /** Overrides for the brand background layers. */
   background?: OgBackground;
@@ -60,13 +69,13 @@ export interface OgCardOptions {
 }
 
 const MIN_SIDE = 16;
-/** Inter's cap height as a fraction of the em. */
-const CAP = 0.7275;
 
 /**
- * A social-preview card: logo + wordmark, wrapped title, accent rule, subtitle,
- * footer; or, with `cover`, the social layout (title, excerpt and a Dagnam.AI bar
- * over the cover's art).
+ * A social-preview card: logo + wordmark (Moonhouse), wrapped title, accent rule,
+ * subtitle, footer (Unbounded, the site's text face); or, with `cover`, the social
+ * layout (title, excerpt and a Dagnam.AI bar over the cover's art). Every line is
+ * wrapped by the advance widths of the font it is drawn in, so Node and a browser
+ * wrap alike.
  */
 export function ogCard(opts: OgCardOptions): string {
   const input: unknown = opts;
@@ -141,13 +150,19 @@ export function ogCard(opts: OgCardOptions): string {
   // aspect ratio and only the crop and margins change (1200x630 gives u = 630).
   const u = Math.min(height, 0.525 * width);
   const pad = u / 7;
-  const text0 = (
+  const sans = (
     size: number,
     extra: Record<string, string | number | undefined>,
-  ) => ({ "font-family": FONT_FAMILY, "font-size": size, fill: fg, ...extra });
+  ) => ({
+    "font-family": SANS_FAMILY,
+    "font-size": size,
+    "font-weight": "400",
+    fill: fg,
+    ...extra,
+  });
   const parts: string[] = [bg.body];
 
-  // Logo mark + wordmark
+  // Logo mark + wordmark (Moonhouse, uppercase, the site's wordmark)
   const logoSize = 0.09 * u;
   const k = logoSize / LOGO.height;
   parts.push(
@@ -159,65 +174,62 @@ export function ogCard(opts: OgCardOptions): string {
       el("path", { d: LOGO.path, fill: BRAND.red }),
     ),
   );
-  const wordSize = 0.07 * u;
+  const wordSize = 0.055 * u;
   parts.push(
     el(
       "text",
       {
         x: pad + logoSize + 0.04 * u,
-        y: pad + logoSize / 2 + (CAP / 2) * wordSize,
-        ...text0(wordSize, { "font-weight": "700" }),
+        y: pad + logoSize / 2 + middleBaseline(MOONHOUSE, wordSize),
+        "font-family": DISPLAY_FAMILY,
+        "font-size": wordSize,
+        fill: fg,
       },
-      "Dagnam",
-      el("tspan", { fill: BRAND.red }, "."),
-      "AI",
+      "DAGNAM",
+      el("tspan", { fill: BRAND.red }, ".AI"),
     ),
   );
 
   // Text blocks, measured first so the group can be centred between the header and footer.
-  const titleSize = 0.11 * u;
-  const subSize = 0.045 * u;
-  const eyebrowSize = 0.035 * u;
-  const footerSize = 0.03 * u;
-  const titleLines = wrapText(title, {
-    maxWidth: 0.6 * width,
-    maxLines: subtitle === undefined ? 3 : 2,
-    size: titleSize,
-    weight: "bold",
-  });
+  const titleSize = 0.09 * u;
+  const subSize = 0.04 * u;
+  const eyebrowSize = 0.028 * u;
+  const footerSize = 0.028 * u;
+  const wrap = (
+    value: string,
+    size: number,
+    maxWidth: number,
+    maxLines: number,
+    extra: { letterSpacing?: number; balance?: boolean } = {},
+  ): string[] =>
+    wrapFont(UNBOUNDED, value, { size, maxWidth, maxLines, ...extra });
+  const titleLines = wrap(
+    title,
+    titleSize,
+    0.6 * width,
+    subtitle === undefined ? 3 : 2,
+    { balance: true },
+  );
   const subLines =
     subtitle === undefined
       ? []
-      : wrapText(subtitle, {
-          maxWidth: 0.55 * width,
-          maxLines: 2,
-          size: subSize,
-        });
-  const eyebrowSpacing = 0.004 * u;
+      : wrap(subtitle, subSize, 0.55 * width, 2, { balance: true });
+  const eyebrowSpacing = 0.006 * u;
   const eyebrowLines =
     eyebrow === undefined
       ? []
-      : wrapText(eyebrow, {
-          maxWidth: 0.6 * width,
-          maxLines: 1,
-          size: eyebrowSize,
+      : wrap(eyebrow, eyebrowSize, 0.6 * width, 1, {
           letterSpacing: eyebrowSpacing,
         });
   const footerLines =
-    footer === undefined
-      ? []
-      : wrapText(footer, {
-          maxWidth: width - 2 * pad,
-          maxLines: 1,
-          size: footerSize,
-        });
+    footer === undefined ? [] : wrap(footer, footerSize, width - 2 * pad, 1);
 
-  const titleLead = 1.1 * titleSize;
-  const subLead = 1.35 * subSize;
+  const titleLead = 1.15 * titleSize;
+  const subLead = 1.5 * subSize;
   const gap = 0.04 * u;
   const rule = 0.006 * u;
   const eyebrowBlock =
-    eyebrowLines.length > 0 ? 1.1 * eyebrowSize + 0.03 * u : 0;
+    eyebrowLines.length > 0 ? 1.4 * eyebrowSize + 0.03 * u : 0;
   const subBlock =
     subLines.length > 0
       ? gap + rule + gap + subLines.length * subLead
@@ -231,34 +243,31 @@ export function ogCard(opts: OgCardOptions): string {
   let top =
     regionTop + Math.max(0, (regionBottom - regionTop - blockHeight) / 2);
 
-  if (eyebrowLines.length > 0) {
-    for (const line of eyebrowLines) {
-      parts.push(
-        el(
-          "text",
-          {
-            x: pad,
-            y: top + 0.88 * eyebrowSize,
-            ...text0(eyebrowSize, {
-              "font-weight": "400",
-              "letter-spacing": eyebrowSpacing,
-              fill: BRAND.red,
-            }),
-          },
-          text(line),
-        ),
-      );
-    }
-    top += eyebrowBlock;
+  for (const line of eyebrowLines) {
+    parts.push(
+      el(
+        "text",
+        {
+          x: pad,
+          y: top + topBaseline(UNBOUNDED, eyebrowSize),
+          ...sans(eyebrowSize, {
+            "letter-spacing": eyebrowSpacing,
+            fill: BRAND.red,
+          }),
+        },
+        text(line),
+      ),
+    );
   }
+  if (eyebrowLines.length > 0) top += eyebrowBlock;
   for (const line of titleLines) {
     parts.push(
       el(
         "text",
         {
           x: pad,
-          y: top + 0.88 * titleSize,
-          ...text0(titleSize, { "font-weight": "700" }),
+          y: top + topBaseline(UNBOUNDED, titleSize),
+          ...sans(titleSize, {}),
         },
         text(line),
       ),
@@ -282,8 +291,8 @@ export function ogCard(opts: OgCardOptions): string {
         "text",
         {
           x: pad,
-          y: top + (0.88 + 0.175) * subSize,
-          ...text0(subSize, { "font-weight": "400", opacity: 0.72 }),
+          y: top + topBaseline(UNBOUNDED, subSize),
+          ...sans(subSize, { opacity: 0.72 }),
         },
         text(line),
       ),
@@ -297,9 +306,14 @@ export function ogCard(opts: OgCardOptions): string {
         {
           x: pad,
           y: footerBase,
-          ...text0(footerSize, { "font-weight": "400", opacity: 0.6 }),
+          ...sans(footerSize, { opacity: 0.6 }),
         },
-        text(line),
+        ...line
+          .split("•")
+          .flatMap((piece, i) => [
+            ...(i > 0 ? [el("tspan", { fill: BRAND.red }, "•")] : []),
+            text(piece),
+          ]),
       ),
     );
   }

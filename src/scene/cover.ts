@@ -36,6 +36,12 @@ export interface CoverInput {
   intensity?: number | null;
 }
 
+/** The editor's choices alone: what a stored cover spec carries, before `item`, `theme` and `variant` join it. */
+export type CoverChoices = Pick<
+  CoverInput,
+  "family" | "seed" | "hue" | "region" | "intensity"
+>;
+
 export interface CoverGlow {
   /** The ellipse's radii in percent of the box. */
   size: [number, number];
@@ -69,8 +75,9 @@ export interface CoverParams {
 
 /** Brand red `#ef4444` as an OKLCH hue (HSL's hue steps are uneven around red). */
 const BRAND_HUE = 25.3;
-const HUE_RANGE = [-15, 15] as const;
-const INTENSITY_RANGE = [0.6, 1.4] as const;
+/** The ranges `coverSpec` clamps to, and `parseCoverInput` enforces. */
+export const HUE_RANGE = [-15, 15] as const;
+export const INTENSITY_RANGE = [0.6, 1.4] as const;
 const FAMILY_HUE_DRIFT = 15;
 /** An ordered family's items spread this many degrees either way, by index. */
 const ITEM_HUE_SPREAD = 6;
@@ -93,6 +100,8 @@ const ANCHOR_REGIONS: readonly [
   [24, 28],
   [72, 80],
 ];
+/** The editor's `region` is an index into the anchors: 0..REGION_COUNT - 1. */
+export const REGION_COUNT = ANCHOR_REGIONS.length;
 const BASE = { dark: "#0a0a0a", light: "#ffffff" } as const;
 // One lightness/chroma/alpha envelope per theme: siblings stay related.
 const GLOW = {

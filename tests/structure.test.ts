@@ -28,7 +28,8 @@ const ALLOWED: Record<string, readonly string[]> = {
   field: ["core"],
   export: ["core"],
   animate: ["core", "scene", "field", "export"],
-  react: ["core", "animate", "gradient"],
+  // react -> field: `<VisBackground effect="field">` types `options.spec` as `FieldSpec`.
+  react: ["core", "animate", "field", "gradient"],
   node: ["core", "brand", "gradient", "pattern", "scene", "field", "export"],
 };
 

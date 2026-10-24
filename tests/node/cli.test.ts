@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { USAGE, run } from "../../src/node/cli.js";
 import type { CliIo } from "../../src/node/cli.js";
+import { APP_ICON_FILES } from "../../src/node/app-icon.js";
 import { FAVICON_FILES } from "../../src/node/favicons.js";
 import { capture, useTempDir } from "./cli-helpers.js";
 import { PNG_SIG, dims } from "./png-helpers.js";
@@ -24,6 +25,7 @@ describe("dag-vis CLI", () => {
       ["og", "--title", "T", "--out", "x.svg", "--help"],
       ["gradient", "--spec", "s.json", "-h"],
       ["favicons", `--out=${tmp()}`, "--help", "--color", "#fff"],
+      ["app-icon", `--out=${tmp()}`, "--help", "--color", "#fff"],
     ]) {
       const h = capture();
       expect(await run(argv, h.io)).toBe(0);
@@ -270,6 +272,48 @@ describe("dag-vis CLI", () => {
     expect(readdirSync(defaults).sort()).toEqual([...FAVICON_FILES].sort());
   });
 
+  it("app-icon writes the SVG master, the PNG set and the .icns into a directory", async () => {
+    const out = join(tmp(), "mac");
+    const t = capture();
+    expect(
+      await run(
+        [
+          "app-icon",
+          "--out",
+          out,
+          "--color",
+          "#ffffff",
+          "--background",
+          "#000",
+        ],
+        t.io,
+      ),
+    ).toBe(0);
+    expect(readFileSync(join(out, "app-icon.svg"), "utf8")).toContain(
+      'fill="#ffffff"',
+    );
+    expect(t.out.join("")).toBe(
+      APP_ICON_FILES.map((f) => `wrote ${join(out, f)}\n`).join(""),
+    );
+    const defaults = join(tmp(), "defaults-mac");
+    expect(await run(["app-icon", "--out", defaults], capture().io)).toBe(0);
+    expect(readdirSync(defaults).sort()).toEqual([...APP_ICON_FILES].sort());
+    expect(readFileSync(join(defaults, "app-icon.svg"), "utf8")).toContain(
+      'fill="#ca0303"',
+    );
+  });
+
+  it("documents every command, favicons and app-icon with the files they write", () => {
+    for (const part of [
+      "dag-vis favicons --out DIR",
+      "dag-vis app-icon --out DIR",
+      "app-icon.icns",
+      "site.webmanifest",
+      "app-icon-<16|32|64|128|256|512|1024>.png",
+    ])
+      expect(USAGE).toContain(part);
+  });
+
   // [argv, text the one-line stderr message contains]
   it.each([
     [["nope"], "unknown command: nope"],
@@ -415,6 +459,9 @@ describe("dag-vis CLI", () => {
     ],
     [["favicons"], "--out is required"],
     [["favicons", "--out", "d", "--w", "5"], 'unknown option: "--w"'],
+    [["app-icon"], "--out is required"],
+    [["app-icon", "--out", "d", "--w", "5"], 'unknown option: "--w"'],
+    [["app-icon", "--out", "d", "--color", "nope"], "color"],
   ])(
     "fails with exit 1 and a one-line message for %j",
     async (argv, message) => {
@@ -476,6 +523,15 @@ describe("dag-vis CLI", () => {
     expect(await run(["favicons", "--out", file], t.io)).toBe(1);
     expect(t.err.join("")).toMatch(NAMED_ERROR);
     expect(t.err.join("")).toContain("favicons could not");
+  });
+
+  it("app-icon failures surface as one line (outDir is a file)", async () => {
+    const file = join(tmp(), "file2.txt");
+    writeFileSync(file, "x");
+    const t = capture();
+    expect(await run(["app-icon", "--out", file], t.io)).toBe(1);
+    expect(t.err.join("")).toMatch(NAMED_ERROR);
+    expect(t.err.join("")).toContain("appIcon could not");
   });
 
   it("an unexpected error is one line 'unexpected error: ...', exit 1, no stack", async () => {

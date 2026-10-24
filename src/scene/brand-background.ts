@@ -1,5 +1,5 @@
 import { LOGO } from "../brand/logo.js";
-import { PALETTES } from "../brand/tokens.js";
+import { BRAND } from "../brand/tokens.js";
 import { VisError } from "../core/errors.js";
 import { fmt } from "../core/format.js";
 import { focalScale, focalTransform } from "../core/geometry.js";
@@ -29,24 +29,29 @@ export interface BrandBackgroundOptions {
   base?: string | GradientSpec;
   /**
    * 1..64 colours; `palette[0]` colours the band, hairlines and glow (its
-   * alpha is honoured). Default PALETTES.red.
+   * alpha is honoured). Default `[BRAND.accent.dark]`: the dark theme's deep red, never the bright BRAND.red, which washes pink over a dark base.
    */
   palette?: readonly string[];
   /** Motif centre in unit coords, each 0..1. Default [0.82, 0.5]. */
   focus?: readonly [number, number];
   /** Motif larger side as a multiple of the short canvas side, 0.01..50. Default 1.5. */
   scale?: number;
-  /** Band fill opacity 0..1 at the motif's right edge; it fades to nothing leftwards. Default 0.35. */
+  /** Band fill opacity 0..1 at the motif's right edge; it fades to nothing leftwards. Default 0.12. */
   band?: number;
-  /** Offset stroke copies of the curves (faded leftwards like the band), integer 0..16. Default 4. */
+  /**
+   * Opacity 0..1 of the motif's own outline: a crisp `hairlineWidth` stroke with a
+   * faint glow either side, faded leftwards like the band. 0 draws none. Default 1.
+   */
+  edge?: number;
+  /** Offset stroke copies of the curves (faded leftwards like the band), integer 0..16. Default 3. */
   hairlines?: number;
-  /** Stroke width in output px (the motif's scale is divided out), 0.001..64. Default 1.5. */
+  /** Stroke width in output px (the motif's scale is divided out), 0.001..64. Default 1.8. */
   hairlineWidth?: number;
   /** Offset between copies as a fraction of the motif size, 0..1. Default 0.04. */
   hairlineGap?: number;
-  /** Glow opacity 0..1. Default 0.55. */
+  /** Glow opacity 0..1. Default 0.85. */
   glow?: number;
-  /** Glow centre in unit coords. Default = focus. */
+  /** Glow centre in unit coords. Default [0.98, 0.52]: at the right edge, where the deep red pools. */
   glowAt?: readonly [number, number];
   /** Default = palette[0]. */
   glowColor?: string;
@@ -70,6 +75,20 @@ export interface BrandBackgroundOptions {
 }
 
 const MAX_HAIRLINES = 16;
+const DEFAULT_PALETTE = [BRAND.accent.dark];
+/** [gradient offset, share of the glow opacity]: close to a Gaussian, and exactly zero at the radius. */
+const GLOW_FALLOFF = [
+  [0, 1],
+  [0.3, 0.6],
+  [0.6, 0.22],
+  [1, 0],
+] as const;
+/** [stroke width as a multiple of `hairlineWidth`, share of the `edge` opacity]: glow, glow, crisp line. */
+const EDGE_STROKES = [
+  [7, 0.07],
+  [3.5, 0.14],
+  [1, 1],
+] as const;
 const MAX_PALETTE = 64;
 const MAX_SCALE = 50;
 
@@ -121,7 +140,9 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
     orDefault<unknown>(opts.idPrefix, `vis${seed}`),
     60,
   );
-  const accent = parsePalette(orDefault<unknown>(opts.palette, PALETTES.red));
+  const accent = parsePalette(
+    orDefault<unknown>(opts.palette, DEFAULT_PALETTE),
+  );
   const focus = point("focus", orDefault<unknown>(opts.focus, [0.82, 0.5]));
   const scale = bounded(
     "scale",
@@ -129,16 +150,17 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
     0.01,
     MAX_SCALE,
   );
-  const band = unit("band", orDefault<unknown>(opts.band, 0.35));
+  const band = unit("band", orDefault<unknown>(opts.band, 0.12));
+  const edge = unit("edge", orDefault<unknown>(opts.edge, 1));
   const hairlines = integerIn(
     "hairlines",
-    orDefault<unknown>(opts.hairlines, 4),
+    orDefault<unknown>(opts.hairlines, 3),
     0,
     MAX_HAIRLINES,
   );
   const hairlineWidth = bounded(
     "hairlineWidth",
-    orDefault<unknown>(opts.hairlineWidth, 1.5),
+    orDefault<unknown>(opts.hairlineWidth, 1.8),
     0.001,
     64,
   );
@@ -146,8 +168,8 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
     "hairlineGap",
     orDefault<unknown>(opts.hairlineGap, 0.04),
   );
-  const glow = unit("glow", orDefault<unknown>(opts.glow, 0.55));
-  const glowAt = point("glowAt", orDefault<unknown>(opts.glowAt, focus));
+  const glow = unit("glow", orDefault<unknown>(opts.glow, 0.85));
+  const glowAt = point("glowAt", orDefault<unknown>(opts.glowAt, [0.98, 0.52]));
   const glowPaint =
     opts.glowColor === undefined
       ? accent
@@ -213,7 +235,7 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
   );
   // Hairlines fade in with the band, so the motif's left edge never shows.
   const hairId = `${id}-hair`;
-  if (hairlines > 0)
+  if (hairlines > 0 || edge > 0)
     defs += el(
       "linearGradient",
       { id: hairId, x1: 0, y1: 0, x2: 1, y2: 0 },
@@ -221,7 +243,7 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
       el("stop", {
         offset: 0.55,
         "stop-color": accent.hex,
-        "stop-opacity": 0.3,
+        "stop-opacity": 0.45,
       }),
       el("stop", { offset: 1, "stop-color": accent.hex, "stop-opacity": 1 }),
     );
@@ -234,6 +256,20 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
   const curves: string[] = [
     el("path", { d: LOGO.path, fill: `url(#${bandId})` }),
   ];
+  // The outline itself: a crisp line over two wider, fainter strokes (no filter, so
+  // every renderer draws the same glow and nothing bands).
+  if (edge > 0)
+    for (const [widen, weight] of EDGE_STROKES)
+      curves.push(
+        el("path", {
+          d: LOGO.path,
+          fill: "none",
+          stroke: `url(#${hairId})`,
+          "stroke-width": (hairlineWidth * widen) / k,
+          "stroke-linejoin": "round",
+          opacity: edge * weight * accent.alpha,
+        }),
+      );
   for (let i = 1; i <= hairlines; i++) {
     const dx = i * hairlineGap * LOGO.width;
     curves.push(
@@ -261,12 +297,14 @@ export function brandBackgroundLayers(opts: BrandBackgroundOptions): {
         cy: glowAt[1] * height,
         r: glowRadius * minSide,
       },
-      el("stop", {
-        offset: 0,
-        "stop-color": glowPaint.hex,
-        "stop-opacity": glow * glowPaint.alpha,
-      }),
-      el("stop", { offset: 1, "stop-color": glowPaint.hex, "stop-opacity": 0 }),
+      // Eased out, not linear: a straight line to zero leaves a visible wall at the radius.
+      ...GLOW_FALLOFF.map(([offset, share]) =>
+        el("stop", {
+          offset,
+          "stop-color": glowPaint.hex,
+          "stop-opacity": glow * glowPaint.alpha * share,
+        }),
+      ),
     );
     body.push(el("rect", { width, height, fill: `url(#${glowId})` }));
   }

@@ -17,9 +17,13 @@ import type * as FsPromises from "node:fs/promises";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { logoSvg } from "../../src/brand/logo.js";
+import { BRAND } from "../../src/brand/tokens.js";
 import { VisError } from "../../src/core/errors.js";
 import { FAVICON_FILES, favicons } from "../../src/node/favicons.js";
 import type { FaviconsOptions } from "../../src/node/favicons.js";
+import { renderPng } from "../../src/node/render-png.js";
+import { expectGolden } from "../helpers/golden.js";
 import type { Raster } from "../helpers/render.js";
 import { PNG_SIG, decode, dims, pixel } from "./png-helpers.js";
 
@@ -130,8 +134,13 @@ describe("favicons", () => {
       [48, 48],
     ]);
     const svg = read(out, "favicon.svg").toString("utf8");
-    expect(svg).toContain('fill="#ef4444"');
+    // the deep red of BRAND.mark, drawn heavy (LOGO_ICON_WEIGHT), not the bright BRAND.red
+    expect(svg).toContain(
+      'fill="#ca0303" stroke="#ca0303" stroke-width="48" stroke-linejoin="round"',
+    );
+    expect(svg).not.toContain("#ef4444");
     expect(svg).not.toContain("<rect"); // transparent: no backdrop
+    expectGolden("brand/favicon.svg", svg);
     for (const [file, side] of [
       ["apple-touch-icon.png", 180],
       ["icon-192.png", 192],
@@ -143,26 +152,28 @@ describe("favicons", () => {
     expect(manifest).toEqual({
       name: "Dagnam.AI",
       short_name: "Dagnam",
+      id: "/",
+      start_url: "/",
+      scope: "/",
+      display: "standalone",
+      theme_color: "#0a0a0a",
+      background_color: "#0a0a0a",
       icons: [
-        { src: "icon-192.png", sizes: "192x192", type: "image/png" },
-        { src: "icon-512.png", sizes: "512x512", type: "image/png" },
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
         {
-          src: "icon-maskable-512.png",
+          src: "/icon-maskable-512.png",
           sizes: "512x512",
           type: "image/png",
           purpose: "maskable",
         },
       ],
-      theme_color: "#0a0a0a",
-      background_color: "#0a0a0a",
-      display: "standalone",
     });
-    // every manifest icon exists on disk with the size it claims, and its src
-    // is relative to the manifest (no leading slash), so it also resolves when
-    // the site is served under a sub-path
+    // every manifest icon exists on disk with the size it claims, and its src is
+    // root-absolute (the manifest's scope is the whole origin), single-slash
     for (const icon of manifest.icons as { src: string; sizes: string }[]) {
-      expect(icon.src).not.toMatch(/^[/\\]|^[a-z][a-z0-9+.-]*:/i);
-      const [w] = dims(read(out, icon.src));
+      expect(icon.src).toMatch(/^\/[^/\\]/);
+      const [w] = dims(read(out, icon.src.slice(1)));
       expect(icon.sizes).toBe(`${w}x${w}`);
     }
   });
@@ -208,6 +219,49 @@ describe("favicons", () => {
       expect(b.maxY, file).toBeLessThanOrEqual(size * (1 - padding) + 1);
       expect(b.maxX - b.minX, file).toBeGreaterThan(box * 0.95);
     }
+  });
+
+  it("draws every raster surface in the deep brand red, heavier than the plain mark", async () => {
+    await favicons({ outDir: dir });
+    const bg = [0x0a, 0x0a, 0x0a, 255];
+    const covered = (r: Raster): number => {
+      let n = 0;
+      for (let y = 0; y < r.height; y++)
+        for (let x = 0; x < r.width; x++)
+          if (!pixel(r, x, y).every((v, i) => v === bg[i])) n++;
+      return n;
+    };
+    for (const file of [
+      "apple-touch-icon.png",
+      "icon-192.png",
+      "icon-512.png",
+      "icon-maskable-512.png",
+    ]) {
+      const r = decode(read(dir, file));
+      // a fully covered ink pixel exists and is exactly BRAND.mark's #ca0303
+      const solid = new Set<string>();
+      for (let y = 0; y < r.height; y++)
+        for (let x = 0; x < r.width; x++) {
+          const p = pixel(r, x, y);
+          if (!p.every((v, i) => v === bg[i])) solid.add(p.join(","));
+        }
+      expect(solid.has("202,3,3,255"), file).toBe(true);
+      expect(solid.has("239,68,68,255"), file).toBe(false); // never the bright BRAND.red
+    }
+    // the apple-touch mark covers at least 1.5x the pixels of the plain mark at the same size
+    const plain = decode(
+      await renderPng(
+        logoSvg({
+          color: BRAND.mark,
+          size: 180,
+          background: "#0a0a0a",
+          padding: 0.125,
+        }),
+      ),
+    );
+    expect(covered(decode(read(dir, "apple-touch-icon.png")))).toBeGreaterThan(
+      covered(plain) * 1.5,
+    );
   });
 
   it("keeps the maskable icon's ink inside the 80% safe-zone circle", async () => {

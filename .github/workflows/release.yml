@@ -95,18 +95,18 @@ jobs:
           echo "tag=$tag  package.json=$js"
           [ "$js" = "$tag" ] || { echo "::error::package.json says $js, tag says $tag"; exit 1; }
 
-      # OIDC trusted publishing needs npm >= 11.5.1; the npm bundled with the
-      # runner's Node predates it and would 403 looking for a token this job
-      # does not have. Pin the major (not @latest, which would move under a
-      # release) and assert the floor, so a future npm@11 line cannot silently
-      # fall below it.
-      - name: Install an npm that supports trusted publishing
+      # OIDC trusted publishing needs npm >= 11.5.1, and `npm stage publish`
+      # (the only thing our stage-only trusted publisher may do) needs
+      # npm >= 11.15.0; the npm bundled with the runner's Node predates both.
+      # Pin the major (not @latest, which would move under a release) and
+      # assert the floor, so a future npm@11 line cannot silently fall below it.
+      - name: Install an npm that supports staged trusted publishing
         run: |
           npm install -g npm@11
           v=$(npm --version)
           echo "npm $v"
-          [ "$(printf '%s\n' 11.5.1 "$v" | sort -V | head -n1)" = "11.5.1" ] \
-            || { echo "::error::npm $v is older than 11.5.1, which trusted publishing needs"; exit 1; }
+          [ "$(printf '%s\n' 11.15.0 "$v" | sort -V | head -n1)" = "11.15.0" ] \
+            || { echo "::error::npm $v is older than 11.15.0, which npm stage publish needs"; exit 1; }
 
       # --ignore-scripts: nothing in the dependency tree needs an install
       # script to build, and a publish job holding an OIDC token should not run
@@ -124,6 +124,13 @@ jobs:
       # package name cannot use it (the package must exist before a trusted
       # publisher can be attached on npmjs.com), which is what the fallback is
       # for.
+      #
+      # The trusted publisher is configured stage-only ("npm stage publish"), so
+      # a direct `npm publish` from here is refused with a 403 (OIDC permission
+      # denied). The OIDC path therefore STAGES the tarball; the version goes
+      # live when a maintainer approves it (proof of presence, 2FA). A staged
+      # version is not visible to `npm view`, so re-running a tag stages it
+      # again; reject the duplicate with `npm stage reject`.
       #
       # Fallback: an `NPM_TOKEN` secret holding a short-lived granular access
       # token with publish rights on the @dagnam scope and 2FA bypass (classic
@@ -151,6 +158,7 @@ jobs:
             echo "publishing with the NPM_TOKEN fallback"
             NODE_AUTH_TOKEN="$NPM_TOKEN" npm publish "$tarball" --provenance --access public
           else
-            echo "publishing with npm trusted publishing (OIDC)"
-            npm publish "$tarball" --provenance --access public
+            echo "staging with npm trusted publishing (OIDC)"
+            npm stage publish "$tarball" --provenance --access public
+            echo "Staged, not live: a maintainer approves it on npmjs.com (or npm stage approve) with 2FA."
           fi

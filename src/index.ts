@@ -19,8 +19,20 @@ export {
 export type { Rgba, Rng, Size } from "./core/index.js";
 
 // brand
-export { BRAND, LOGO, PALETTES, logoSvg, palette } from "./brand/index.js";
-export type { LogoSvgOptions, PaletteName } from "./brand/index.js";
+export {
+  BRAND,
+  LOGO,
+  LOGO_ICON_WEIGHT,
+  PALETTES,
+  appIconSvg,
+  logoSvg,
+  palette,
+} from "./brand/index.js";
+export type {
+  AppIconSvgOptions,
+  LogoSvgOptions,
+  PaletteName,
+} from "./brand/index.js";
 
 // gradient
 export {
@@ -79,12 +91,15 @@ export {
   coverSpec,
   measureText,
   ogCard,
+  parseCoverChoices,
+  parseCoverInput,
   ribbon,
   ribbonCurves,
   wrapText,
 } from "./scene/index.js";
 export type {
   BrandBackgroundOptions,
+  CoverChoices,
   CoverGlow,
   CoverInput,
   CoverLayers,
@@ -100,8 +115,10 @@ export type {
 export {
   FLOW_PRESET_NAMES,
   FLOW_SHAPES,
+  fieldPresetNames,
   fieldPresets,
   flowPresets,
+  parseFieldPreset,
   randomFlow,
   renderField,
 } from "./field/index.js";

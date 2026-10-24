@@ -35,7 +35,7 @@ import {
 } from "@dagnam/vis";
 
 brandBackground({ width: 1200, height: 630 }); // the og-default look, any size (SVG string)
-ogCard({ title: "Build AI Systems Visually", subtitle: "Dagnam.AI" }); // SVG with real Inter metrics
+ogCard({ title: "Build AI Systems Visually", subtitle: "Dagnam.AI" }); // SVG in the site's fonts (Unbounded text, Moonhouse wordmark), wrapped with their metrics
 ogCard({
   title: "Building a reasoning model",
   excerpt: "Data, architecture and training on one GPU.",
@@ -64,6 +64,19 @@ ribbon({ width: 1600, height: 900, lines: 120, mesh: true }); // the wave-mesh r
   - A stop is a colour string or `{ color, at?, opacity? }`.
 - **Patterns**: `pattern(spec)` returns `{ svg, defs, fill, cssBackground, tile }`. Kinds: `dots`, `grid`, `lines`, `stripes`, `dagMesh`, `contours`, `noise`.
 - **Covers**: `coverSpec(input)` returns a `glows` gradient spec and `coverLayers(input)` the same cover as `{ base, glows }`: one deterministic look per `family` (a topic; omit it and the `item` is its own family), nudged per `item`, with optional `index`/`count` for an ordered family and the editor choices `seed`, `hue`, `region` and `intensity` (`null` or omitted means derive as usual). `family: ""` and a `null` `index` or `count` throw a `VisError`, as does any non-finite number; an empty `seed` means no seed. `coverSpec` lists the echo first so the main glow paints on top. `gradient(coverSpec({ family, item, theme, variant })).css` is the background.
+- **Strict parsers**: `coverSpec` clamps; to reject typos in stored or authored data, parse first. `parseCoverInput(value)` checks the whole cover input (`item`, `theme`, `variant` required; `family`, `index`, `count`, `seed`, `hue` -15..15, `region` integer 0..4, `intensity` 0.6..1.4 optional, `null` allowed for `family`, `seed`, `hue`, `region` and `intensity`; `count` is at most 10000 and `index` is below `count`, which defaults to 1); `parseCoverChoices(value)` checks just the editor's choices (`family`, `seed`, `hue`, `region`, `intensity`); `parseFieldPreset(value)` returns a `FieldPresetName` (`fieldPresetNames` lists them in `fieldPresets` order). The two cover parsers throw a `VisError` naming the field (`cover.hue: expected a number in -15..15, got 20`) on an unknown key, a wrong type, a non-plain object, `NaN`/`Infinity`, an out-of-range number (never clamped) or a string over 200 characters, and return a new object with only the keys given; `parseFieldPreset` throws, listing the known names, for anything but an exact preset name. So `coverSpec(parseCoverInput(x))` never throws. Omit `family` or use `null` for no family; `family: ""` is rejected (`coverSpec` throws on it). The `CoverChoices` type is the choices subset of `CoverInput`.
+
+  ```ts
+  import { coverSpec, parseCoverChoices, parseFieldPreset } from "@dagnam/vis";
+
+  const stored = JSON.parse(json) as Record<string, unknown>;
+  const { kind, field_preset, ...rest } = stored; // neither is a cover choice
+  const choices = parseCoverChoices(rest); // throws on a typo or an out-of-range value
+  const spec = coverSpec({ ...choices, item, theme: "dark", variant: "card" });
+  const preset =
+    field_preset === undefined ? undefined : parseFieldPreset(field_preset);
+  ```
+
 - **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`; or `title`, `excerpt` and `cover` for the social card), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry).
 - **Text and core helpers**: `measureText`, `wrapText`, `FONT_FAMILY`, `createRng`, `fmt`, colour helpers (`parseColor`, `toHex`, `toCss`, `mix`, `ramp`, `withAlpha`, `toVec3`), `VisError`. `measureText` and `wrapText` take at most 10,000 characters of text and `wrapText` returns at most 100 lines. The SVG builder, the validators, the stop pipeline, the geometry helpers and the font metrics are internal and not exported.
 
@@ -91,15 +104,17 @@ A few differences between the generators are deliberate; check them before wirin
 ### Node API
 
 ```ts
-import { favicons, renderPng } from "@dagnam/vis/node";
+import { appIcon, favicons, renderPng } from "@dagnam/vis/node";
 import { ogCard } from "@dagnam/vis";
 
 const png = await renderPng(ogCard({ title: "Hi" }), { width: 1200 }); // Buffer
 await favicons({ outDir: "public" }); // favicon.ico/svg, apple-touch-icon, PWA icons, site.webmanifest
+await appIcon({ outDir: "build/icons" }); // macOS app icon: app-icon.svg, app-icon-<16..1024>.png, app-icon.icns
 ```
 
 - `renderPng(svg, { width?, background?, fontFiles? })` resolves to a PNG `Buffer`. Text is drawn with the bundled fonts only (Inter, Unbounded, Moonhouse; no system fonts), so output does not depend on the machine's fonts.
-- `favicons({ outDir, background?, color?, name?, shortName? })` writes the files listed in `FAVICON_FILES` and resolves to their paths. The icon `src` values in `site.webmanifest` are relative (`icon-192.png`, not `/icon-192.png`), so they resolve against the manifest's own URL and work at the site root and under any sub-path; serve the icons next to the manifest and link it with `<link rel="manifest" href="site.webmanifest">` (a path relative to the page, or an absolute one for a root deployment).
+- `favicons({ outDir, background?, color?, name?, shortName? })` writes the files listed in `FAVICON_FILES` and resolves to their paths. Every icon draws the mark in `BRAND.mark` (the dark theme's deep red, `oklch(52.768% 0.21534 29.097)`) at `LOGO_ICON_WEIGHT` (an extra 48-unit round stroke, so the strands survive at 16 px); the plain `LOGO` and `logoSvg()` are unchanged. `site.webmanifest` has `id`, `start_url` and `scope` `"/"` and root-absolute icon `src` values (`/icon-192.png`), so serve the set from the site root and link it with `<link rel="manifest" href="/site.webmanifest">`.
+- `appIcon({ outDir, background?, color? })` writes `APP_ICON_FILES`: the SVG master (`app-icon.svg`, `appIconSvg()` in the root entry: an 824 px superellipse plate on a transparent 1024 canvas, Apple's icon grid), its PNGs at 16, 32, 64, 128, 256, 512 and 1024 px and `app-icon.icns`. `icnsFromPngs(pngs)` packs square PNGs into an `.icns` with no dependency (chunk types `icp4 icp5 ic07 ic08 ic09 ic10 ic11 ic12 ic13 ic14`: `iconutil` writes ic07 to ic14 and reads icp4 and icp5).
 - `icoFromPngs(pngs)` packs PNG buffers into an `.ico`; `FONT_FILES` lists the bundled font paths; `run(argv, io)` is the CLI entry (it never calls `process.exit`).
 
 ### Security
@@ -237,8 +252,8 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
 
 <div className="relative h-64">
   <VisBackground
-    effect="dither" // "dither" | "pixel" (createPixelBlast) | "terminal" | "glitch" | "ribbon"
-    options={{ waveSpeed: 0.15, colors: ["#e64040"] }} // that effect's options, typed per effect
+    effect="dither" // "dither" | "pixel" (createPixelBlast) | "terminal" | "glitch" | "ribbon" | "field"
+    options={{ waveSpeed: 0.15, colors: ["#e64040"] }} // that effect's options, typed per effect (a field needs `spec`)
     className="absolute inset-0" // layout is yours: the wrapper only sets overflow: hidden
     onError={(e) => report(e)} // optional: no WebGL2, invalid options
   />
@@ -262,6 +277,11 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
 - **Options.** A changed value is applied with `update()` on the running effect (`seed` re-phases, `colors`
   recolours); equal re-renders do nothing. Adding or removing an option key (turning `loop` on or off, dropping
   `colors`) recreates the effect, because `update()` cannot clear a value.
+- **`effect="field"`** takes `options.spec`, a `FieldSpec` (required; for example `fieldPresets["fluid-dawn"]`), and
+  the common options except `seed` and `colors`, which belong to the spec. A field's spec is fixed for the life of a
+  handle, so a spec that changes by value recreates the effect (the canvas is replaced, and one frame of flash is
+  possible); an equal spec in a fresh object does nothing, and the other options still go through `update()`. An
+  invalid new spec is contained like any creation failure.
 - **Failures stay local.** Invalid options (or a missing WebGL2) when the effect is created leave no canvas, call
   `onError` once (`console.error` without it) and keep the rest of the page rendering; changing the options retries.
   An invalid update keeps the canvas and the last valid options and calls `onError` once. An `onError` that itself
@@ -282,6 +302,7 @@ npx dag-vis background --w 1500 --h 500 --focus 0.8,0.5 --out banner.svg
 npx dag-vis gradient --spec spec.json --w 1200 --h 630 --out g.png
 npx dag-vis pattern --spec pattern.json --out tile.svg
 npx dag-vis favicons --out public
+npx dag-vis app-icon --out build/icons
 npx dag-vis presets                                   # every preset, one "name<TAB>kind" line each
 npx dag-vis export lunar --out lunar.png --size og
 npx dag-vis export fluted-ember --out ember.mp4 --w 1920 --h 1080 --fps 30 --duration 6 --loop
@@ -291,7 +312,7 @@ npx dag-vis sheet --out sheet.png                     # every preset in one cont
 
 A spec is a JSON object in a file of at most 1 MiB, for example `{ "kind": "linear", "angle": 90, "stops": ["#ef4444", "#10abba"] }` for `gradient` and `{ "kind": "dots", "spacing": 24 }` for `pattern`. Numbers are plain decimals (`600`, `0.5`). Options take `--name value` or `--name=value`. `dag-vis --help` (or `-h`, anywhere among the arguments) prints every option.
 
-For `og`, `background`, `gradient` and `pattern`, `--out` must end in `.svg` or `.png` (any case). `.png` is rasterised with the bundled fonts (it needs `@resvg/resvg-js`) and `.svg` is written as is; anything else (`card.jpg`, `.webp`, no extension, a trailing dot, `-`) exits `1` with `dag-vis: --out must end in .svg or .png, got "card.jpg"` and writes nothing. `favicons --out` is a directory and has no extension rule. Those commands and `sheet` write files atomically (a temp file renamed over the target, so an existing file is replaced even if read-only and the new one gets the default mode) and create missing parent directories. Exit status is `0` on success and `1` with a single `dag-vis: …` line on stderr for any invalid option or spec.
+For `og`, `background`, `gradient` and `pattern`, `--out` must end in `.svg` or `.png` (any case). `.png` is rasterised with the bundled fonts (it needs `@resvg/resvg-js`) and `.svg` is written as is; anything else (`card.jpg`, `.webp`, no extension, a trailing dot, `-`) exits `1` with `dag-vis: --out must end in .svg or .png, got "card.jpg"` and writes nothing. `favicons --out` and `app-icon --out` are directories and have no extension rule. Those commands and `sheet` write files atomically (a temp file renamed over the target, so an existing file is replaced even if read-only and the new one gets the default mode) and create missing parent directories. Exit status is `0` on success and `1` with a single `dag-vis: …` line on stderr for any invalid option or spec.
 
 `export <preset|spec.json>` takes a preset name (see `presets`) or a `.json` spec file (a field, gradient or ribbon spec). The format is the `--out` extension (`png`, `jpg`, `jpeg`, `webp`, `avif`, `svg`, `gif`, `apng`, `mp4`, `webm`) or `--format`, which also takes `png-seq` (then `--out` is the folder). The size is `--size og|square|story|wallpaper|4k|header` (1200x630, 1080x1080, 1080x1920, 2560x1440, 3840x2160, 1500x500) or `--w` and `--h` in whole pixels; the default is `og`. Animations take `--fps` (1 to 60, default 30), `--duration` (seconds, default 6), `--loop` (a seamless loop), `--alpha` (webm and apng) and `--poster FILE` (frame 0 as a PNG); stills take `--t`, the second to draw. `--quality` (0 to 1, default 0.8) applies to jpeg, webp, avif, mp4 and webm. An option that does not apply to the chosen format is an error, not ignored. Formats that need ffmpeg, its limits and the other guards are in [Exports](#exports); `export` does not create the folder of `--out`, `sheet --out` must end in `.png` and does. `sheet` takes `--tile 300x170`, `--gap` and `--columns`. `--alpha` is stricter here than in the library: the CLI accepts it only for webm and apng, while `exportAnimation` and `exportCanvas` also take `alpha: true` for `png-seq` (which always keeps transparency, so it changes nothing) and refuse it for mp4, gif and, in the browser, jpeg. A warning (a GIF over 800 px wide or over 50 fps) goes to stderr and the exit status stays `0`.
 
@@ -342,11 +363,11 @@ Options and gradient specs are validated at the boundary, including ones that co
 - Gradient overlay images must be raster `data:` URIs (`data:image/png`, `jpeg`, `gif` or `webp`) to rasterise (see Security); a URL, a path or an `image/svg+xml` data URI works in the CSS and SVG output only.
 - `pattern(...).cssBackground` repeats seamlessly only for `dots`, `grid`, `stripes` and `lines` at multiples of 90 degrees, with the default sample size; see the `PatternResult` doc comment in [`src/pattern/types.ts`](https://github.com/Dagnam-AI/dag-vis/blob/main/src/pattern/types.ts) for the rest.
 - Colours are parsed as hex, `rgb()`/`rgba()` and `oklch()` only: no CSS Color 4 `none`, no `turn`/`rad`/`grad` hue units, no `calc()`, no named colours.
-- `brandBackground` reconstructs the production og-default look from parameters; it is not a pixel match, and its defaults may be retuned after design review.
+- `brandBackground` reconstructs the production og-default look from parameters (deep red `BRAND.accent.dark`, a crisp outline with a faint glow, the glow pooled at the right edge); it is not a pixel match, and its defaults may be retuned after design review.
 
 ## Layering
 
-`core ← brand ← gradient, pattern ← scene ← node`, with `field` and `export` beside that chain: each imports `core` only, and `animate` and `node` import them (the root imports `field` but never `export`). Enforced by eslint `no-restricted-imports` per layer and `tests/structure.test.ts`; `node:*` and `@resvg/resvg-js` are imported only under `src/node/`. No file is over 500 lines and every source file has a mirrored test.
+`core ← brand ← gradient, pattern ← scene ← node`, with `field` and `export` beside that chain: each imports `core` only, and `animate` and `node` import them (the root imports `field` but never `export`; `react` imports `field` for the `FieldSpec` type only). Enforced by eslint `no-restricted-imports` per layer and `tests/structure.test.ts`; `node:*` and `@resvg/resvg-js` are imported only under `src/node/`. No file is over 500 lines and every source file has a mirrored test.
 
 ## Develop
 

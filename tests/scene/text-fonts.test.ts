@@ -7,8 +7,12 @@ import {
   fontWidth,
   middleBaseline,
   topBaseline,
+  DISPLAY_FAMILY,
+  SANS_FAMILY,
+  wrapFont,
   wrapGreedy,
 } from "../../src/scene/text-fonts.js";
+import type { FontMetrics } from "../../src/scene/text-fonts.js";
 
 /** Every character 10 px wide: lines of N characters fit a width of 10 * N. */
 const tenPx = (t: string): number => 10 * Array.from(t).length;
@@ -162,5 +166,205 @@ describe("asciiPunctuation", () => {
       "\u2018\u2019\u201a\u201c\u201d\u201e\u2013\u2014\u2022\u2026",
     ))
       expect(MOONHOUSE.advances.has(ch.codePointAt(0) ?? 0)).toBe(true);
+  });
+});
+
+describe("the brand font families", () => {
+  it("name the faces exactly as the bundled files name themselves", () => {
+    // resvg matches family names case-sensitively: the display face is lowercase.
+    expect(DISPLAY_FAMILY).toBe("moonhouse, sans-serif");
+    expect(SANS_FAMILY).toBe("Unbounded, sans-serif");
+  });
+});
+
+describe("wrapFont", () => {
+  /** Every glyph 1 em wide: at size 10, a line of N characters is 10 N px. */
+  const SQUARE: FontMetrics = {
+    unitsPerEm: 1000,
+    ascent: 800,
+    descent: 200,
+    advances: new Map(),
+    fallback: 1000,
+  };
+  const wrap = (
+    text: string,
+    maxWidth: number,
+    extra: Partial<Parameters<typeof wrapFont>[2]> = {},
+  ): string[] =>
+    wrapFont(SQUARE, text, { size: 10, maxWidth, maxLines: 9, ...extra });
+
+  it("keeps text that fits on one line and gives nothing for no text", () => {
+    expect(wrap("hello world", 110)).toEqual(["hello world"]);
+    expect(wrap("", 110)).toEqual([]);
+    expect(wrap("a", 110, { balance: true })).toEqual(["a"]);
+  });
+
+  it("wraps greedily: a word that fits the width exactly stays, the next goes down", () => {
+    expect(wrap("aaaa bb cc dd", 100)).toEqual(["aaaa bb cc", "dd"]);
+    expect(wrap("aaaa bb cc dd", 99)).toEqual(["aaaa bb", "cc dd"]);
+  });
+
+  it("balances: the same number of lines at the narrowest width", () => {
+    expect(wrap("aaaa bb cc dd", 100, { balance: true })).toEqual([
+      "aaaa bb",
+      "cc dd",
+    ]);
+    const lines = wrap("one two three four five six seven", 200, {
+      balance: true,
+    });
+    expect(lines.length).toBe(
+      wrap("one two three four five six seven", 200).length,
+    );
+    expect(lines.join(" ")).toBe("one two three four five six seven");
+    for (const line of lines) expect(line.length * 10).toBeLessThanOrEqual(200);
+    // already even: unchanged
+    expect(wrap("aa bb", 50, { balance: true })).toEqual(["aa bb"]);
+    expect(wrap("aaaa bbbb", 45, { balance: true })).toEqual(["aaaa", "bbbb"]);
+  });
+
+  it("never gives balance a reason to add a line, break a word, or exceed maxWidth", () => {
+    for (const text of [
+      "a bb ccc dddd eeeee ffffff",
+      "x ".repeat(40).trim(),
+      "ab cd ef gh ij kl",
+    ])
+      for (const maxWidth of [30, 55, 80, 140, 400]) {
+        const plain = wrap(text, maxWidth);
+        const even = wrap(text, maxWidth, { balance: true });
+        expect(even.length, `${text} @${maxWidth}`).toBe(plain.length);
+        expect(even.join(" ")).toBe(plain.join(" "));
+        for (const line of even)
+          expect(line.length * 10).toBeLessThanOrEqual(maxWidth);
+      }
+  });
+
+  it("never splits a word to balance: a long word with a short tail stays whole", () => {
+    expect(wrap("aaaaaaaaaa b", 105, { balance: true })).toEqual([
+      "aaaaaaaaaa",
+      "b",
+    ]);
+    expect(wrap("aaaaaaaaaa bb cc", 110, { balance: true })).toEqual([
+      "aaaaaaaaaa",
+      "bb cc",
+    ]);
+    expect(wrap("bb aaaaaaaaaaaa c", 125, { balance: true })).toEqual([
+      "bb",
+      "aaaaaaaaaaaa",
+      "c",
+    ]);
+    expect(wrap("ccc ccc aaaaaaaaaa d", 105, { balance: true })).toEqual([
+      "ccc ccc",
+      "aaaaaaaaaa",
+      "d",
+    ]);
+  });
+
+  it("keeps whole words in every balanced line, over a word list and many widths", () => {
+    const words = [
+      "a",
+      "bb",
+      "ccc",
+      "ddddd",
+      "eeeeeeee",
+      "ffffffffff",
+      "gggggggggggg",
+    ];
+    for (let seed = 0; seed < 60; seed++) {
+      // a deterministic pseudo-random sentence of 2..7 words
+      const text = Array.from(
+        { length: 2 + (seed % 6) },
+        (_, i) => words[(seed * 7 + i * 3 + ((i * seed) % 5)) % words.length],
+      ).join(" ");
+      for (const maxWidth of [120, 130, 150, 200, 260, 400]) {
+        const plain = wrap(text, maxWidth);
+        const even = wrap(text, maxWidth, { balance: true });
+        const label = `${text} @${maxWidth}`;
+        // every word is at most 120 px, so the plain wrap never splits one
+        expect(even.join(" "), label).toBe(text);
+        expect(even.length, label).toBe(plain.length);
+        for (const line of even)
+          expect(line.length * 10, label).toBeLessThanOrEqual(maxWidth);
+      }
+    }
+  });
+
+  it("does not split the brand card's long words in Unbounded", () => {
+    const at = (text: string, maxWidth = 720) =>
+      wrapFont(UNBOUNDED, text, {
+        size: 56.7,
+        maxWidth,
+        maxLines: 3,
+        balance: true,
+      });
+    expect(at("Hyperparameter optimization")).toEqual([
+      "Hyperparameter",
+      "optimization",
+    ]);
+    expect(at("Backpropagation explained")).toEqual([
+      "Backpropagation",
+      "explained",
+    ]);
+    expect(at("Internationalization done right")).toEqual([
+      "Internationalization",
+      "done right",
+    ]);
+    expect(at("Reinforcement learning fundamentals")).toEqual([
+      "Reinforcement",
+      "learning",
+      "fundamentals",
+    ]);
+    for (const title of [
+      "Hyperparameter optimization",
+      "Backpropagation explained",
+      "Internationalization done right",
+      "Reinforcement learning fundamentals",
+    ])
+      expect(at(title).join(" ")).toBe(title);
+  });
+
+  it("breaks a word wider than the line between grapheme clusters", () => {
+    expect(wrap("abcdefghij", 40)).toEqual(["abcd", "efgh", "ij"]);
+    expect(wrap("ab abcdefghij", 40)).toEqual(["ab", "abcd", "efgh", "ij"]);
+    // an emoji with a variation selector is one cluster, never split
+    expect(wrap("a\u{2764}\u{fe0f}b", 20)).toEqual(["a\u{2764}\u{fe0f}", "b"]);
+    // a glyph wider than the line still gets a line of its own
+    expect(wrap("abc", 5)).toEqual(["a", "b", "c"]);
+  });
+
+  it("ends the last line in an ellipsis that fits when the text runs past maxLines", () => {
+    const lines = wrap("aaaa bbbb cccc dddd", 50, { maxLines: 2 });
+    expect(lines).toEqual(["aaaa", "bbbb…"]);
+    expect(wrap("aaaa bbbb", 5, { maxLines: 1 })).toEqual(["…"]);
+    expect(wrap("aaaa bbbb", 45, { maxLines: 1 })).toEqual(["aaa…"]);
+    for (const line of lines) expect(line.length * 10).toBeLessThanOrEqual(50);
+    // balance does not apply to a truncated text
+    expect(
+      wrap("aaaa bbbb cccc dddd", 50, { maxLines: 2, balance: true }),
+    ).toEqual(lines);
+  });
+
+  it("counts letter spacing after every code point", () => {
+    // 5 characters at 10 px + 2 px spacing each = 60 px
+    expect(wrap("abcde", 59, { letterSpacing: 2 })).toEqual(["abcd", "e"]);
+    expect(wrap("abcde", 60, { letterSpacing: 2 })).toEqual(["abcde"]);
+  });
+
+  it("measures with the real font: the brand card copy wraps to even lines", () => {
+    const at = (text: string, size: number, maxWidth: number) =>
+      wrapFont(UNBOUNDED, text, { size, maxWidth, maxLines: 3, balance: true });
+    expect(at("Build AI Systems Visually", 56.7, 720)).toEqual([
+      "Build AI Systems",
+      "Visually",
+    ]);
+    expect(
+      at(
+        "A simpler way to design and orchestrate modern AI workflows.",
+        25.2,
+        660,
+      ),
+    ).toEqual([
+      "A simpler way to design and",
+      "orchestrate modern AI workflows.",
+    ]);
   });
 });

@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { MOONHOUSE } from "../../src/brand/moonhouse-metrics.js";
+import { UNBOUNDED } from "../../src/brand/unbounded-metrics.js";
 import { VisError } from "../../src/core/errors.js";
 import { ogCard } from "../../src/scene/og-card.js";
-import { MAX_TEXT_LENGTH, measureText } from "../../src/scene/text.js";
+import { fontWidth } from "../../src/scene/text-fonts.js";
+import { MAX_TEXT_LENGTH } from "../../src/scene/text.js";
+import { textContent } from "../helpers/svg-text.js";
 import { expectGolden } from "../helpers/golden.js";
 import { rasterize } from "../helpers/render.js";
 
@@ -16,7 +20,8 @@ interface Line {
   x: number;
   y: number;
   size: number;
-  weight: "regular" | "bold";
+  /** The face the line names in font-family: the display face is Moonhouse, the rest Unbounded. */
+  family: string;
   letterSpacing: number;
   text: string;
 }
@@ -32,22 +37,23 @@ function textLines(svg: string): Line[] {
       x: Number(m[1]),
       y: Number(m[2]),
       size: Number(m[4]),
-      weight: attrs.includes('font-weight="700"') ? "bold" : "regular",
+      family: /font-family="([^"]*)"/.exec(attrs)?.[1] ?? "",
       letterSpacing: Number(/letter-spacing="([\d.]+)"/.exec(attrs)?.[1] ?? 0),
-      text: (m[5] ?? "").replace(/<[^>]+>/g, ""),
+      text: textContent(m[5] ?? ""),
     });
   }
   return out;
 }
 
-/** Right edge in px by measureText. */
+/** Right edge in px by the advances of the font the line is set in. */
 const rightEdge = (l: Line): number =>
   l.x +
-  measureText(l.text, {
-    size: l.size,
-    weight: l.weight,
-    letterSpacing: l.letterSpacing,
-  });
+  fontWidth(
+    l.family.startsWith("moonhouse") ? MOONHOUSE : UNBOUNDED,
+    l.text,
+    l.size,
+  ) +
+  l.letterSpacing * Array.from(l.text).length;
 
 describe("ogCard", () => {
   it("renders 1200×630 by default with the logo, wordmark, wrapped title, rule, subtitle and footer", () => {
@@ -55,17 +61,80 @@ describe("ogCard", () => {
     expect(svg).toContain('width="1200" height="630"');
     expect(svg).toContain('fill="url(#vis1-band)"'); // brand background underneath
     expect(svg).toContain('<path d="M615.026245'); // logo mark
-    expect(svg).toContain(">Dagnam<"); // wordmark with red dot
-    expect(svg).toContain('fill="#ef4444">.</tspan>');
-    expect(
-      (svg.match(/font-weight="700"/g) ?? []).length,
-    ).toBeGreaterThanOrEqual(2);
-    expect(svg).toContain("Build AI Systems");
-    expect(svg).toContain(">Visually<");
-    expect(svg).toContain("A simpler way to design and");
-    expect(svg).toContain("Visual • Modular • Production-ready");
-    expect(svg).toContain('font-family="Inter, system-ui, sans-serif"');
+    expect(svg).toContain(">DAGNAM<"); // Moonhouse wordmark with a red .AI
+    expect(svg).toContain('fill="#ef4444">.AI</tspan>');
+    const lines = textLines(svg);
+    expect(lines.map((l) => l.text)).toEqual([
+      "DAGNAM.AI",
+      "Build AI Systems",
+      "Visually",
+      "A simpler way to design and",
+      "orchestrate modern AI workflows.",
+      "Visual • Modular • Production-ready",
+    ]);
     expect(svg).toContain('<rect x="90"'); // accent rule at the left margin
+    // The footer's bullets are the brand red.
+    expect(svg.match(/<tspan fill="#ef4444">•<\/tspan>/g)).toHaveLength(2);
+  });
+
+  it("sets all text in the site's fonts: Unbounded 400 for title, subtitle, eyebrow and footer, Moonhouse for the wordmark", () => {
+    const svg = ogCard({ ...opts, eyebrow: "Docs" });
+    const lines = textLines(svg);
+    expect(lines).toHaveLength(7);
+    for (const l of lines)
+      expect(l.family, l.text).toBe(
+        l.text === "DAGNAM.AI"
+          ? "moonhouse, sans-serif"
+          : "Unbounded, sans-serif",
+      );
+    // every Unbounded line is weight 400 (the only weight bundled); nothing is bold or Inter
+    expect(svg.match(/font-weight="400"/g)).toHaveLength(6);
+    expect(svg).not.toContain('font-weight="700"');
+    expect(svg).not.toContain("Inter");
+  });
+
+  it("wraps the brand copy to even lines in Unbounded's wide metrics, clear of the art", () => {
+    const lines = textLines(ogCard(opts));
+    const sub = lines.filter((l) => l.size === 25.2);
+    // 60 characters of subtitle at 25.2 px are 949 px in Unbounded: two lines, balanced.
+    expect(sub.map((l) => l.text)).toEqual([
+      "A simpler way to design and",
+      "orchestrate modern AI workflows.",
+    ]);
+    for (const l of lines) {
+      expect(rightEdge(l), l.text).toBeLessThanOrEqual(0.6 * 1200 + 90);
+      expect(l.x).toBeGreaterThanOrEqual(90);
+    }
+    // the second subtitle line is the longer one, but by less than 25% (an even pair)
+    expect(
+      fontWidth(UNBOUNDED, sub[1]?.text ?? "", 25.2) /
+        fontWidth(UNBOUNDED, sub[0]?.text ?? "", 25.2),
+    ).toBeLessThan(1.25);
+  });
+
+  it("never splits a long word to balance the title", () => {
+    for (const [title, expected] of [
+      ["Hyperparameter optimization", ["Hyperparameter", "optimization"]],
+      ["Backpropagation explained", ["Backpropagation", "explained"]],
+      [
+        "Internationalization done right",
+        ["Internationalization", "done right"],
+      ],
+      [
+        "Reinforcement learning fundamentals",
+        ["Reinforcement", "learning", "fundamentals"],
+      ],
+    ] as const)
+      for (const [width, height] of [
+        [1200, 630],
+        [1080, 1080],
+      ] as const)
+        expect(
+          textLines(ogCard({ title, width, height }))
+            .filter((l) => l.size > 40)
+            .map((l) => l.text),
+          `${title} ${width}x${height}`,
+        ).toEqual(expected);
   });
 
   it("shows an eyebrow, light theme colours, and escapes text", () => {
@@ -87,12 +156,12 @@ describe("ogCard", () => {
   it("caps the title at three lines, or two when a subtitle follows, ending in an ellipsis", () => {
     const long = "word ".repeat(40).trim();
     const alone = textLines(ogCard({ title: long })).filter(
-      (l) => l.size === 69.3,
+      (l) => l.size === 56.7,
     );
     expect(alone).toHaveLength(3);
     expect(alone[2]?.text.endsWith("…")).toBe(true);
     const withSub = textLines(ogCard({ title: long, subtitle: "sub" })).filter(
-      (l) => l.size === 69.3,
+      (l) => l.size === 56.7,
     );
     expect(withSub).toHaveLength(2);
     expect(withSub[1]?.text.endsWith("…")).toBe(true);
@@ -116,6 +185,7 @@ describe("ogCard", () => {
       background: {
         focus: [0.5, 0.5],
         hairlines: 0,
+        edge: 0,
         width: 5,
         height: 5,
         seed: 9,
@@ -148,7 +218,7 @@ describe("ogCard", () => {
       for (const c of [content, { title: content.title }, { title: "Hi" }]) {
         const lines = textLines(ogCard({ ...c, width, height }));
         const [word, ...rest] = lines;
-        expect(word?.text).toBe("Dagnam.AI");
+        expect(word?.text).toBe("DAGNAM.AI");
         // Baselines run top to bottom, strictly increasing, all inside the canvas.
         const ys = rest.map((l) => l.y);
         expect(ys).toEqual([...ys].sort((a, b) => a - b));
@@ -208,7 +278,7 @@ describe("ogCard", () => {
       eyebrow: "\u{ad}",
       footer: "",
     });
-    expect(textLines(blank).map((l) => l.text)).toEqual(["Dagnam.AI", "T"]);
+    expect(textLines(blank).map((l) => l.text)).toEqual(["DAGNAM.AI", "T"]);
     expect(blank).toBe(ogCard({ title: "T" }));
   });
 

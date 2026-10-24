@@ -25,6 +25,7 @@ import {
   writeOut,
 } from "./cli-support.js";
 import type { CliIo, Command, Options } from "./cli-support.js";
+import { appIcon } from "./app-icon.js";
 import { favicons } from "./favicons.js";
 import { renderPng } from "./render-png.js";
 import { messageOf } from "./util.js";
@@ -38,6 +39,7 @@ export const USAGE = `Dagnam visuals from the command line (dag-vis <command> [o
   dag-vis gradient --spec spec.json [--w W --h H] --out f.(svg|png)
   dag-vis pattern --spec spec.json --out f.(svg|png)
   dag-vis favicons --out DIR [--background C --color C]
+  dag-vis app-icon --out DIR [--background C --color C]
   dag-vis export <preset|spec.json> --out FILE [--format F] [--w N --h N | --size NAME]
                  [--fps N --duration S --loop] [--quality Q] [--t S] [--alpha] [--poster FILE]
   dag-vis presets
@@ -45,10 +47,16 @@ export const USAGE = `Dagnam visuals from the command line (dag-vis <command> [o
 
 For og, background, gradient and pattern an --out must end in .svg or .png (any
 case), or the command exits 1 and writes nothing; .png is rasterised with the
-bundled Inter fonts (needs @resvg/resvg-js), .svg is written as is. favicons
---out is a directory. These commands and sheet write atomically (a temp file
-renamed over the target, so an existing file is replaced even if read-only, and
-the new one gets the default mode) and create missing parent directories.
+bundled fonts (needs @resvg/resvg-js), .svg is written as is. favicons and
+app-icon take a directory as --out: favicons writes favicon.ico, favicon.svg,
+apple-touch-icon.png, icon-192.png, icon-512.png, icon-maskable-512.png and
+site.webmanifest; app-icon writes the macOS app icon (a squircle plate on a
+transparent 1024 canvas) as app-icon.svg, app-icon-<16|32|64|128|256|512|1024>.png
+and app-icon.icns. Both draw the mark in the brand's deep red unless --color is
+given; --background (opaque) is the tile, or the plate. These commands and sheet
+write atomically (a temp file renamed over the target, so an existing file is
+replaced even if read-only, and the new one gets the default mode) and create
+missing parent directories.
 Numbers are plain decimals (600, 0.5); --focus is x,y in 0..1.
 Options take "--name value" or "--name=value" (use the second form for a value
 that starts with "--"). A spec is a JSON object in a file of at most 1 MiB. To
@@ -201,12 +209,17 @@ const COMMANDS = new Map<string, Command>([
       },
     },
   ],
-  [
-    "favicons",
+  ...(
+    [
+      ["favicons", favicons],
+      ["app-icon", appIcon],
+    ] as const
+  ).map(([name, write]): [string, Command] => [
+    name,
     {
       options: ["out", "background", "color"],
       async run(opts, io) {
-        const written = await favicons({
+        const written = await write({
           outDir: required(opts, "out"),
           ...defined({
             background: opts.get("background"),
@@ -216,7 +229,7 @@ const COMMANDS = new Map<string, Command>([
         io.stdout(written.map((p) => `wrote ${p}\n`).join(""));
       },
     },
-  ],
+  ]),
 ]);
 
 /**

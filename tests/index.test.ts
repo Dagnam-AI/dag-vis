@@ -18,6 +18,21 @@ describe("@dagnam/vis root barrel", () => {
     expect(vis.ribbon(svgOpts)).toContain("<svg");
   });
 
+  it("exposes the strict cover and preset parsers, and the CoverChoices type, from the root", () => {
+    const choices: vis.CoverChoices = vis.parseCoverChoices({ hue: 5 });
+    const input: vis.CoverInput = vis.parseCoverInput({
+      ...choices,
+      item: "a",
+      theme: "dark",
+      variant: "card",
+    });
+    expect(vis.coverSpec(input).kind).toBe("glows");
+    const name: vis.FieldPresetName = vis.parseFieldPreset("lunar");
+    expect(vis.fieldPresetNames).toContain(name);
+    expect(vis.fieldPresetNames).toEqual(Object.keys(vis.fieldPresets));
+    expect(() => vis.parseCoverInput({})).toThrow(vis.VisError);
+  });
+
   it("exposes renderField with its option and frame types from the root", () => {
     const dir: vis.FlutedFieldDirection = "vertical";
     expect(dir).toBe("vertical");
@@ -158,14 +173,17 @@ describe("@dagnam/vis root barrel", () => {
       "FONT_FAMILY",
       "FREEFORM_PALETTES",
       "LOGO",
+      "LOGO_ICON_WEIGHT",
       "PALETTES",
       "VisError",
       "animatedGradientCss",
+      "appIconSvg",
       "brandBackground",
       "brandBackgroundLayers",
       "coverLayers",
       "coverSpec",
       "createRng",
+      "fieldPresetNames",
       "fieldPresets",
       "flowPresets",
       "fmt",
@@ -179,6 +197,9 @@ describe("@dagnam/vis root barrel", () => {
       "ogCard",
       "palette",
       "parseColor",
+      "parseCoverChoices",
+      "parseCoverInput",
+      "parseFieldPreset",
       "pattern",
       "ramp",
       "randomFlow",

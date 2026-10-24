@@ -14,6 +14,8 @@ import { gradient } from "../gradient/index.js";
 import type { GradientSpec } from "../gradient/index.js";
 import type { OgCardOptions } from "./og-card.js";
 import {
+  DISPLAY_FAMILY,
+  SANS_FAMILY,
   asciiPunctuation,
   fontWidth,
   middleBaseline,
@@ -41,10 +43,8 @@ const SOCIAL = {
   addressSize: 22,
 } as const;
 const TEXT_WIDTH = SOCIAL.width - 2 * SOCIAL.pad;
-// The family as the font file names itself, lowercase: resvg matches family names
-// case-sensitively (a browser does not), and "Moonhouse" would fall back to Inter.
-const DISPLAY = "moonhouse, sans-serif";
-const SANS = "Unbounded, sans-serif";
+const DISPLAY = DISPLAY_FAMILY;
+const SANS = SANS_FAMILY;
 
 /**
  * The social card. Text is set in the two bundled brand fonts: lines are wrapped

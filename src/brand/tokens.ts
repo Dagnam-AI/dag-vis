@@ -15,12 +15,20 @@ export function deepFreeze<T>(value: T): T {
   return value;
 }
 
+/** The dark theme's primary: the one deep red behind `BRAND.accent.dark` and `BRAND.mark`. */
+const ACCENT_DARK = "oklch(52.768% 0.21534 29.097)";
+
 export const BRAND = deepFreeze({
   red: "#ef4444",
   accent: {
-    dark: "oklch(52.768% 0.21534 29.097)",
+    dark: ACCENT_DARK,
     light: "oklch(67.517% 0.21256 24.87)",
   },
+  /**
+   * The mark colour of every icon surface (favicons, apple-touch, PWA, the desktop
+   * app icon): the dark theme's primary, so no icon uses a second copy of it.
+   */
+  mark: ACCENT_DARK,
   background: { dark: "#0a0a0a", light: "#ffffff" },
   foreground: { dark: "#fafafa", light: "#0a0a0a" },
   stripes: ["#d42762", "#edc41c", "#1bd766", "#10abba"],

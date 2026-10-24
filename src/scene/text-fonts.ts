@@ -1,6 +1,14 @@
 import { orDefault } from "../core/validate.js";
 import { ZERO_WIDTH, graphemes } from "./text.js";
 
+/**
+ * The `font-family` of the brand display face and of the brand text face, as the font
+ * files name themselves, lowercase and capitalised: resvg matches family names
+ * case-sensitively (a browser does not), and "Moonhouse" would fall back to Inter.
+ */
+export const DISPLAY_FAMILY = "moonhouse, sans-serif";
+export const SANS_FAMILY = "Unbounded, sans-serif";
+
 /** What the social card needs of a font: hhea ascent/descent and advances, in font units. */
 export interface FontMetrics {
   unitsPerEm: number;
@@ -99,4 +107,88 @@ export function asciiPunctuation(text: string): string {
     .replace(/[\u2013\u2014]/g, "-")
     .replace(/\u2022/g, "*")
     .replace(/\u2026/g, "...");
+}
+
+export interface WrapFontOptions {
+  /** Px. */
+  size: number;
+  /** Widest line, px. */
+  maxWidth: number;
+  /** Lines kept; more text ends the last one in "…". */
+  maxLines: number;
+  /** Px added after every code point. Default 0. */
+  letterSpacing?: number;
+  /** Narrow the lines to the least width that keeps the line count (no short last line). Default false. */
+  balance?: boolean;
+}
+
+/**
+ * Word wrap of already-clean `text` (single spaces) into lines whose width in
+ * `font` is at most `maxWidth`, at most `maxLines` of them. A word wider than
+ * the line breaks between grapheme clusters; text past `maxLines` ends the last
+ * line in "…". With `balance` the lines are re-wrapped at the narrowest width
+ * that gives the same number of lines, so a short last line borrows words from
+ * the one above ("Build AI Systems / Visually" stays, but "A simpler way to
+ * design and orchestrate modern / AI workflows." becomes two even lines). Machine
+ * independent: advances only, no kerning. Empty text gives `[]`.
+ */
+export function wrapFont(
+  font: FontMetrics,
+  text: string,
+  opts: WrapFontOptions,
+): string[] {
+  const { size, maxLines, letterSpacing = 0 } = opts;
+  const width = (s: string): number =>
+    fontWidth(font, s, size) + letterSpacing * Array.from(s).length;
+  const layout = (limit: number): string[] => {
+    const lines: string[] = [];
+    let cur = "";
+    for (const word of text.split(" ").filter(Boolean)) {
+      const next = cur === "" ? word : `${cur} ${word}`;
+      if (width(next) <= limit) {
+        cur = next;
+        continue;
+      }
+      if (cur !== "") lines.push(cur);
+      if (width(word) <= limit) {
+        cur = word;
+        continue;
+      }
+      // A single word wider than the line: break it between grapheme clusters.
+      cur = "";
+      for (const g of graphemes(word)) {
+        if (width(cur + g) > limit && cur !== "") {
+          lines.push(cur);
+          cur = g;
+        } else cur += g;
+      }
+    }
+    if (cur !== "") lines.push(cur);
+    return lines;
+  };
+
+  const lines = layout(opts.maxWidth);
+  if (lines.length > maxLines) {
+    let last = lines.slice(maxLines - 1, maxLines).join("");
+    while (last && width(`${last}…`) > opts.maxWidth)
+      last = graphemes(last).slice(0, -1).join("").trimEnd();
+    return [...lines.slice(0, maxLines - 1), `${last}…`];
+  }
+  if (!opts.balance || lines.length < 2) return lines;
+  // Bisect the width: layout(w) has the same number of lines for every w from the
+  // answer up to maxWidth, and more below it. Never go below the widest word: a
+  // narrower line breaks it between grapheme clusters, and the tail can still join
+  // the next words, keeping the line count (and so fooling the search). 24 steps
+  // resolve the rest far below a pixel.
+  let lo = Math.min(
+    opts.maxWidth,
+    Math.max(...text.split(" ").map((word) => width(word))),
+  );
+  let hi = opts.maxWidth;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (layout(mid).length === lines.length) hi = mid;
+    else lo = mid;
+  }
+  return layout(hi);
 }
