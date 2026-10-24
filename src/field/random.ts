@@ -39,8 +39,8 @@ const round = (v: number): number => Number(v.toFixed(3));
 
 /**
  * A new flow field from a seed: 3 to 5 colours along a hue arc, a random shape, warp,
- * rotation and vignette. The same options always give the same spec, and it always passes
- * `resolveField`. Throws a VisError naming `seed` or `mood` when either is invalid.
+ * rotation and vignette. The same options always give the same spec, and it is always a valid
+ * spec for `renderField` and `createField`. Throws a VisError naming `seed` or `mood` when either is invalid.
  *
  * The mood's bands describe the `oklch()` strings written into `palette`: lightness
  * rises from the first colour to the last (dark 18 to 60 %, light 65 to 95 %, vivid 40 to

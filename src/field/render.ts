@@ -93,26 +93,28 @@ export function renderField(
   spec: FieldSpec,
   opts: RenderFieldOptions,
 ): FieldFrame {
-  return draw(() => snapshotOf(spec), opts);
+  return draw(() => resolveField(spec), opts);
 }
 
 /**
  * `renderField` for the exact object `resolveField` returned (an internal type: the root
  * entry does not export it), rendered from the private copy `resolveField` took, so editing
  * the object afterwards changes nothing. Recognised by identity, never by shape: a clone or
- * a hand-built look-alike is validated as a raw spec and fails. The exporters and the
- * contact sheet resolve once and draw many frames with it.
+ * a hand-built look-alike is refused with a VisError. The exporters and the contact sheet
+ * resolve once and draw many frames with it. `renderField` does not take such an object.
  */
 export function renderResolved(
   spec: ResolvedField,
   opts: RenderFieldOptions,
 ): FieldFrame {
-  return draw(() => snapshotOf(spec), opts);
-}
-
-/** The validated snapshot behind a spec `resolveField` returned, else the raw spec validated now. */
-function snapshotOf(spec: unknown): ResolvedField {
-  return resolvedField(spec) ?? resolveField(spec);
+  return draw(() => {
+    const snapshot = resolvedField(spec);
+    if (snapshot === undefined)
+      throw new VisError(
+        "spec must be the object resolveField returned (a copy or a look-alike is not one)",
+      );
+    return snapshot;
+  }, opts);
 }
 
 /** The shared body: options are checked first, then `resolve` runs, so the first error is the same whichever door was used. */

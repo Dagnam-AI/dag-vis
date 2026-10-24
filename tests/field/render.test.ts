@@ -137,17 +137,16 @@ describe("renderField", () => {
     expect(JSON.stringify(spec)).toBe(before);
   });
 
-  describe("recognising a resolved spec", () => {
-    it("accepts what resolveField returned", () => {
+  describe("renderField takes a raw spec; renderResolved takes what resolveField returned", () => {
+    it("renderResolved draws the same bytes as renderField of the raw spec", () => {
       const r = resolveField(fluid);
-      expect(renderResolved(r, { width: 4, height: 4 }).data.length).toBe(64);
-      // renderField still recognises the object by identity (its type is internal).
-      expect(renderField(r as never, { width: 4, height: 4 }).data.length).toBe(
-        64,
+      const o = { width: 4, height: 4 };
+      expect(same(renderResolved(r, o).data, renderField(fluid, o).data)).toBe(
+        true,
       );
     });
 
-    it("renders the copy taken at resolve time, whatever is done to the object afterwards", () => {
+    it("renderResolved renders the copy taken at resolve time, whatever is done to the object afterwards", () => {
       const o = { width: 24, height: 14, t: 0.5 };
       const r = resolveField({ ...fluted, reeds: 6 }) as { reeds: number };
       const before = renderResolved(r as never, o);
@@ -155,14 +154,32 @@ describe("renderField", () => {
       expect(same(renderResolved(r as never, o).data, before.data)).toBe(true);
     });
 
-    it("rejects a copy of a resolved spec loudly instead of drawing another picture", () => {
+    it("renderResolved refuses a clone or a look-alike instead of trusting its shape", () => {
       const o = { width: 4, height: 4 };
       for (const spec of [flow, fluid, fluted, flutedFluid]) {
         const r = resolveField({ ...spec, light: undefined });
         for (const copy of [structuredClone(r), { ...r }])
-          expect(() => renderField(copy as never, o)).toThrow(
-            /pass the original/,
+          expect(() => renderResolved(copy, o)).toThrow(
+            /must be the object resolveField returned/,
           );
+      }
+      expect(() => renderResolved({ kind: "flow" } as never, o)).toThrow(
+        VisError,
+      );
+    });
+
+    it("renderResolved checks the options before the spec", () => {
+      expect(() =>
+        renderResolved({ kind: "flow" } as never, { width: 0, height: 4 }),
+      ).toThrow(/width/);
+    });
+
+    it("renderField refuses a resolved object, a copy of one and its clone loudly: they are not raw specs", () => {
+      const o = { width: 4, height: 4 };
+      for (const spec of [flow, fluid, fluted, flutedFluid]) {
+        const r = resolveField({ ...spec, light: undefined });
+        for (const given of [r, structuredClone(r), { ...r }])
+          expect(() => renderField(given as never, o)).toThrow(VisError);
       }
       const vignetted = resolveField({ ...flow, light: { vignette: 0.8 } });
       expect(() => renderField(structuredClone(vignetted) as never, o)).toThrow(

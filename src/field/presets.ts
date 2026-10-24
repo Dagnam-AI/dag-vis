@@ -275,8 +275,8 @@ function frozenRecord<K extends string, V>(
 }
 
 /**
- * The flow presets by name, deeply frozen: a spec to pass to `renderField`, `createField`
- * or `resolveField` as it is, or to copy (`{ ...flowPresets.lunar, seed: 9 }`) and change.
+ * The flow presets by name, deeply frozen: a spec to pass to `renderField` or `createField`
+ * as it is, or to copy (`{ ...flowPresets.lunar, seed: 9 }`) and change.
  * Key order is the contract: `FLOW_PRESET_NAMES`. The record has no prototype, so a
  * lookup by user input never reaches `Object.prototype`; for the same reason it has no
  * `hasOwnProperty` and does not convert to a string: test a name with `name in flowPresets`

@@ -80,7 +80,7 @@ function send(gl: WebGL2RenderingContext, s: Slot): void {
  * Live WebGL2 renderer for any field kind: the picture `renderField` computes on the
  * CPU, drawn by one fullscreen shader and driven by the shared GL runtime (so
  * `start`, `stop`, `renderAt`, `loop`, `autoPause`, resize, reduced motion and context
- * loss behave as for every other effect). `spec` is validated by `resolveField` before
+ * loss behave as for every other effect). `spec` is validated before
  * anything else (a VisError names the parameter) and copied: later edits to the object
  * change nothing.
  *
