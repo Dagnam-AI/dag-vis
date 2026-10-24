@@ -176,8 +176,14 @@ export function wrapFont(
   }
   if (!opts.balance || lines.length < 2) return lines;
   // Bisect the width: layout(w) has the same number of lines for every w from the
-  // answer up to maxWidth, and more below it. 24 steps resolve it far below a pixel.
-  let lo = 0;
+  // answer up to maxWidth, and more below it. Never go below the widest word: a
+  // narrower line breaks it between grapheme clusters, and the tail can still join
+  // the next words, keeping the line count (and so fooling the search). 24 steps
+  // resolve the rest far below a pixel.
+  let lo = Math.min(
+    opts.maxWidth,
+    Math.max(...text.split(" ").map((word) => width(word))),
+  );
   let hi = opts.maxWidth;
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2;

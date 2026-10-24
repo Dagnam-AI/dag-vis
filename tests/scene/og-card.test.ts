@@ -111,6 +111,31 @@ describe("ogCard", () => {
     ).toBeLessThan(1.25);
   });
 
+  it("never splits a long word to balance the title", () => {
+    for (const [title, expected] of [
+      ["Hyperparameter optimization", ["Hyperparameter", "optimization"]],
+      ["Backpropagation explained", ["Backpropagation", "explained"]],
+      [
+        "Internationalization done right",
+        ["Internationalization", "done right"],
+      ],
+      [
+        "Reinforcement learning fundamentals",
+        ["Reinforcement", "learning", "fundamentals"],
+      ],
+    ] as const)
+      for (const [width, height] of [
+        [1200, 630],
+        [1080, 1080],
+      ] as const)
+        expect(
+          textLines(ogCard({ title, width, height }))
+            .filter((l) => l.size > 40)
+            .map((l) => l.text),
+          `${title} ${width}x${height}`,
+        ).toEqual(expected);
+  });
+
   it("shows an eyebrow, light theme colours, and escapes text", () => {
     const svg = ogCard({
       ...opts,

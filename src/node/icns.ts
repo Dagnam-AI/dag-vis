@@ -6,7 +6,7 @@ import { pngSize } from "./ico.js";
  * The ICNS chunk types that hold a PNG of each pixel size. The codes are the ones
  * macOS's `iconutil` writes (ic07 128, ic08 256, ic09 512, ic10 1024 = 512@2x,
  * ic11 = 16@2x, ic12 = 32@2x, ic13 = 128@2x, ic14 = 256@2x) plus icp4 and icp5,
- * the 16 and 32 px PNGs (both read back by `iconutil -c iconset`). icp6 is NOT
+ * the 16 and 32 px PNGs (`iconutil` reads them back with `-c iconset`; it writes ARGB chunks for those two sizes itself). icp6 is NOT
  * used: macOS reads it as 48 px. A 2x chunk repeats the pixels of the size
  * whose 1x chunk it shares.
  */

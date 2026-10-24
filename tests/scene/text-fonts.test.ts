@@ -238,6 +238,90 @@ describe("wrapFont", () => {
       }
   });
 
+  it("never splits a word to balance: a long word with a short tail stays whole", () => {
+    expect(wrap("aaaaaaaaaa b", 105, { balance: true })).toEqual([
+      "aaaaaaaaaa",
+      "b",
+    ]);
+    expect(wrap("aaaaaaaaaa bb cc", 110, { balance: true })).toEqual([
+      "aaaaaaaaaa",
+      "bb cc",
+    ]);
+    expect(wrap("bb aaaaaaaaaaaa c", 125, { balance: true })).toEqual([
+      "bb",
+      "aaaaaaaaaaaa",
+      "c",
+    ]);
+    expect(wrap("ccc ccc aaaaaaaaaa d", 105, { balance: true })).toEqual([
+      "ccc ccc",
+      "aaaaaaaaaa",
+      "d",
+    ]);
+  });
+
+  it("keeps whole words in every balanced line, over a word list and many widths", () => {
+    const words = [
+      "a",
+      "bb",
+      "ccc",
+      "ddddd",
+      "eeeeeeee",
+      "ffffffffff",
+      "gggggggggggg",
+    ];
+    for (let seed = 0; seed < 60; seed++) {
+      // a deterministic pseudo-random sentence of 2..7 words
+      const text = Array.from(
+        { length: 2 + (seed % 6) },
+        (_, i) => words[(seed * 7 + i * 3 + ((i * seed) % 5)) % words.length],
+      ).join(" ");
+      for (const maxWidth of [120, 130, 150, 200, 260, 400]) {
+        const plain = wrap(text, maxWidth);
+        const even = wrap(text, maxWidth, { balance: true });
+        const label = `${text} @${maxWidth}`;
+        // every word is at most 120 px, so the plain wrap never splits one
+        expect(even.join(" "), label).toBe(text);
+        expect(even.length, label).toBe(plain.length);
+        for (const line of even)
+          expect(line.length * 10, label).toBeLessThanOrEqual(maxWidth);
+      }
+    }
+  });
+
+  it("does not split the brand card's long words in Unbounded", () => {
+    const at = (text: string, maxWidth = 720) =>
+      wrapFont(UNBOUNDED, text, {
+        size: 56.7,
+        maxWidth,
+        maxLines: 3,
+        balance: true,
+      });
+    expect(at("Hyperparameter optimization")).toEqual([
+      "Hyperparameter",
+      "optimization",
+    ]);
+    expect(at("Backpropagation explained")).toEqual([
+      "Backpropagation",
+      "explained",
+    ]);
+    expect(at("Internationalization done right")).toEqual([
+      "Internationalization",
+      "done right",
+    ]);
+    expect(at("Reinforcement learning fundamentals")).toEqual([
+      "Reinforcement",
+      "learning",
+      "fundamentals",
+    ]);
+    for (const title of [
+      "Hyperparameter optimization",
+      "Backpropagation explained",
+      "Internationalization done right",
+      "Reinforcement learning fundamentals",
+    ])
+      expect(at(title).join(" ")).toBe(title);
+  });
+
   it("breaks a word wider than the line between grapheme clusters", () => {
     expect(wrap("abcdefghij", 40)).toEqual(["abcd", "efgh", "ij"]);
     expect(wrap("ab abcdefghij", 40)).toEqual(["ab", "abcd", "efgh", "ij"]);

@@ -11,7 +11,7 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 - Brand: `BRAND.mark`, the one named colour of every icon surface (the dark theme's primary, `BRAND.accent.dark`), and `LOGO_ICON_WEIGHT` (48): `logoSvg({ weight })` adds a same-colour round-joined stroke (the fitted box grows by it, so `padding` still bounds the ink). The plain `LOGO` and the default `logoSvg()` are unchanged.
 - Brand: `appIconSvg()`, the desktop app icon master: an 824 px superellipse plate (`#0a0a0a`) on a transparent 1024 canvas (Apple's icon grid) carrying the heavy deep-red mark.
-- Node: `appIcon({ outDir, background?, color? })` and `APP_ICON_FILES` write `app-icon.svg`, `app-icon-{16,32,64,128,256,512,1024}.png` and `app-icon.icns`; `icnsFromPngs(pngs)` builds the ICNS container with no dependency (PNG chunks `icp4 icp5 ic07 ic08 ic09 ic10 ic11 ic12 ic13 ic14`, the codes macOS's `iconutil` reads and writes). CLI: `dag-vis app-icon --out DIR [--background C --color C]`.
+- Node: `appIcon({ outDir, background?, color? })` and `APP_ICON_FILES` write `app-icon.svg`, `app-icon-{16,32,64,128,256,512,1024}.png` and `app-icon.icns`; `icnsFromPngs(pngs)` builds the ICNS container with no dependency (PNG chunks `icp4 icp5 ic07 ic08 ic09 ic10 ic11 ic12 ic13 ic14`, the codes macOS's `iconutil` writes for ic07 to ic14 and reads for icp4 and icp5; it writes ARGB for 16 and 32 px). CLI: `dag-vis app-icon --out DIR [--background C --color C]`.
 - Scenes: `brandBackground` option `edge` (0..1, default 1): the motif's own outline as a crisp stroke with a faint two-step glow.
 
 ### Changed
