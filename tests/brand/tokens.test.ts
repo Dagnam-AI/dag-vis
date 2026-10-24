@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { parseColor, toHex } from "../../src/core/color.js";
@@ -10,9 +13,35 @@ describe("BRAND", () => {
     expect(BRAND.red).toBe("#ef4444");
     expect(BRAND.accent.dark).toBe("oklch(52.768% 0.21534 29.097)");
     expect(BRAND.accent.light).toBe("oklch(67.517% 0.21256 24.87)");
+    // The mark colour of every icon surface is the dark theme's primary, one value.
+    expect(BRAND.mark).toBe(BRAND.accent.dark);
+    expect(toHex(parseColor(BRAND.mark))).toBe("#ca0303");
     expect(BRAND.background).toEqual({ dark: "#0a0a0a", light: "#ffffff" });
     expect(BRAND.foreground).toEqual({ dark: "#fafafa", light: "#0a0a0a" });
     expect(BRAND.stripes).toEqual(["#d42762", "#edc41c", "#1bd766", "#10abba"]);
+  });
+
+  it("keeps ONE copy of the mark colour: no source file but tokens.ts spells it", () => {
+    const sources = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? sources(join(dir, e.name))
+          : /\.tsx?$/.test(e.name)
+            ? [join(dir, e.name)]
+            : [],
+      );
+    const src = join(import.meta.dirname, "..", "..", "src");
+    const files = sources(src);
+    expect(files.length).toBeGreaterThan(50);
+    for (const file of files) {
+      const text = readFileSync(file, "utf8");
+      expect(text, file).not.toMatch(/#ca0303/i); // its hex rendering
+      if (!file.endsWith("brand/tokens.ts"))
+        expect(text, file).not.toContain("52.768"); // its oklch spelling
+    }
+    expect(readFileSync(join(src, "brand", "tokens.ts"), "utf8")).toContain(
+      "52.768",
+    );
   });
 
   it("every token and palette entry parses", () => {
@@ -20,6 +49,7 @@ describe("BRAND", () => {
       BRAND.red,
       BRAND.accent.dark,
       BRAND.accent.light,
+      BRAND.mark,
       ...BRAND.stripes,
       ...Object.values(PALETTES).flat(),
     ];

@@ -93,6 +93,12 @@ describe("dag-vis CLI files", () => {
       expect(readdirSync(dir)).toContain("favicon.ico");
     });
 
+    it("app-icon --out is a directory and is not subject to the extension rule", async () => {
+      const dir = join(tmp(), "mac.png");
+      expect(await run(["app-icon", "--out", dir], capture().io)).toBe(0);
+      expect(readdirSync(dir)).toContain("app-icon.icns");
+    });
+
     it("creates missing parent directories", async () => {
       const path = join(tmp(), "a", "b", "c", "og.svg");
       expect(await run(og(path), capture().io)).toBe(0);
@@ -280,6 +286,7 @@ describe("dag-vis CLI files", () => {
         ],
         ["pattern", "--spec", spec, "--out", join(tmp(), `p${n}.svg`)],
         ["favicons", "--out", join(tmp(), `icons${n}`)],
+        ["app-icon", "--out", join(tmp(), `mac${n}`)],
       ];
       for (const n of ["1", "2"])
         for (const argv of commands(n))
@@ -289,10 +296,11 @@ describe("dag-vis CLI files", () => {
           expect(sha(join(tmp(), `${f}1.${ext}`))).toBe(
             sha(join(tmp(), `${f}2.${ext}`)),
           );
-      for (const name of readdirSync(join(tmp(), "icons1")))
-        expect(sha(join(tmp(), "icons1", name))).toBe(
-          sha(join(tmp(), "icons2", name)),
-        );
+      for (const set of ["icons", "mac"])
+        for (const name of readdirSync(join(tmp(), `${set}1`)))
+          expect(sha(join(tmp(), `${set}1`, name))).toBe(
+            sha(join(tmp(), `${set}2`, name)),
+          );
     });
   });
 });
