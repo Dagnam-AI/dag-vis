@@ -9,6 +9,14 @@ declare global {
       sample(name: string, t: number): number;
       snapshot(name: string, t: number): string;
     };
+    /** parity.html: GPU RGB triples at `points`, then the drawing-buffer width and height. */
+    __parity: (
+      name: string,
+      t: number,
+      loop: number | undefined,
+      points: [number, number][],
+    ) => number[];
+    __parityReady?: boolean;
   }
 }
 export {};
