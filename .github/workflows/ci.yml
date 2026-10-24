@@ -141,13 +141,14 @@ jobs:
           node root-graph.mjs
 
           cat > root.mjs <<'EOF'
-          import { brandBackground, gradient, ogCard, pattern, ribbon } from "@dagnam/vis";
+          import { brandBackground, fieldPresets, gradient, ogCard, pattern, renderField, ribbon } from "@dagnam/vis";
           const svg = brandBackground({ width: 1200, height: 630 });
           if (!svg.startsWith("<svg")) throw new Error("brandBackground did not render");
           if (!gradient({ kind: "linear", stops: ["#ef4444", "#10abba"] }).css.startsWith("background:")) throw new Error("gradient");
           if (!pattern({ kind: "dagMesh" }).cssBackground.startsWith("url(")) throw new Error("pattern");
           if (!ogCard({ title: "Smoke" }).includes("Smoke")) throw new Error("ogCard");
           if (!ribbon({ width: 100, height: 50, lines: 4, samples: 8 }).includes("<path")) throw new Error("ribbon");
+          if (renderField(fieldPresets.lunar, { width: 8, height: 4 }).data.length !== 8 * 4 * 4) throw new Error("renderField");
           console.log("root ok:", svg.length, "bytes");
           EOF
           node root.mjs
@@ -157,7 +158,7 @@ jobs:
           cat > animate.mjs <<'EOF'
           import * as animate from "@dagnam/vis/animate";
           import * as root from "@dagnam/vis";
-          for (const name of ["createDither", "createPixelBlast", "createTerminal", "createGlitch", "createRibbon"])
+          for (const name of ["createDither", "createPixelBlast", "createTerminal", "createGlitch", "createRibbon", "createField", "exportCanvas"])
             if (typeof animate[name] !== "function") throw new Error(`${name} missing from @dagnam/vis/animate`);
           if (animate.loopTime(5, { duration: 2 }) !== 1) throw new Error("loopTime");
           if ("createDither" in root) throw new Error("the root must not export the animate effects");
@@ -209,7 +210,12 @@ jobs:
           cat > consumer.ts <<'EOF'
           import { gradient, ogCard, VisError } from "@dagnam/vis";
           import type { GradientSpec } from "@dagnam/vis";
-          import { favicons, renderPng } from "@dagnam/vis/node";
+          import { renderField, fieldPresets } from "@dagnam/vis";
+          import type { FieldFrame } from "@dagnam/vis";
+          import { exportStatic, favicons, renderPng } from "@dagnam/vis/node";
+          const frame: FieldFrame = renderField(fieldPresets.lunar, { width: 8, height: 4 });
+          const still: Promise<void> = exportStatic(fieldPresets.lunar, { width: 8, height: 4, format: "png", out: "still.png" });
+          export { frame, still };
           const spec: GradientSpec = { kind: "linear", stops: ["#ef4444", "#10abba"] };
           const css: string = gradient(spec).css;
           const card: string = ogCard({ title: css.slice(0, 4) });
@@ -226,10 +232,13 @@ jobs:
           # A browser consumer (DOM lib) of the animate and react entries.
           npm install --save-dev react@19.3.1 @types/react@19.3.0 >/dev/null
           cat > consumer-dom.tsx <<'EOF'
-          import { createDither, type EffectHandle, type DitherOptions } from "@dagnam/vis/animate";
+          import { createDither, createField, exportCanvas, type EffectHandle, type DitherOptions } from "@dagnam/vis/animate";
+          import { fieldPresets } from "@dagnam/vis";
           import { VisBackground, Gradient } from "@dagnam/vis/react";
           const handle: EffectHandle<DitherOptions> = createDither(document.createElement("canvas"), { colors: ["#e64040"] });
           handle.renderAt(1);
+          const field = createField(document.createElement("canvas"), fieldPresets.lunar, { loop: { duration: 6 } });
+          export const clip: Promise<Blob> = exportCanvas(field, { format: "mp4", duration: 6 });
           export const view = (
             <>
               <VisBackground effect="dither" options={{ waveSpeed: 0.15 }} />
