@@ -1,6 +1,60 @@
 # Motion
 
-Videos for Dagnam, made in code with [Remotion](https://www.remotion.dev) on top of the deterministic effects in `@dagnam/vis`. This folder is not part of the published npm package.
+## What this is
+
+Videos for Dagnam, made in code with [Remotion](https://www.remotion.dev) on top of the deterministic effects in `@dagnam/vis`. `motion/` is a consumer of `@dagnam/vis` and `@dagnam/vis/animate`: it aliases both to the repository's own `../src` and `../src/animate` (see "Alias into `src/`" below), has its own dependencies and lockfile, and is not part of the published npm package (it is outside `files` and outside the public API allow-list).
+
+## Setup
+
+```sh
+npm ci                                     # at the repository root first: motion bundles the library's source, which imports gifenc
+cd motion && npm ci && npm run assets      # assets copies the fonts into gitignored public/fonts/
+npm run studio                             # the Remotion Studio
+```
+
+- Run every command from `motion/`; the scripts check the working directory because the library alias and the relative paths are `motion/`'s. The scripts are TypeScript run by Node's type stripping (Node 22.18 or newer).
+- `MOTION_GL=swangle` selects the software renderer, which a machine without a GPU needs and which every deliverable uses (see "Rendering and storing a video").
+- The local videos folder is `../info/videos/` beside this checkout, or wherever `DAG_VIDEOS_DIR` points.
+- Only macOS has been used. `sheet.ts` refuses to run on Windows: it links `public/` into its bundle instead of copying it, which needs symlinks.
+
+## Commands
+
+| command                                                                             | what it does                                                                                                                                    |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run assets`                                                                    | Copies Inter, Unbounded and Moonhouse from the library into `public/fonts/`; refuses unless git says that folder is ignored.                    |
+| `npm run audio -- <video>`                                                          | Synthesises the video's bed (`src/videos/<video>/audio.ts`), normalises it to -16 LUFS and writes `public/generated/<video>.wav`; fails closed. |
+| `npm run check:render -- <file.mp4> <video> [--json]`                               | Frame count, size, frame rate, audio length against the picture, loudness and true peak of a finished render; exit 1 with named problems.       |
+| `npm run sheet -- <video> [--props <json>]`                                         | Renders the storyboard (the frames in `timing.ts`, captioned) to `out/<video>/<video>-sheet-<yyyymmdd>-v<N>.png`.                               |
+| `npm run render -- <video> [--props <json>] [--crf 18] [--allow-dirty]`             | One deliverable: bed, versioned MP4, checks, local copy, ledger line. `--preview-not-a-deliverable` is the quick-look variant.                  |
+| `npm run store -- out/<video>/<name>.mp4 [--upload]` and `npm run store -- --check` | Local copy (and, only on the owner's own command, the R2 copy) of a finished render; `--check` verifies the local folder.                       |
+
+## Starting a real video with the `remotion-video` skill
+
+The skill runs inside `dag-vis/motion/`. It has two gates, and nothing is created before the first.
+
+1. **Proposal.** The skill fills `brief.md` and ends with "Go?". Nothing is created before the go.
+2. **Storyboard.** On the go: `mkdir src/videos/<slug>`; save the filled brief as `src/videos/<slug>/BRIEF.md`; write `timing.ts` (one file for picture and sound), `audio.ts` and `<Slug>.tsx`; register the composition with `id = <slug>` in `Root.tsx`. `npm run sheet -- <slug>` renders the 6 to 8 captioned frames to `out/<slug>/<slug>-sheet-<yyyymmdd>-v<N>.png`. Send it and end with "Go?".
+3. **Film.** On the second go: build it, then `npm run render -- <slug>`. Deliver what `BRIEF.md`'s hand-over lists plus the `RENDERS.jsonl` line, and always say that nobody has listened to the sound.
+
+A revision starts from the existing `BRIEF.md` and renders the next `v<N>`. `src/videos/pipeline-proof/` is the worked example of the layout.
+
+## Rules
+
+- Never overwrite an earlier render: names are versioned (`<video>-<yyyymmdd>-v<N>.mp4`) and `Config.setOverwriteOutput(false)` is set. Renders live in `out/` (gitignored), are stored locally and, when the owner decides, in R2, and are recorded in `RENDERS.jsonl` under `stored: { local, r2 }`.
+- No synthetic voice and no music unless the owner asks for them or provides them. The sound is made in code.
+- Sound targets: about -16 LUFS integrated, true peak below -1 dBTP, audio as long as the picture. They are measured with `loudnorm` in JSON mode and `silencedetect` plus `ffprobe`, because Remotion's bundled ffmpeg has no `ebur128` (see "ffmpeg and ffprobe"). `npm run check:render -- <file> <slug>` checks them.
+- Compositions are pure functions of the frame: draw with `EffectCanvas` (it calls `renderAt(frame / fps)` and never `start()`), put `seed` in the props, read no clock, and make the loop `loopFrames(duration, fps)` long.
+- Colours and fonts come from `src/bridge/brand.ts`.
+
+## Fonts
+
+Moonhouse (headlines and the wordmark; the family name is lowercase `moonhouse`, as the library's social card sets it), Inter (text) and Unbounded (UI) are copied from the library's `src/node/fonts/` into the gitignored `public/fonts/` by `npm run assets`.
+
+**Standing caution.** Moonhouse's embedded licence (NimaVisual free font) allows "personal and commercial work" but forbids modifying the font file and redistributing it (website, CD-ROM, archive) without written permission, and the root README flags that this permission is not confirmed. So the font files themselves are never committed under `motion/` (the structure test fails any tracked font, image, video or audio file), never uploaded to R2 or a website, and never put in a release asset or a shared Remotion bundle (`sheet.ts` links `public/` instead of copying it for that reason); only rendered pixels (video frames) leave the machine. Moonhouse has no curly quotes, dashes or "…": set text as `${THEME.display}, ${THEME.text}` so a missing glyph falls back to Inter.
+
+## Remotion licence
+
+The Free License applies while the team is within Remotion's eligibility list; the quoted text, the links and the headcount rule are under "Licence" below. Re-confirm before a 4th person joins and before any Remotion 5.0 bump.
 
 ## Rendering and storing a video
 
@@ -20,6 +74,13 @@ One command makes one deliverable: it synthesises and normalises the video's sou
   - An object that already exists is never overwritten. It counts as uploaded only if it is this file. An object that carries `x-amz-meta-sha256` is this file only if that equals the local SHA-256; any other value fails, even if its size and `ETag` happen to match. Only an object with no such metadata is judged by its size and a plain 32-hex MD5 `ETag` (a multipart `ETag`, which has a dash, proves nothing). Anything else fails with a named error and records nothing.
   - `npm run store -- --check` verifies the local folder only.
 - **What leaves the machine.** Rendered pixels (the MP4, its props and its check output). The Moonhouse font file is never committed, uploaded or released.
+
+## Gates
+
+- `npm run check` at the repository root ends with `check:motion` (`scripts/check-motion.mjs`): eslint, `tsc --noEmit` and `vitest --coverage` in `motion/`, then `npm audit`. When `motion/node_modules` is missing it prints one "skipped" line and passes; CI's `Motion` workflow (`.github/workflows/motion.yml`, separate from `ci.yml` so a motion audit cannot block a library release) installs first and sets `MOTION_REQUIRED=1`, where a skip is a failure. It also renders the sound bed and one still under swangle.
+- Coverage is 100% on statements, branches, functions and lines for `src/lib` and `src/bridge`. `src/videos`, `src/sheet`, `Root.tsx` and `index.ts` are visual and outside the floor by `include`; they are judged on the storyboard and the rendered frames. No suppression comments.
+- Structure rules (`tests/structure.test.ts`): `motion/` reaches the library only as `@dagnam/vis` or `@dagnam/vis/animate`; the library's `src/` never imports `motion/`; `src/lib` imports only its siblings; every `lib` and `bridge` file has a mirrored test; no file over 500 lines; the shared toolchain pins equal the root's; no tracked font, image, video or audio file; no implicit upload.
+- **Audit note.** `npm audit` reports `zod` below 4.6.6 (GHSA-mrhx-c7xc-m3w5), which Remotion's studio pins exactly in every release from 4.0.534 to 4.0.538. It is recorded as an accepted risk in `scripts/check-motion.mjs` with a review date of 2026-10-26: **from 2026-10-27 (UTC) the entry has lapsed and the gate fails.** The replacement is `"overrides": { "zod": "4.6.6" }` in `motion/package.json`, a scheduled follow-up for after 2026-10-25T16:18Z, when 4.6.6 is 14 days old; it removes the accepted-risk entry.
 
 ## The pipeline proof
 

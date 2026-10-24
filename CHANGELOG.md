@@ -23,6 +23,7 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 - Scenes: `ribbon(opts, phase?)` takes a phase in radians (any finite number, default 0) that moves the ribbon exactly as `ribbonCurves` does, with period 2*pi; a ribbon spec exported with `exportStatic` or `exportAnimation` also takes `drift` (radians per second without a loop; a loop advances one turn per period).
 - Demo: the Flow page (`/flow.html`) with every field preset live and export buttons.
 - Tooling: `npm run demo`, a gallery of the five effects (`?effect=`, `?t=`, `?seed=`, `?w=`, `?h=`; an invalid parameter shows an error); `npm run test:e2e`, Playwright tests in headless Chromium (the gallery, the Flow page and the CPU/GPU field parity) that also run in CI; and `npm run fidelity`, which captures each effect beside the landing-page card it was ported from and writes a pixel-difference report. None of the three is published.
+- `motion/`: Remotion motion-graphics project beside the package (own dependencies, not shipped); pipeline-proof loop; `check:motion` in the gate.
 
 ### Fixed
 
