@@ -1,0 +1,46 @@
+name: Motion
+
+# motion/ is never published, so it lives in its own workflow: release.yml
+# gates a publish on the whole of ci.yml, and a motion audit or a dated
+# advisory entry must not block a @dagnam/vis release.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: no job here writes to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: motion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  motion:
+    name: motion/ - lint, types, 100% pure-logic coverage, audit, one still under swangle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            motion/package-lock.json
+
+      # motion/ bundles the library's source, which imports gifenc from the root install.
+      - run: npm ci
+      - run: npm ci --prefix motion
+      - run: cd motion && npx remotion browser ensure
+
+      # The gate `npm run check` ends with locally, but a skip is a failure here.
+      - run: MOTION_REQUIRED=1 npm run check:motion
+
+      # GitHub runners have no GPU: swangle (SwiftShader) is the renderer everywhere.
+      - run: cd motion && MOTION_GL=swangle npx remotion still smoke out/ci-smoke.png

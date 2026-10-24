@@ -8,10 +8,16 @@ interface Accepted {
 }
 interface Mod {
   findings: (report: unknown, accepted: Accepted[], today: string) => string[];
+  decide: (
+    report: unknown,
+    accepted: Accepted[],
+    today: string,
+    required: boolean,
+  ) => { exit: number; lines: string[] };
 }
 // A variable specifier: the script is plain .mjs with no declaration file.
 const SCRIPT = join(__dirname, "..", "..", "scripts", "check-motion.mjs");
-const { findings } = (await import(SCRIPT)) as Mod;
+const { findings, decide } = (await import(SCRIPT)) as Mod;
 
 const advisory = (id: string) => ({
   source: 1,
@@ -51,4 +57,39 @@ describe("check-motion findings", () => {
       expect(findings(r, accepted, "2026-10-24")).toHaveLength(1);
     },
   );
+});
+
+describe("check-motion decide", () => {
+  const offline = { error: { code: "ENOTFOUND" } };
+  it("skips loudly, exit 0, when there is no report and the gate is not required", () => {
+    const r = decide(offline, accepted, "2026-10-24", false);
+    expect(r.exit).toBe(0);
+    expect(r.lines).toHaveLength(1);
+    expect(r.lines[0]).toContain("SKIPPED");
+  });
+  it("fails closed when there is no report and the gate is required", () => {
+    expect(decide(offline, accepted, "2026-10-24", true).exit).toBe(1);
+    expect(decide(undefined, accepted, "2026-10-24", true).exit).toBe(1);
+  });
+  it.each([false, true])(
+    "fails an unlisted advisory whatever required is (%s)",
+    (required) => {
+      const r = decide(report("GHSA-b"), accepted, "2026-10-24", required);
+      expect(r).toEqual({
+        exit: 1,
+        lines: ["npm audit: GHSA-b is not accepted"],
+      });
+    },
+  );
+  it.each([false, true])(
+    "fails a lapsed acceptance whatever required is (%s)",
+    (required) => {
+      expect(
+        decide(report("GHSA-a"), accepted, "2026-10-27", required).exit,
+      ).toBe(1);
+    },
+  );
+  it("passes an accepted advisory inside its date", () => {
+    expect(decide(report("GHSA-a"), accepted, "2026-10-26", true).exit).toBe(0);
+  });
 });

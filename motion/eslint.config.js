@@ -11,7 +11,10 @@ const rootWithoutIgnores = root.filter(
 );
 
 const RELATIVE_SRC = {
-  group: ["../../src/*", "../../../src/*", "../../../../src/*", "**/dist/**"],
+  group: [
+    ...[1, 2, 3, 4, 5, 6].map((n) => `${"../".repeat(n)}src/*`),
+    "**/dist/**",
+  ],
   message:
     "Reach the library through the `@dagnam/vis` alias, never a relative path into src/ or dist/.",
 };
