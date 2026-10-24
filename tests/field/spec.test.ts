@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { VisError } from "../../src/core/index.js";
-import { FLOW_SHAPES, resolveField } from "../../src/field/spec.js";
+import { FLOW_SHAPES, MAX_REEDS, resolveField } from "../../src/field/spec.js";
 import type { FieldSpec } from "../../src/field/spec.js";
 
 /** An array with a hole at `hole` (a literal `[, x]` trips no-sparse-arrays), so validators must read by index. */
@@ -119,6 +119,13 @@ describe("resolveField", () => {
     expect(r.grain).toBe(0.7);
     expect(r.direction).toBe("vertical");
     expect(r.reeds).toBe(24);
+  });
+
+  it("accepts the most reeds the shader holds and rejects one more", () => {
+    const f = (reeds: number) => resolveField(fluted({ reeds }));
+    expect(MAX_REEDS).toBe(256);
+    expect(f(MAX_REEDS)).toMatchObject({ reeds: MAX_REEDS });
+    expect(() => f(MAX_REEDS + 1)).toThrow(/reeds/);
   });
 
   it("exposes the shape enum in spec order", () => {

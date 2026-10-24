@@ -3,7 +3,7 @@ import { describeValue } from "../../core/validate.js";
 import { oklabToRgb, rgbToOklab } from "../oklab.js";
 import type { ResolvedFluid } from "../spec.js";
 import { grainOffset } from "./grain.js";
-import { assertPositiveSize, uvError } from "./guards.js";
+import { assertPositiveSize, UV_REACH, uvError } from "./guards.js";
 import type { Sampler } from "./types.js";
 
 /**
@@ -11,13 +11,6 @@ import type { Sampler } from "./types.js";
  * `base`. The same literal is in `GLSL_FLUID`.
  */
 export const BASE_WEIGHT = 0.02;
-
-/**
- * Largest `u` or `v` (divided by max(aspect, 1)) a sampler accepts. Beyond it the
- * Gaussian exponent could leave float32 range on the GPU twin: at the limit the
- * exponent is below 1e18 in size, and the smallest legal variance is 2e-6.
- */
-const UV_REACH = 1e6;
 
 /** Seeded Lissajous parameters per point: integer frequencies 1..3 and phases in [0, 2π). */
 export interface FluidDrift {

@@ -22,6 +22,8 @@ export const FLOW_SHAPES: readonly FlowShape[] = [
 ];
 /** Most points a fluid field holds: the GPU twin sizes its uniform arrays to it. */
 export const MAX_FLUID_POINTS = 8;
+/** Most reeds a fluted field holds: the GPU twin sizes its offsets uniform to it (a multiple of 4). */
+export const MAX_REEDS = 256;
 export type FlutedDirection = "vertical" | "horizontal";
 const DIRECTIONS: readonly FlutedDirection[] = ["vertical", "horizontal"];
 
@@ -273,7 +275,7 @@ function resolveFluted(o: Obj): ResolvedFluted {
   return {
     kind: "fluted",
     source,
-    reeds: int(o, "", "reeds", 24, 2, 256),
+    reeds: int(o, "", "reeds", 24, 2, MAX_REEDS),
     direction: oneOf(o, "direction", DIRECTIONS, "vertical"),
     refraction: num(o, "", "refraction", 0.6, 0, 1),
     shade: num(o, "", "shade", 0.5, 0, 1),
