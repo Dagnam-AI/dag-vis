@@ -91,12 +91,15 @@ export {
   coverSpec,
   measureText,
   ogCard,
+  parseCoverChoices,
+  parseCoverInput,
   ribbon,
   ribbonCurves,
   wrapText,
 } from "./scene/index.js";
 export type {
   BrandBackgroundOptions,
+  CoverChoices,
   CoverGlow,
   CoverInput,
   CoverLayers,
@@ -112,8 +115,10 @@ export type {
 export {
   FLOW_PRESET_NAMES,
   FLOW_SHAPES,
+  fieldPresetNames,
   fieldPresets,
   flowPresets,
+  parseFieldPreset,
   randomFlow,
   renderField,
 } from "./field/index.js";
