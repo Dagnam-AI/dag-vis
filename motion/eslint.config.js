@@ -68,7 +68,7 @@ const boundary = {
       ExportAllDeclaration: (n) => check(n, n.source.value),
       ExportNamedDeclaration: (n) => check(n, n.source?.value),
       ImportExpression: (n) => check(n, n.source.value),
-      TSImportType: (n) => check(n, n.argument.literal?.value),
+      TSImportType: (n) => check(n, n.source.value),
       TSExternalModuleReference: (n) => check(n, n.expression.value),
     };
   },

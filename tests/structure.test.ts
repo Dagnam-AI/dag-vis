@@ -1,5 +1,15 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,18 +33,20 @@ const ALLOWED: Record<string, readonly string[]> = {
 };
 
 /**
- * Every module specifier: static `from "..."`, side-effect `import "..."` and dynamic
- * `import("...")` (also with a comment before the string, single quotes or backticks).
+ * Every module specifier: static `from "..."`, side-effect `import "..."`, dynamic
+ * `import("...")` (also with line or block comments before the string, single quotes
+ * or backticks) and `import x = require("...")`.
  */
 const IMPORT_SPECIFIER =
-  /(?:from|import)\s*\(?\s*(?:(?:\/\*[^*]*\*\/|\/\/[^\n]*\n)\s*)*["'`]([^"'`]+)["'`]/g;
+  /(?:from|import|=\s*require)\s*\(?\s*(?:(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*\n)\s*)*["'`]([^"'`]+)["'`]/g;
 
+/** Every file under `dir`; `skip` names top-level folders of `dir` only, never a folder of the same name deeper down. */
 function walk(dir: string, skip: readonly string[] = []): string[] {
   return readdirSync(dir)
     .filter((name) => !skip.includes(name))
     .flatMap((name) => {
       const p = join(dir, name);
-      return statSync(p).isDirectory() ? walk(p, skip) : [p];
+      return statSync(p).isDirectory() ? walk(p) : [p];
     });
 }
 
@@ -57,6 +69,39 @@ const layerOf = (p: string): string => relative(SRC, p).split("/")[0]!;
 describe("repository structure", () => {
   it("has at least one source file", () => {
     expect(sources.length).toBeGreaterThan(0);
+  });
+
+  it("scans every import spelling, including TS require and a block comment holding a star", () => {
+    const specs = (code: string): string[] =>
+      [...code.matchAll(IMPORT_SPECIFIER)].map((m) => m[1]!);
+    expect(specs('import a from "a"; import "b"; export * from "c";')).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+    expect(specs('const m = await import(/* * a * star */ "d");')).toEqual([
+      "d",
+    ]);
+    expect(specs('const m = await import(\n// why\n"e");')).toEqual(["e"]);
+    expect(specs('import fs = require("node:fs");')).toEqual(["node:fs"]);
+    expect(specs("import x = require('f')")).toEqual(["f"]);
+  });
+
+  it("walk skips the named folders at the top only", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "walk-"));
+    try {
+      for (const f of ["node_modules/a.ts", "src/node_modules/b.ts", "c.ts"]) {
+        mkdirSync(dirname(join(tmp, f)), { recursive: true });
+        writeFileSync(join(tmp, f), "");
+      }
+      expect(
+        walk(tmp, ["node_modules"])
+          .map((p) => relative(tmp, p))
+          .sort(),
+      ).toEqual(["c.ts", join("src", "node_modules", "b.ts")]);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   it.each(sources)("%s imports only leftwards in the layer order", (file) => {
@@ -142,6 +187,10 @@ describe("repository structure", () => {
 });
 
 const MOTION = join(ROOT, "motion");
+// Fonts, images, then video and audio.
+const BINARY_ASSET =
+  /\.(ttf|otf|woff2?|ttc|otc|eot|png|jpe?g|gif|webp|avif|mp4|mov|webm|mkv|wav|mp3|aac|flac|ogg|m4a)$/i;
+const isBinaryAsset = (path: string): boolean => BINARY_ASSET.test(path);
 const motionSources = walk(join(MOTION, "src")).filter((p) =>
   /\.tsx?$/.test(p),
 );
@@ -253,15 +302,39 @@ describe("motion/", () => {
   });
 
   it("never tracks a font, image, video or audio file under motion/", () => {
-    const tracked = execFileSync("git", ["ls-files", "motion"], {
+    // -z: NUL-separated and unquoted, so a non-ASCII name cannot hide its extension behind a closing quote.
+    const tracked = execFileSync("git", ["ls-files", "-z", "motion"], {
       cwd: ROOT,
       encoding: "utf8",
-    }).split("\n");
+    }).split("\0");
     // Moonhouse's licence forbids redistributing the font file; renders and
     // generated media are artifacts. Only pixels leave the machine, never these.
-    expect(
-      tracked.filter((p) => /\.(ttf|otf|woff2?|png|mp4|wav)$/i.test(p)),
-    ).toEqual([]);
+    expect(tracked.filter(isBinaryAsset)).toEqual([]);
+  });
+
+  it("recognises binary assets by extension, whatever the folder or the characters in the name", () => {
+    for (const name of [
+      "motion/a/Mönhouse.ttf",
+      "motion/MOON.OTF",
+      "motion/x.woff2",
+      "motion/x.ttc",
+      "motion/x.eot",
+      "motion/public/a b.jpeg",
+      "motion/x.webp",
+      "motion/x.avif",
+      "motion/x.mov",
+      "motion/x.mkv",
+      "motion/x.m4a",
+      "motion/x.flac",
+    ])
+      expect(isBinaryAsset(name), name).toBe(true);
+    for (const name of [
+      "motion/README.md",
+      "motion/src/a.ts",
+      "motion/ttf",
+      "",
+    ])
+      expect(isBinaryAsset(name), name).toBe(false);
   });
 
   it("gitignores the copied fonts, generated assets and renders", () => {
