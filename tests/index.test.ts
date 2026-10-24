@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it, vi } from "vitest";
 
 import * as vis from "../src/index.js";
@@ -15,12 +19,31 @@ describe("@dagnam/vis root barrel", () => {
   });
 
   it("exposes renderField with its option and frame types from the root", () => {
+    const dir: vis.FlutedFieldDirection = "vertical";
+    expect(dir).toBe("vertical");
     const opts: vis.RenderFieldOptions = { width: 2, height: 2 };
     const frame: vis.FieldFrame = vis.renderField(
       { kind: "flow", palette: ["#000", "#fff"] },
       opts,
     );
     expect(frame.data).toHaveLength(16);
+  });
+
+  it("keeps the internal field names out of the root: time coordinates and the per-kind resolved types", () => {
+    const text = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/index.ts"),
+      "utf8",
+    );
+    for (const name of [
+      "timeCoords",
+      "TimeCoords",
+      "ResolvedFlow",
+      "ResolvedFluid",
+      "ResolvedFluted",
+      "FlutedDirection",
+    ])
+      expect(text, name).not.toMatch(new RegExp(`\\b${name}\\b`));
+    expect(text).toMatch(/\bResolvedField\b/);
   });
 
   it("imports in plain Node with no DOM and no canvas", async () => {
@@ -104,7 +127,6 @@ describe("@dagnam/vis root barrel", () => {
       "resolveField",
       "ribbon",
       "ribbonCurves",
-      "timeCoords",
       "toCss",
       "toHex",
       "toVec3",

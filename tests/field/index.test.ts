@@ -22,17 +22,13 @@ describe("field barrel", () => {
   });
 
   it("the root barrel re-exports the public subset as the same bindings", () => {
-    for (const name of [
-      "FLOW_SHAPES",
-      "renderField",
-      "resolveField",
-      "timeCoords",
-    ] as const)
+    for (const name of ["FLOW_SHAPES", "renderField", "resolveField"] as const)
       expect(root[name]).toBe(field[name]);
   });
 
   it("keeps the noise, the sampler factory and the constants out of the root", () => {
     for (const name of [
+      "timeCoords",
       "hash4",
       "hash01",
       "simplex4",

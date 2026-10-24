@@ -148,10 +148,16 @@ describe("renderField", () => {
       expect(same(renderField(r as never, o).data, before.data)).toBe(true);
     });
 
-    it("validates a cloned look-alike like any raw spec", () => {
-      const clone = structuredClone(resolveField(fluid));
-      expect(() => renderField(clone, { width: 4, height: 4 })).toThrow(
-        VisError,
+    it("rejects a copy of a resolved spec loudly instead of drawing another picture", () => {
+      const o = { width: 4, height: 4 };
+      for (const spec of [flow, fluid, fluted, flutedFluid]) {
+        const r = resolveField({ ...spec, light: undefined });
+        for (const copy of [structuredClone(r), { ...r }])
+          expect(() => renderField(copy, o)).toThrow(/pass the original/);
+      }
+      const vignetted = resolveField({ ...flow, light: { vignette: 0.8 } });
+      expect(() => renderField(structuredClone(vignetted), o)).toThrow(
+        /vignette/,
       );
     });
 
@@ -212,7 +218,7 @@ describe("renderField", () => {
         expect(() => renderField(flow, { ...o, t: t as never })).toThrow(
           /\bt\b/,
         );
-      for (const loop of [0, -2, Number.NaN, Infinity, "4", null])
+      for (const loop of [0, -2, Number.NaN, Infinity, "4", null, 1.1e10])
         expect(() => renderField(flow, { ...o, loop: loop as never })).toThrow(
           /loop/,
         );
@@ -223,6 +229,18 @@ describe("renderField", () => {
         loop: undefined as never,
       });
       expect(same(a.data, b.data)).toBe(true);
+    });
+
+    it("accepts a loop of exactly MAX_T and rejects anything above it, naming loop", () => {
+      const o = { width: 8, height: 8 };
+      for (const spec of specs)
+        expect(
+          renderField(spec, { ...o, loop: MAX_T, t: 3 }).data,
+        ).toHaveLength(256);
+      for (const loop of [MAX_T + 1, 1e7, 1.1e10, 1e300])
+        expect(() => renderField(flow, { ...o, loop })).toThrow(
+          /loop must be .*1000000/,
+        );
     });
 
     it("rejects an unknown spec", () => {

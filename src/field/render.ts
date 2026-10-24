@@ -3,6 +3,7 @@ import {
   MAX_DIMENSION,
   assertOptions,
   bounded,
+  describeValue,
   integerIn,
 } from "../core/validate.js";
 import { flowSampler } from "./cpu/flow.js";
@@ -24,14 +25,19 @@ export interface FieldFrame {
   height: number;
 }
 
+/** What to render: the size of the frame and the moment in the animation. */
 export interface RenderFieldOptions {
   /** Whole pixels, 1..16384. */
   width: number;
-  /** Whole pixels, 1..16384. `width * height` is at most `MAX_FRAME_PIXELS`. */
+  /** Whole pixels, 1..16384; `width * height` is at most 33,554,432 (2^25) pixels in all. */
   height: number;
-  /** Seconds, finite, within ±1000000; default 0. */
+  /** Seconds, finite, within ±1000000. Default 0. */
   t?: number;
-  /** Loop period in seconds (positive, finite); frames at t and t + loop are byte-identical. */
+  /**
+   * Loop period in seconds, above 0 and at most 1000000: frames at `t` and `t + loop`
+   * are byte-identical. Above about 40000 seconds the noise coordinates leave the range
+   * where a GPU frame matches this one to the documented tolerance.
+   */
   loop?: number;
 }
 
@@ -40,6 +46,16 @@ export const MAX_FRAME_PIXELS = 2 ** 25;
 
 /** Largest |t| in seconds (about 11.6 days): keeps the noise's time coordinates well inside its domain. */
 export const MAX_T = 1e6;
+
+/** `loop` as timeCoords takes it: undefined, or seconds above 0 and at most `MAX_T`. */
+function loopOf(loop: unknown): number | undefined {
+  if (loop === undefined) return undefined;
+  if (typeof loop !== "number" || !(loop > 0 && loop <= MAX_T))
+    throw new VisError(
+      `loop must be a number of seconds above 0 and at most ${MAX_T}, got ${describeValue(loop)}`,
+    );
+  return loop;
+}
 
 /** The sampler of `spec`'s kind, for a picture of `width` x `height` pixels. */
 export function makeSampler(
@@ -87,7 +103,7 @@ export function renderField(
       `width x height must be at most ${MAX_FRAME_PIXELS} pixels, got ${width} x ${height}`,
     );
   const t = opts.t === undefined ? 0 : bounded("t", opts.t, -MAX_T, MAX_T);
-  const tc = timeCoords(t, opts.loop); // checks loop (type, finite, > 0) and names it
+  const tc = timeCoords(t, loopOf(opts.loop));
   const sampler = makeSampler(
     resolvedField(spec) ?? resolveField(spec),
     width,

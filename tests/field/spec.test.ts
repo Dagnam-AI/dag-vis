@@ -404,4 +404,95 @@ describe("resolveField", () => {
     for (const v of [null, undefined, 1, "flow"])
       expect(resolvedField(v)).toBeUndefined();
   });
+
+  describe("the shape list", () => {
+    it("is frozen: it cannot be extended, so it cannot widen what resolveField accepts", () => {
+      expect(Object.isFrozen(FLOW_SHAPES)).toBe(true);
+      expect(() => (FLOW_SHAPES as string[]).push("evil")).toThrow(TypeError);
+      expect(() => resolveField(flow({ shape: "evil" }))).toThrow(/shape/);
+      expect(FLOW_SHAPES).toHaveLength(6);
+    });
+  });
+
+  describe("a copy of a resolved spec", () => {
+    const resolvedOf = {
+      flow: () => resolveField(flow({ light: { vignette: 0.8 } })),
+      "flow with a highlight": () =>
+        resolveField(
+          flow({ light: { highlight: { at: [0.5, 0.5], strength: 0.3 } } }),
+        ),
+      fluid: () => resolveField(fluid()),
+      "fluid with a base": () => resolveField(fluid({ base: "#123456" })),
+      "fluted over flow": () => resolveField(fluted()),
+      "fluted over fluid": () => resolveField(fluted({ source: fluid() })),
+    };
+    const copies: Record<string, (v: unknown) => unknown> = {
+      structuredClone: (v) => structuredClone(v),
+      "JSON round trip": (v) => JSON.parse(JSON.stringify(v)) as unknown,
+      "spread copy": (v) => ({ ...(v as object) }),
+    };
+    for (const [what, make] of Object.entries(resolvedOf))
+      for (const [how, copy] of Object.entries(copies))
+        it(`${what}, by ${how}: fails loudly instead of rendering another picture`, () => {
+          expect(() => resolveField(copy(make()))).toThrow(VisError);
+          expect(() => resolveField(copy(make()))).toThrow(
+            /resolved spec.*pass the original resolveField\(\) result or the raw spec/s,
+          );
+        });
+
+    it("names the offending key", () => {
+      expect(() => resolveField(structuredClone(resolveField(flow())))).toThrow(
+        /vignette/,
+      );
+      expect(() =>
+        resolveField(structuredClone(resolveField(fluid()))),
+      ).toThrow(/points\[0\]\.color|base/);
+      expect(() =>
+        resolveField(structuredClone(resolveField(fluted()))),
+      ).toThrow(/source\.(vignette|highlight)/);
+    });
+
+    it("catches a colour object on a point even when base is a string, and leaves other bad points to the normal checks", () => {
+      const bad = fluid({
+        base: "#fff",
+        points: [{ at: [0, 0], color: { r: 0, g: 0, b: 0, a: 1 } }],
+      });
+      expect(() => resolveField(bad)).toThrow(/points\[0\]\.color.*resolved/s);
+      expect(() => resolveField(fluid({ points: [null] }))).toThrow(
+        /points\[0\] must be an object/,
+      );
+      expect(() => resolveField(fluid({ points: [1] }))).toThrow(
+        /points\[0\] must be an object/,
+      );
+    });
+
+    it("does not reject raw specs that use the raw spelling of the same options", () => {
+      expect(
+        resolveField(
+          flow({
+            light: { vignette: 0.4, highlight: { at: [0.1, 0.2] } },
+          }),
+        ),
+      ).toMatchObject({ vignette: 0.4 });
+      expect(resolveField(fluid({ base: "#fff" }))).toMatchObject({
+        kind: "fluid",
+      });
+    });
+  });
+
+  it("freezes the private snapshot so an internal caller cannot corrupt it", () => {
+    const r = resolveField(fluted({ source: fluid() }));
+    const snap = resolvedField(r) as unknown as {
+      reeds: number;
+      source: { points: { at: number[]; color: object }[] };
+    };
+    expect(Object.isFrozen(snap)).toBe(true);
+    expect(Object.isFrozen(snap.source)).toBe(true);
+    expect(Object.isFrozen(snap.source.points[0])).toBe(true);
+    expect(Object.isFrozen(snap.source.points[0]?.at)).toBe(true);
+    expect(Object.isFrozen(snap.source.points[0]?.color)).toBe(true);
+    expect(() => {
+      snap.reeds = 1;
+    }).toThrow(TypeError);
+  });
 });

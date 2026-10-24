@@ -6,7 +6,7 @@ export type {
   FlowShape,
   FluidFieldPoint,
   FluidFieldSpec,
-  FlutedDirection,
+  FlutedFieldDirection,
   FlutedFieldSpec,
   ResolvedField,
   ResolvedFlow,

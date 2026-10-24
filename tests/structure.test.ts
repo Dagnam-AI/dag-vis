@@ -20,6 +20,13 @@ const ALLOWED: Record<string, readonly string[]> = {
   node: ["core", "brand", "gradient", "pattern", "scene"],
 };
 
+/**
+ * Every module specifier: static `from "..."`, side-effect `import "..."` and dynamic
+ * `import("...")` (also with a comment before the string, single quotes or backticks).
+ */
+const IMPORT_SPECIFIER =
+  /(?:from|import)\s*\(?\s*(?:\/\*[^*]*\*\/\s*)?["'`]([^"'`]+)["'`]/g;
+
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const p = join(dir, name);
@@ -41,8 +48,8 @@ describe("repository structure", () => {
     const allowed = layer.includes(".")
       ? Object.keys(ALLOWED)
       : ALLOWED[layer]!;
-    // Static `from "..."`, side-effect `import "..."` and dynamic `import("...")` alike.
-    for (const m of text.matchAll(/(?:from|import)\s*\(?\s*"(\.[^"]+)"/g)) {
+    for (const m of text.matchAll(IMPORT_SPECIFIER)) {
+      if (!m[1]!.startsWith(".")) continue;
       const target = join(dirname(file), m[1]!);
       const targetLayer = layerOf(target);
       if (targetLayer === layer || targetLayer.includes(".")) continue;
@@ -51,9 +58,11 @@ describe("repository structure", () => {
       );
     }
     if (layer !== "node" && !layer.includes(".")) {
-      expect(text, `${relative(ROOT, file)} uses a Node import`).not.toMatch(
-        /from\s+"node:/,
-      );
+      for (const m of text.matchAll(IMPORT_SPECIFIER))
+        expect(
+          m[1]!.startsWith("node:"),
+          `${relative(ROOT, file)} uses the Node import ${m[1]!}`,
+        ).toBe(false);
     }
   });
 
