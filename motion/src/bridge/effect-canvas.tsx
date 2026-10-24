@@ -21,10 +21,12 @@ export interface EffectCanvasProps {
  * Remotion renders frame N from a frame number; the library renders from
  * seconds. This is the whole bridge: a sized box (the runtime reads the
  * canvas parent's rect), one handle per `create`, and `renderAt(t)` drawn in
- * a layout effect, in the same task as the screenshot's pixel read (the GL
- * context keeps no drawing buffer). `start()` is never called: no
- * requestAnimationFrame, no observers, no clock, so a frame is a pure
- * function of `t`.
+ * a layout effect (the GL context keeps no drawing buffer, so a JavaScript
+ * readback must happen in the same task as the draw; Remotion captures the
+ * frame in a later task). `start()` is never called: no requestAnimationFrame,
+ * no clock. The first `renderAt` installs a resize observer on the box, which
+ * only repaints the last frame when the box changes size, so a frame is still
+ * a pure function of `t`.
  *
  * Setup is synchronous (the context and shaders are built inside `create` and
  * the first `renderAt`), so there is nothing to hold the render for.

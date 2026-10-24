@@ -55,7 +55,7 @@ const times = (handle: Fake): number[] =>
 afterEach(cleanup);
 
 describe("<EffectCanvas>", () => {
-  it("creates one handle, paints t = frame / fps for each frame, never starts the loop, destroys on unmount", () => {
+  it("creates one handle, paints each `t` it is given, never starts the loop, destroys on unmount", () => {
     const { made, create } = recording();
     const frame = (f: number) => (
       <EffectCanvas create={create} t={f / FPS} width={640} height={360} />
