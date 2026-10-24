@@ -523,10 +523,20 @@ describe("renderRgba", () => {
     expect(Math.abs(g - 0xc0)).toBeLessThanOrEqual(2);
     expect(b).toBe(255);
     expect(Array.from(data.subarray(8, 12))).toEqual([0, 0, 0, 0]);
-    // The same pixel through the PNG encoder agrees with the straight bytes.
-    const png = await renderPng(svg);
-    const premultiplied = pixel(decode(png), 0, 0);
-    expect(premultiplied[3]).toBe(128);
+    // The PNG encoder agrees: drawn back (premultiplied), each pixel is the straight bytes scaled by alpha.
+    const drawn = decode(await renderPng(svg));
+    for (const x of [0, 1, 2]) {
+      const straight = Array.from(data.subarray(x * 4, x * 4 + 4));
+      const back = pixel(drawn, x, 0);
+      expect(back[3]).toBe(straight[3]);
+      for (const c of [0, 1, 2])
+        expect(
+          Math.abs(
+            (back[c] ?? NaN) -
+              ((straight[c] ?? NaN) * (straight[3] ?? NaN)) / 255,
+          ),
+        ).toBeLessThanOrEqual(2);
+    }
   });
 
   it("composites onto the background: every pixel opaque and exact", async () => {

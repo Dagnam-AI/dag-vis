@@ -3,6 +3,7 @@ import {
   MAX_DIMENSION,
   bounded,
   describeValue,
+  finite,
   integerIn,
 } from "../core/validate.js";
 import {
@@ -32,8 +33,8 @@ export interface FrameSource {
   svg(t: number): string;
 }
 
-/** Ribbon phase advance per second without a loop (rad/s); a loop advances 2*pi per period. */
-const RIBBON_RATE = 0.5;
+/** Ribbon phase advance per second without a loop (rad/s) unless the spec sets `drift`; a loop advances 2*pi per period. */
+const RIBBON_DRIFT = 0.5;
 
 /** Field kinds are per-pixel, so their SVG is a labelled raster: `<image>` with the PNG inlined. Vector kinds stay vector. */
 export function rasterSvg(png: Buffer, width: number, height: number): string {
@@ -44,9 +45,13 @@ export function rasterSvg(png: Buffer, width: number, height: number): string {
   );
 }
 
-/** Phase in radians at `t`: 0.5 rad/s, or one full turn per `loop` seconds so frames `loop` apart match. */
-function ribbonPhase(t: number, loop: number | undefined): number {
-  if (loop === undefined) return t * RIBBON_RATE;
+/** Phase in radians at `t`: `drift` rad/s, or one full turn per `loop` seconds so frames `loop` apart match (a loop overrides `drift`). */
+function ribbonPhase(
+  t: number,
+  loop: number | undefined,
+  drift: number,
+): number {
+  if (loop === undefined) return t * drift;
   return (2 * Math.PI * (((t % loop) + loop) % loop)) / loop;
 }
 
@@ -60,6 +65,15 @@ function isField(spec: { kind: string; source?: unknown }): boolean {
     source !== null &&
     (source.kind === "flow" || source.kind === "fluid")
   );
+}
+
+/** `bytes` if it is exactly one `width` x `height` RGBA frame: the contract every consumer (ffmpeg, GIF) relies on. */
+function exact(bytes: Uint8Array, width: number, height: number): Uint8Array {
+  if (bytes.length !== width * height * 4)
+    throw new VisError(
+      `frame has ${bytes.length} bytes, expected ${width * height * 4} (${width}x${height} RGBA)`,
+    );
+  return bytes;
 }
 
 /** A promise for `run()`: a throw becomes a rejection, like the resvg-backed sources. */
@@ -124,13 +138,23 @@ export function frameSource(
   }
   if (named.kind === "ribbon") {
     const options = { ...spec, width, height } as RibbonSvgOptions;
-    const svg = (t: number) => ribbon(options, ribbonPhase(instant(t), period));
+    // `drift` (rad/s, as in the animated ribbon) sets the speed when there is no loop.
+    const drift =
+      (spec as { drift?: unknown }).drift === undefined
+        ? RIBBON_DRIFT
+        : finite("drift", (spec as { drift?: unknown }).drift);
+    const svg = (t: number) =>
+      ribbon(options, ribbonPhase(instant(t), period, drift));
     svg(0); // the options are checked now, not at the first frame
     return {
       animated: true,
       svg,
       rgba: async (t, background) =>
-        (await renderRgba(svg(t), { width, ...flatten(background) })).data,
+        exact(
+          (await renderRgba(svg(t), { width, ...flatten(background) })).data,
+          width,
+          height,
+        ),
       png: (t, background) =>
         renderPng(svg(t), { width, ...flatten(background) }),
     };
@@ -141,7 +165,11 @@ export function frameSource(
     animated: false,
     svg: () => svg,
     rgba: async (_t, background) =>
-      (await renderRgba(svg, { width, ...flatten(background) })).data,
+      exact(
+        (await renderRgba(svg, { width, ...flatten(background) })).data,
+        width,
+        height,
+      ),
     png: (_t, background) => renderPng(svg, { width, ...flatten(background) }),
   };
 }

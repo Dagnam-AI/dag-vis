@@ -1,10 +1,11 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rename, rm, rmdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 import { VisError } from "../core/index.js";
 import {
   assertOptions,
+  bounded,
   describeValue,
   orDefault,
   parseFlag,
@@ -39,7 +40,7 @@ export interface StaticOptions {
   t?: number;
   /** Loop period, so `t` lands on the same frame the animated export would produce. */
   loop?: number;
-  /** 0..1 for jpeg, webp and avif; default 0.8. */
+  /** 0..1, default 0.8; used by jpeg, webp and avif, but checked for every format. */
   quality?: number;
   /**
    * Opaque CSS colour that transparency is flattened onto for jpeg and avif,
@@ -54,13 +55,18 @@ export interface AnimationOptions {
   width: number;
   height: number;
   format: AnimationFormat;
-  /** A file path, or for png-seq the folder (created if missing) that receives `frame-00000.png`, `frame-00001.png`, ... */
+  /**
+   * A file path, or for png-seq the folder (created if missing) that receives
+   * `frame-00000.png`, `frame-00001.png`, ... A folder that already holds
+   * `frame-NNNNN.png` files is refused, so two sequences never mix: use a new
+   * or empty folder.
+   */
   out: string;
   /** Integer 1..60; default 30. */
   fps?: number;
   /** Seconds, up to 60; default 6. */
   duration?: number;
-  /** 0..1 for mp4, webm; default 0.8. */
+  /** 0..1, default 0.8; used by mp4 and webm, but checked for every format. */
   quality?: number;
   /** Make the motion periodic over the whole clip (frames / fps) so the file loops without a seam. */
   loop?: boolean;
@@ -79,6 +85,10 @@ export interface AnimationOptions {
 
 /** Longest output path accepted (PATH_MAX on the common platforms). */
 const MAX_PATH_LENGTH = 4096;
+/** Browsers play a GIF delay under 2 centiseconds as 10, so a GIF is exact only up to this rate. */
+const GIF_MAX_FPS = 50;
+/** The file names a png-seq export writes. */
+const SEQUENCE_FRAME = /^frame-\d{5}\.png$/;
 /** Formats that cannot hold transparency in a still. */
 const OPAQUE_STILLS: readonly string[] = ["jpeg", "avif"];
 
@@ -173,6 +183,7 @@ export async function exportStatic(
   const format = oneOf("format", o.format, STATIC_FORMATS);
   const out = pathOf("out", o.out);
   const background = backgroundOf(o.background);
+  bounded("quality", o.quality ?? 0.8, 0, 1);
   const src = frameSource(spec, o.width, o.height, o.loop);
   const t = o.t ?? 0;
   switch (format) {
@@ -205,7 +216,21 @@ export async function exportStatic(
   }
 }
 
-/** frame-00000.png ... into the folder `out`; on failure the frames written so far (and a folder this call created) are removed. */
+/** Refuse a folder that already holds a frame sequence: a second export would mix with it. Nothing is deleted. */
+async function assertNoSequence(out: string): Promise<void> {
+  // A folder that does not exist (or is no folder) is for `mkdir` to report.
+  const names = await readdir(out).catch(() => []);
+  if (names.some((name) => SEQUENCE_FRAME.test(name)))
+    throw new VisError(
+      `out ${describeValue(out)} already contains a frame sequence (frame-NNNNN.png files): use an empty or new folder`,
+    );
+}
+
+/**
+ * frame-00000.png ... into the folder `out`, which holds no frame of an earlier
+ * sequence (see `assertNoSequence`), so every file written here is new. On
+ * failure exactly those frames (and a folder this call created) are removed.
+ */
 async function writeSequence(
   src: FrameSource,
   out: string,
@@ -254,6 +279,7 @@ export async function exportAnimation(
       `alpha is not supported by ${format}; use webm or apng (png-seq always keeps transparency)`,
     );
   const background = backgroundOf(o.background);
+  bounded("quality", o.quality ?? 0.8, 0, 1);
   if (o.warn !== undefined && typeof o.warn !== "function")
     throw new VisError(`warn must be a function, got ${describeValue(o.warn)}`);
   const plan = animationPlan(
@@ -265,6 +291,15 @@ export async function exportAnimation(
     },
     o.warn,
   );
+  if (format === "gif" && plan.fps > GIF_MAX_FPS)
+    (
+      o.warn ??
+      ((message: string) => {
+        console.warn(message);
+      })
+    )(
+      `GIF delays are whole centiseconds and browsers play under 2 as 10, so ${plan.fps} fps plays at ${GIF_MAX_FPS}; use mp4 or webm`,
+    );
   // The clip plays count / fps seconds: that, not the requested duration, is the period of a seamless loop.
   const src = frameSource(
     spec,
@@ -299,6 +334,7 @@ export async function exportAnimation(
       };
       break;
     case "png-seq":
+      await assertNoSequence(out);
       job = () => writeSequence(src, out, plan.count, plan.fps);
       break;
     case "apng":

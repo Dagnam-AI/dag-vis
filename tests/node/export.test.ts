@@ -509,7 +509,7 @@ describe("exportAnimation", () => {
     expect(src.svg(8 / 30)).toBe(src.svg(0));
   });
 
-  it("warns through the callback, and defaults duration and fps", async () => {
+  it("warns through the callback about a GIF wider than 800 px", async () => {
     const dir = fresh();
     const warn = vi.fn();
     await exportAnimation(flow, {
@@ -524,6 +524,116 @@ describe("exportAnimation", () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining("GIF wider than"),
     );
+  });
+
+  it("warns when a GIF is faster than 50 fps, through the callback or console.warn, and not at 50", async () => {
+    const dir = fresh();
+    const gif = (fps: number, warn?: (m: string) => void) =>
+      exportAnimation(flow, {
+        width: 8,
+        height: 4,
+        format: "gif",
+        fps,
+        duration: 0.1,
+        out: join(dir, `${fps}.gif`),
+        ...(warn === undefined ? {} : { warn }),
+      });
+    const warn = vi.fn();
+    await gif(50, warn);
+    expect(warn).not.toHaveBeenCalled();
+    await gif(60, warn);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringMatching(/60 fps plays at 50; use mp4 or webm/),
+    );
+    const spy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await gif(55);
+      expect(spy).toHaveBeenCalledWith(expect.stringContaining("55 fps"));
+    } finally {
+      spy.mockRestore();
+    }
+    // Other formats are not held to the GIF delay floor.
+    await exportAnimation(flow, {
+      width: 8,
+      height: 4,
+      format: "png-seq",
+      fps: 60,
+      duration: 0.05,
+      out: join(dir, "seq"),
+      warn,
+    });
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a folder that already holds a frame sequence, touching nothing", async () => {
+    const dir = fresh();
+    const seq = join(dir, "seq");
+    mkdirSync(seq);
+    writeFileSync(join(seq, "frame-00000.png"), "old zero");
+    writeFileSync(join(seq, "frame-00007.png"), "old seven");
+    writeFileSync(join(dir, "poster.png"), "old poster");
+    await expect(
+      exportAnimation(flow, {
+        ...base,
+        format: "png-seq",
+        out: seq,
+        poster: join(dir, "poster.png"),
+      }),
+    ).rejects.toThrow(/out ".*" already contains a frame sequence/);
+    expect(files(seq)).toEqual(["frame-00000.png", "frame-00007.png"]);
+    expect(readFileSync(join(seq, "frame-00000.png"), "utf8")).toBe("old zero");
+    expect(readFileSync(join(seq, "frame-00007.png"), "utf8")).toBe(
+      "old seven",
+    );
+    expect(readFileSync(join(dir, "poster.png"), "utf8")).toBe("old poster");
+  });
+
+  it("accepts a folder with other files, even frame look-alikes, and failure removes only the frames it wrote", async () => {
+    const dir = fresh();
+    const seq = join(dir, "mine");
+    mkdirSync(seq);
+    const others = [
+      "notes.txt",
+      "frame-1.png",
+      "frame-00000.jpg",
+      "frames-00000.png",
+    ];
+    for (const name of others) writeFileSync(join(seq, name), name);
+    hook.failRename = (to) => to.endsWith("frame-00002.png");
+    await expect(
+      exportAnimation(flow, { ...base, format: "png-seq", out: seq }),
+    ).rejects.toThrow(/disk full/);
+    expect(files(seq)).toEqual([...others].sort());
+    for (const name of others)
+      expect(readFileSync(join(seq, name), "utf8")).toBe(name);
+    hook.failRename = undefined;
+    await exportAnimation(flow, { ...base, format: "png-seq", out: seq });
+    expect(files(seq)).toHaveLength(others.length + 4);
+  });
+
+  it("checks quality for every format, even where it is not used", async () => {
+    const dir = fresh();
+    for (const format of ["gif", "png-seq"] as const)
+      await expect(
+        exportAnimation(flow, {
+          ...base,
+          format,
+          quality: 2,
+          out: join(dir, "x"),
+        }),
+      ).rejects.toThrow(/quality/);
+    for (const format of ["png", "svg"] as const)
+      await expect(
+        exportStatic(flow, {
+          width: 8,
+          height: 4,
+          format,
+          quality: NaN,
+          out: join(dir, "x"),
+        }),
+      ).rejects.toThrow(/quality/);
+    expect(files(dir)).toEqual([]);
   });
 
   it("defaults to 30 fps and 6 seconds", async () => {

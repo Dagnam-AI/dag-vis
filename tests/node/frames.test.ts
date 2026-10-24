@@ -115,6 +115,24 @@ describe("frameSource: ribbons", () => {
     expect(png.equals(await src.png(0))).toBe(false);
   });
 
+  it("moves at the spec's drift, and a loop overrides it", () => {
+    const fast = frameSource({ ...spec, drift: 2 }, 16, 8);
+    expect(fast.svg(1.5)).toBe(ribbon(options, 3));
+    expect(frameSource({ ...spec, drift: 0 }, 16, 8).svg(9)).toBe(
+      ribbon(options, 0),
+    );
+    expect(frameSource({ ...spec, drift: 2 }, 16, 8, 4).svg(1)).toBe(
+      ribbon(options, Math.PI / 2),
+    );
+  });
+
+  it("rejects a drift that is not a finite number", () => {
+    for (const bad of [NaN, Infinity, "1", null])
+      expect(() => frameSource({ ...spec, drift: bad }, 16, 8)).toThrow(
+        /drift/,
+      );
+  });
+
   it("validate the options up front", () => {
     expect(() => frameSource({ kind: "ribbon", lines: 0 }, 16, 8)).toThrow(
       /lines/,
@@ -137,13 +155,14 @@ describe("frameSource: gradients", () => {
     expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([8, 4]);
   });
 
-  it("take a background (a no-op for an opaque fill) and route a fluted gradient to the gradient", async () => {
+  it("take a background that changes nothing under an opaque fill, and route a fluted gradient to the gradient", async () => {
+    const src = frameSource(spec, 8, 4);
     expect(
-      Buffer.from(await frameSource(spec, 8, 4).rgba(0, "#ff0000")).length,
-    ).toBe(128);
-    expect(
-      (await frameSource(spec, 8, 4).png(0, "#ff0000")).length,
-    ).toBeGreaterThan(0);
+      Buffer.from(await src.rgba(0, "#ff0000")).equals(
+        Buffer.from(await src.rgba(0)),
+      ),
+    ).toBe(true);
+    expect((await src.png(0, "#ff0000")).equals(await src.png(0))).toBe(true);
     const fluted = frameSource({ kind: "fluted", source: spec }, 8, 4);
     expect(fluted.animated).toBe(false);
   });
