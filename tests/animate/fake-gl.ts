@@ -44,6 +44,12 @@ export class FakeGl {
   bufferSize: [number, number] | null = null;
   /** Every texImage2D data argument, in call order. */
   textures: ArrayBufferView[] = [];
+  /** Object identity, for "frees the right objects": what was created, deleted and bound (null = unbound). */
+  createdPrograms: object[] = [];
+  deletedPrograms: object[] = [];
+  createdTextures: object[] = [];
+  deletedTextures: object[] = [];
+  boundTextures: (object | null)[] = [];
   compileOk = true;
   linkOk = true;
   /** null simulates a driver that returns no info log. */
@@ -101,7 +107,9 @@ export class FakeGl {
   createProgram(): object {
     this.programs += 1;
     this.calls.push("createProgram");
-    return { id: this.programs };
+    const program = { id: this.programs };
+    this.createdPrograms.push(program);
+    return program;
   }
   attachShader(): void {
     // not recorded: every program attaches the same two shaders
@@ -115,8 +123,9 @@ export class FakeGl {
   getProgramInfoLog(): string | null {
     return this.infoLog === null ? null : `${this.infoLog}: link error`;
   }
-  deleteProgram(): void {
+  deleteProgram(program: object): void {
     this.calls.push("deleteProgram");
+    this.deletedPrograms.push(program);
   }
   useProgram(): void {
     this.calls.push("useProgram");
@@ -161,10 +170,13 @@ export class FakeGl {
   }
   createTexture(): object {
     this.calls.push("createTexture");
-    return {};
+    const texture = {};
+    this.createdTextures.push(texture);
+    return texture;
   }
   bindTexture(target: number, tex: object | null): void {
     this.calls.push(`bindTexture ${target} ${tex === null ? "null" : "tex"}`);
+    this.boundTextures.push(tex);
   }
   texImage2D(
     _target: number,
@@ -173,11 +185,13 @@ export class FakeGl {
     w: number,
     h: number,
     _border: number,
-    _format: number,
-    _type: number,
+    format: number,
+    type: number,
     data: ArrayBufferView,
   ): void {
-    this.calls.push(`texImage2D ${internal} ${w}x${h} ${data.byteLength}`);
+    this.calls.push(
+      `texImage2D ${internal} ${w}x${h} ${format} ${type} ${data.byteLength}`,
+    );
     this.textures.push(data);
   }
   texParameteri(_target: number, p: number, v: number): void {
@@ -186,8 +200,9 @@ export class FakeGl {
   activeTexture(unit: number): void {
     this.calls.push(`activeTexture ${unit}`);
   }
-  deleteTexture(): void {
+  deleteTexture(texture: object): void {
     this.calls.push("deleteTexture");
+    this.deletedTextures.push(texture);
   }
   viewport(x: number, y: number, w: number, h: number): void {
     this.calls.push(`viewport ${x} ${y} ${w} ${h}`);

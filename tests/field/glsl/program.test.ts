@@ -62,6 +62,28 @@ describe("planGpu: flow", () => {
     expect(u.uRot).toEqual({ t: "2f", v: [1, 0] });
   });
 
+  it("sends the highlight colour channel by channel", () => {
+    const u = planGpu(
+      resolveField({
+        kind: "flow",
+        palette: ["#000", "#fff"],
+        light: {
+          highlight: {
+            at: [0.2, 0.4],
+            strength: 0.5,
+            radius: 0.3,
+            color: "#9fe07a",
+          },
+        },
+      }),
+    ).uniforms(8, 8, timeCoords(0));
+    const [r, g, b] = nums(u.uHighlightColor?.v);
+    expect(r).toBeCloseTo(0x9f / 255, 12);
+    expect(g).toBeCloseTo(0xe0 / 255, 12);
+    expect(b).toBeCloseTo(0x7a / 255, 12);
+    expect(nums(u.uHighlight?.v)).toEqual([0.2, 0.4, 0.5, 0.3]);
+  });
+
   it("sends (cos, sin) of the rotation", () => {
     const rotated = planGpu(
       resolveField({ ...fieldPresets.lagoon, kind: "flow" }),

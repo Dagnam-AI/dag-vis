@@ -49,7 +49,9 @@ describe("createField", () => {
     const at = (c: string) => calls.indexOf(c);
     expect(at("linkProgram")).toBeGreaterThan(-1);
     expect(calls).toContain(`disable ${gl().BLEND}`);
-    const tex = at(`texImage2D ${gl().RGB32F} 256x1 ${256 * 3 * 4}`);
+    const tex = at(
+      `texImage2D ${gl().RGB32F} 256x1 ${gl().RGB} ${gl().FLOAT} ${256 * 3 * 4}`,
+    );
     expect(tex).toBeGreaterThan(at("linkProgram"));
     expect(gl().textures[0]).toHaveLength(768);
     expect(calls.filter((c) => c.startsWith("texParameteri"))).toEqual([
@@ -256,14 +258,26 @@ describe("createField", () => {
     expect(calls.filter((c) => c === "createTexture")).toHaveLength(1);
     expect(names(calls.slice(calls.lastIndexOf("useProgram")))).toEqual(first);
     expect(calls.at(-1)).toBe(`drawArrays ${gl().TRIANGLES} 0 3`);
+    // The restored frame samples the rebuilt texture, and destroy frees the live objects.
+    expect(gl().createdTextures).toHaveLength(2);
+    expect(gl().boundTextures.at(-1)).toBe(gl().createdTextures[1]);
+    h.destroy();
+    expect(gl().deletedTextures).toEqual([gl().createdTextures[1]]);
+    expect(gl().deletedPrograms).toEqual([gl().createdPrograms[1]]);
   });
 
   it("destroy frees the program and the LUT, never the context, and the canvas can host another field", () => {
     const h = createField(canvas, preset("lagoon"));
     h.renderAt(0);
+    expect(gl().createdTextures).toHaveLength(1);
+    expect(gl().createdPrograms).toHaveLength(1);
+    // The texture the frame sampled is the one that was uploaded.
+    expect(gl().boundTextures.at(-1)).toBe(gl().createdTextures[0]);
     gl().calls.length = 0;
     h.destroy();
     expect(gl().calls).toEqual(["deleteTexture", "deleteProgram"]);
+    expect(gl().deletedTextures).toEqual(gl().createdTextures);
+    expect(gl().deletedPrograms).toEqual(gl().createdPrograms);
     expect(() => {
       h.renderAt(0);
     }).toThrow(VisError);
@@ -276,6 +290,8 @@ describe("createField", () => {
     expect(fake.gls).toHaveLength(1);
     again.destroy();
     expect(gl().calls.at(-1)).toBe("deleteProgram");
+    expect(gl().deletedPrograms[1]).toBe(gl().createdPrograms[1]);
+    expect(gl().deletedPrograms[1]).not.toBe(gl().createdPrograms[0]);
     expect(gl().calls).not.toContain("loseContext");
   });
 
@@ -296,9 +312,9 @@ describe("createField", () => {
     expect(() => createField(canvas, preset("lunar"), { speed: -1 })).toThrow(
       /speed/,
     );
-    expect(() => createField(canvas, preset("lunar"), { seed: 1.5 })).toThrow(
-      /seed/,
-    );
+    expect(() =>
+      createField(canvas, preset("lunar"), { seed: 1.5 } as never),
+    ).toThrow(/seed/);
     expect(fake.gls).toHaveLength(0);
   });
 
@@ -367,17 +383,55 @@ describe("createField", () => {
       expect(h.duration).toBe(4);
     });
 
-    it("does not let the common seed change a field: the spec's seed is the only one", () => {
-      const h = createField(canvas, preset("lunar"), { seed: 99 });
+    it("does not let a seed option change a field: the spec's seed is the only one", () => {
+      const h = createField(canvas, preset("lunar"), { seed: 99 } as never);
       h.renderAt(0);
       expect(uniforms(gl().calls)).toContain("uniform1ui uSeed 2");
-      h.update({ seed: 7 });
+      h.update({ seed: 7 } as never);
       gl().calls.length = 0;
       h.renderAt(1);
       expect(names(gl().calls)).not.toContain("uSeed");
       expect(() => {
-        h.update({ seed: 1.5 });
+        h.update({ seed: 1.5 } as never);
       }).toThrow(/seed/);
+    });
+  });
+
+  describe("update with a spec", () => {
+    const patch = (spec: unknown, extra: object = {}) =>
+      ({ spec, ...extra }) as never;
+
+    it("accepts the same spec by value and still applies the rest of the patch", () => {
+      const h = createField(canvas, preset("lagoon"));
+      h.renderAt(0);
+      const copy = structuredClone(preset("lagoon"));
+      expect(() => {
+        h.update(patch(copy, { loop: { duration: 3 } }));
+      }).not.toThrow();
+      expect(h.duration).toBe(3);
+      expect(() => {
+        h.update(patch(undefined));
+      }).not.toThrow();
+    });
+
+    it("throws a VisError for a different spec and applies nothing of the patch", () => {
+      const h = createField(canvas, preset("lagoon"));
+      h.renderAt(0);
+      const other = { ...(preset("lagoon") as object), seed: 77 };
+      expect(() => {
+        h.update(patch(other, { loop: { duration: 3 } }));
+      }).toThrow(VisError);
+      expect(() => {
+        h.update(patch(preset("fluid-dawn")));
+      }).toThrow(/destroy it and create a new one/);
+      expect(h.duration).toBeUndefined();
+    });
+
+    it("throws the validation error, naming the parameter, for an invalid spec", () => {
+      const h = createField(canvas, preset("lagoon"));
+      expect(() => {
+        h.update(patch({ kind: "flow", palette: ["#000"] }));
+      }).toThrow(/palette/);
     });
   });
 

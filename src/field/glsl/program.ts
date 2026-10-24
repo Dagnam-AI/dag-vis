@@ -44,8 +44,9 @@ export interface GpuPlan {
   /**
    * The uniforms for one frame of `width` x `height` whole pixels (the drawing buffer)
    * at the moment `tc`. The SAME record, value objects and arrays come back on every
-   * call, updated in place, so a caller can keep references and a frame allocates
-   * nothing: read or copy what you need before the next call. Values that never change
+   * call, updated in place, so a caller can keep references and the packer allocates
+   * nothing per frame (the caller's `tc` aside): read or copy what you need before the
+   * next call. Values that never change
    * (everything except the size, the time, the grain frame and the fluid points) are
    * set once.
    */
@@ -122,7 +123,13 @@ function fluidKind(spec: ResolvedFluid): Kind {
   };
 }
 
-/** Assemble the fragment shader and the per-frame uniform packer for one resolved spec (from `resolveField`). */
+/**
+ * Assemble the fragment shader and the per-frame uniform packer for one resolved spec
+ * (from `resolveField`). Uniform budget: the worst program (a fluted field over an
+ * eight point fluid) counts 100 of the 224 uniform vectors GLSL ES 3.0 guarantees a
+ * fragment shader, counting every scalar and every array element as a whole vector
+ * (packing brings it lower).
+ */
 export function planGpu(spec: ResolvedField): GpuPlan {
   const flute = spec.kind === "fluted" ? spec : null;
   // The sampler that runs: the field itself, or the source a fluted field looks through.

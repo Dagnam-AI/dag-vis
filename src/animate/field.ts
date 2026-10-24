@@ -1,3 +1,4 @@
+import { VisError } from "../core/index.js";
 import {
   planGpu,
   resolveField,
@@ -13,8 +14,12 @@ import {
 } from "./gl.js";
 import type { EffectHandle, EffectOptions } from "./runtime.js";
 
-/** The common effect options; a field takes no others (see `createField`). */
-export type FieldOptions = EffectOptions;
+/**
+ * The common effect options a field uses. `seed` and `colors` are left out on purpose: a
+ * field's seed and colours live in its spec, so an option of that name could only
+ * mislead (see `createField`).
+ */
+export type FieldOptions = Omit<EffectOptions, "seed" | "colors">;
 
 /** One uniform of the program: where it lives, what the plan holds for it, and what was last sent. */
 interface Slot {
@@ -42,9 +47,11 @@ function send(gl: WebGL2RenderingContext, s: Slot): void {
     else gl.uniform1f(loc, v);
     return;
   }
-  if (s.sent instanceof Float64Array && same(s.sent, v)) return;
-  // A float64 copy, so a value that float32 cannot hold still compares equal next frame.
-  s.sent = Float64Array.from(v);
+  // A float64 copy (made once per slot), so a value float32 cannot hold still compares equal next frame.
+  if (s.sent instanceof Float64Array) {
+    if (same(s.sent, v)) return;
+    s.sent.set(v);
+  } else s.sent = Float64Array.from(v);
   switch (u.t) {
     case "2f":
       gl.uniform2f(loc, Number(v[0]), Number(v[1]));
@@ -85,27 +92,32 @@ function send(gl: WebGL2RenderingContext, s: Slot): void {
  *
  * Seeds: a field's seed (an unsigned 32 bit integer) is part of its spec, because the
  * picture must be a pure function of the spec for `renderField` and the exporters to
- * agree with it. The common `seed` option is therefore validated (a safe integer, as
- * for every effect) and otherwise ignored: put the seed in the spec.
+ * agree with it. There is no `seed` option (the type leaves it out); one passed anyway
+ * is validated like every effect's (a safe integer) and otherwise ignored. The same
+ * goes for `colors`: the palette is in the spec.
  *
- * `opts` may carry extra keys (`<VisBackground>` passes `{ spec, ...options }`); they
- * are ignored. `update()` takes the common options only (`loop` is read on every frame,
+ * `opts` may carry other extra keys (`<VisBackground>` passes `{ spec, ...options }`);
+ * they are ignored. `update()` takes the common options (`loop` is read on every frame,
  * so it takes effect at once; like every effect it cannot be cleared) and a rejected
- * patch changes nothing. To change the spec, `destroy()` and create a new field.
- * `colors` has no meaning for a field and is ignored. `destroy()` frees the program and
- * the palette texture but not the context, so the same canvas can host a new field.
+ * patch changes nothing. A patch that carries a `spec` equal by value to the field's is
+ * accepted and the spec ignored; one that carries a different spec (or an invalid one)
+ * throws a VisError before anything is applied, because a field never changes its spec
+ * live: `destroy()` and create a new field. `destroy()` frees the program and the
+ * palette texture but not the context, so the same canvas can host a new field.
  */
 export function createField(
   canvas: HTMLCanvasElement,
   spec: FieldSpec,
   opts: FieldOptions = {},
-): EffectHandle {
-  const plan = planGpu(resolveField(spec));
+): EffectHandle<FieldOptions> {
+  const resolved = resolveField(spec);
+  const plan = planGpu(resolved);
+  const specKey = JSON.stringify(resolved);
   let program: WebGLProgram | null = null;
   let lut: WebGLTexture | null = null;
   let slots: Slot[] = [];
 
-  const handle: EffectHandle = createGlRuntime(
+  const handle: EffectHandle<FieldOptions> = createGlRuntime(
     canvas,
     {
       // Runs on first use and again after a context restore; the old objects died with the old context.
@@ -174,5 +186,14 @@ export function createField(
     },
     opts,
   );
+  const update = handle.update.bind(handle);
+  handle.update = (patch) => {
+    const next = (patch as { spec?: unknown }).spec;
+    if (next !== undefined && JSON.stringify(resolveField(next)) !== specKey)
+      throw new VisError(
+        "spec cannot change on a live field: destroy it and create a new one",
+      );
+    update(patch);
+  };
   return handle;
 }
