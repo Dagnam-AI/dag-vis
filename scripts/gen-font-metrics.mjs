@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Generates src/brand/moonhouse-metrics.ts and src/brand/unbounded-metrics.ts
-// (plus unbounded-500-metrics.ts and unbounded-700-metrics.ts) from the SHIPPED font files in src/node/fonts/, so wrapping in the social
+// Generates src/brand/moonhouse-metrics.ts, src/brand/unbounded-metrics.ts and
+// its 500 and 700 siblings (unbounded-500-metrics.ts, unbounded-700-metrics.ts)
+// from the SHIPPED font files in src/node/fonts/, so wrapping in the social
 // card agrees with the glyphs resvg draws. No dependencies: it reads the
 // tables it needs (head, hhea, hmtx, cmap formats 4 and 12) straight from the
 // TTF. Inter's table (src/brand/inter-metrics.ts) is older and not produced here.

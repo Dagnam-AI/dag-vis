@@ -47,29 +47,37 @@ describe("the bundled display fonts", () => {
         expect(tags).not.toContain(variable);
       const os2 = buf.readUInt32BE(12 + 16 * tags.indexOf("OS/2") + 8);
       expect(buf.readUInt16BE(os2 + 4)).toBe(weight);
-      // resvg registers a face under its nameID 1: it must be the family, not "Unbounded Medium".
+      // The static-font naming convention: nameID 16/17 hold the family and style where
+      // nameID 1/2 carry the legacy "Unbounded Medium" / "Regular" pair.
       const name = buf.readUInt32BE(12 + 16 * tags.indexOf("name") + 8);
       const strings = name + buf.readUInt16BE(name + 4);
-      const ones: string[] = [];
+      const names = new Map<number, string>();
       for (let i = 0; i < buf.readUInt16BE(name + 2); i++) {
         const rec = name + 6 + 12 * i;
-        if (buf.readUInt16BE(rec + 6) === 1)
-          ones.push(
-            Buffer.from(
-              buf.subarray(
-                strings + buf.readUInt16BE(rec + 10),
-                strings +
-                  buf.readUInt16BE(rec + 10) +
-                  buf.readUInt16BE(rec + 8),
-              ),
-            )
-              .swap16()
-              .toString("utf16le"),
-          );
+        const at = strings + buf.readUInt16BE(rec + 10);
+        names.set(
+          buf.readUInt16BE(rec + 6),
+          Buffer.from(buf.subarray(at, at + buf.readUInt16BE(rec + 8)))
+            .swap16()
+            .toString("utf16le"),
+        );
       }
-      expect(ones).toContain("Unbounded");
+      expect(names.get(16) ?? names.get(1)).toBe("Unbounded");
+      expect(names.get(17) ?? names.get(2)).toBe(face);
+      expect(names.get(14)).toBe("https://scripts.sil.org/OFL");
     },
   );
+
+  it("record where the Unbounded faces come from: upstream commit, source sha-256 and the recipe", () => {
+    const source = read("UNBOUNDED-SOURCE.txt");
+    for (const part of [
+      "f3ec43228a864a72487e41552e2140efab9884ea",
+      "323b511be380c8d474ef030686b71aedde501f8d9cd46da558b7c40454372c3f",
+      "instantiateVariableFont",
+      "name_IDs",
+    ])
+      expect(source).toContain(part);
+  });
 
   it("ship Moonhouse alone in its directory, byte for byte, with its own licence and the owner-instruction note", () => {
     expect(readdirSync(join(FONTS, "moonhouse")).sort()).toEqual([

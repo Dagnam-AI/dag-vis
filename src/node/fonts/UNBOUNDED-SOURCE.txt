@@ -1,0 +1,29 @@
+Unbounded-Regular.ttf, Unbounded-Medium.ttf and Unbounded-Bold.ttf are static
+Latin-subset instances of the variable font published by the Unbounded Project
+(SIL OFL 1.1, see OFL-Unbounded.txt). They are not hand-edited.
+
+Upstream
+  https://github.com/googlefonts/unbounded
+  commit f3ec43228a864a72487e41552e2140efab9884ea (2023-04-12)
+  fonts/variable/Unbounded[wght].ttf
+  sha-256 323b511be380c8d474ef030686b71aedde501f8d9cd46da558b7c40454372c3f
+  (778272 bytes; wght 200..900, default 400)
+
+Recipe (fontTools 4.67.0), once per weight W in 400, 500, 700
+  font = instancer.instantiateVariableFont(TTFont(upstream), {"wght": W},
+                                           updateFontNames=True)
+  options = subset.Options()
+  options.layout_features += ["pnum", "tnum"]
+  options.glyph_names = True
+  options.name_IDs = [0, 1, 2, 3, 4, 5, 6, 14, 16, 17, 260]
+  subsetter = subset.Subsetter(options)
+  subsetter.populate(unicodes=<the 226 code points of Unbounded-Regular.ttf>)
+  subsetter.subset(font)
+
+The name table follows the static-font convention: Medium is nameID 1
+"Unbounded Medium", 2 "Regular", 16 "Unbounded", 17 "Medium"; Bold is
+nameID 1 "Unbounded", 2 "Bold". A renderer therefore sees one family
+"Unbounded" with usWeightClass 400, 500 and 700.
+
+The advance tables in src/brand/unbounded*-metrics.ts are generated from these
+files by scripts/gen-font-metrics.mjs.
