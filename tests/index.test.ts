@@ -183,6 +183,7 @@ describe("@dagnam/vis root barrel", () => {
       "coverLayers",
       "coverSpec",
       "createRng",
+      "fieldPresetCatalog",
       "fieldPresetNames",
       "fieldPresets",
       "flowPresets",
