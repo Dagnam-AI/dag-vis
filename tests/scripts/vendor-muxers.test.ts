@@ -71,7 +71,31 @@ describe("scripts/vendor-muxers.mjs", () => {
   it("fails when a muxer build is missing", () => {
     const { dist, run } = setup();
     rmSync(join(dist, "..", "node_modules", "mp4-muxer"), { recursive: true });
-    expect(run().status).not.toBe(0);
+    const r = run();
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain("ENOENT");
+    expect(r.stderr).toContain(join("mp4-muxer", "build", "mp4-muxer.mjs"));
+  });
+
+  it("rewrites every occurrence of a specifier, not just the first", () => {
+    const video = `${VIDEO}const c = await import("mp4-muxer");\nconst d = await import("webm-muxer");\n`;
+    const { dist, run } = setup(video);
+    expect(run().status).toBe(0);
+    const out = readFileSync(join(dist, "export", "video.js"), "utf8");
+    expect(out.match(/import\("\.\/vendor\/mp4-muxer\.mjs"\)/g)).toHaveLength(
+      2,
+    );
+    expect(out.match(/import\("\.\/vendor\/webm-muxer\.mjs"\)/g)).toHaveLength(
+      2,
+    );
+    expect(out).not.toMatch(/import\("(mp4|webm)-muxer"\)/);
+  });
+
+  it("fails when another spelling of a muxer import would stay bare", () => {
+    const { run } = setup(`${VIDEO}import "mp4-muxer";\n`);
+    const r = run();
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toContain("still imports mp4-muxer");
   });
 
   it("resolves the muxers from the repo's own node_modules when only a dist is given", () => {

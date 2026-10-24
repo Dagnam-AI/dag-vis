@@ -186,6 +186,26 @@ jobs:
           EOF
           node gif.mjs
 
+          # The two muxers are bundled into dist/export/vendor/, not installed:
+          # prove the shipped copies load as ESM from the tarball and write real
+          # containers (mp4 `ftyp` at offset 4, webm EBML magic), in plain Node.
+          cat > video-muxers.mjs <<'EOF'
+          import { resolve } from "node:path";
+          import { pathToFileURL } from "node:url";
+          const v = (n) => import(pathToFileURL(resolve(`node_modules/@dagnam/vis/dist/export/vendor/${n}.mjs`)).href);
+          const m = await v("mp4-muxer"), w = await v("webm-muxer");
+          const a = new m.Muxer({ target: new m.ArrayBufferTarget(), video: { codec: "avc", width: 16, height: 16 }, fastStart: "in-memory" });
+          a.addVideoChunkRaw(new Uint8Array([0, 0, 0, 1, 0x65, 0x88]), "key", 0, 100000, { decoderConfig: { codec: "avc1.42001f", description: new Uint8Array([1, 0x42, 0, 0x1f, 0xff, 0xe0, 0, 0, 1, 0]) } });
+          a.finalize();
+          if (new TextDecoder().decode(new Uint8Array(a.target.buffer, 4, 4)) !== "ftyp") throw new Error("mp4 has no ftyp box");
+          const b = new w.Muxer({ target: new w.ArrayBufferTarget(), video: { codec: "V_VP9", width: 16, height: 16 } });
+          b.addVideoChunkRaw(new Uint8Array([1, 2, 3]), "key", 0);
+          b.finalize();
+          if (new Uint8Array(b.target.buffer)[0] !== 0x1a) throw new Error("webm has no EBML header");
+          console.log("vendored muxers ok in plain Node:", a.target.buffer.byteLength, "mp4 bytes,", b.target.buffer.byteLength, "webm bytes");
+          EOF
+          node video-muxers.mjs
+
           # The export declarations must not name a bare module: gifenc ships
           # without types, so a consumer type-checking one would hit TS7016.
           if grep -En "(from|import)[ (]*[\"'][^.\"']" node_modules/@dagnam/vis/dist/export/*.d.ts; then

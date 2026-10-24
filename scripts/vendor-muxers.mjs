@@ -33,7 +33,10 @@ for (const name of ["mp4-muxer", "webm-muxer"]) {
   const specifier = `import("${name}")`;
   if (!video.includes(specifier))
     throw new Error(`${target} has no ${specifier}`);
-  video = video.replace(specifier, `import("./vendor/${name}.mjs")`);
+  video = video.replaceAll(specifier, `import("./vendor/${name}.mjs")`);
+  // Any other spelling (single quotes, a static import) would stay bare.
+  const left = new RegExp(`(?:from\\s*|import\\s*\\(?\\s*)["']${name}["']`);
+  if (left.test(video)) throw new Error(`${target} still imports ${name}`);
 }
 
 writeFileSync(target, video);
