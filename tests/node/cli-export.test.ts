@@ -362,7 +362,7 @@ describe("dag-vis export", () => {
     expect(recorded(out).args).toContain("10");
   });
 
-  it("passes --alpha to a webm export and refuses it for a GIF", async () => {
+  it("passes --alpha to a webm export and refuses it for gif, mp4 and png-seq", async () => {
     const webm = join(tmp(), "a.webm");
     const base = ["--w", "8", "--h", "4", "--fps", "2", "--duration", "1"];
     const plain = await cli("export", "lunar", "--out", webm, ...base);
@@ -370,10 +370,24 @@ describe("dag-vis export", () => {
     const flat = recorded(webm).args.join(" ");
     await cli("export", "lunar", "--out", webm, ...base, "--alpha");
     expect(recorded(webm).args.join(" ")).not.toBe(flat);
-    await fails(
-      ["export", "lunar", "--out", join(tmp(), "a.gif"), ...base, "--alpha"],
-      /alpha is not supported by gif/,
-    );
+    for (const [out, format] of [
+      ["a.gif", "gif"],
+      ["a.mp4", "mp4"],
+      ["frames", "png-seq"],
+    ] as const)
+      await fails(
+        [
+          "export",
+          "lunar",
+          "--out",
+          join(tmp(), out),
+          ...(format === "png-seq" ? ["--format", "png-seq"] : []),
+          ...base,
+          "--alpha",
+        ],
+        `--alpha applies to webm and apng, not ${format}`,
+      );
+    expect(existsSync(join(tmp(), "frames"))).toBe(false);
   });
 
   it("encodes a still through ffmpeg for jpg and a looping still lands on the loop frame", async () => {

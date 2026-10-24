@@ -109,6 +109,9 @@ const QUALITY_FORMATS: readonly string[] = [
   "webm",
 ];
 
+/** The animation formats --alpha can keep transparency in (png-seq always does; gif and mp4 cannot). */
+const ALPHA_FORMATS: readonly string[] = ["webm", "apng"];
+
 /** Options that only make sense for some formats are refused for the others, not ignored. */
 function checkApplicable(
   { opts, flags }: { opts: Options; flags: ReadonlySet<string> },
@@ -120,6 +123,10 @@ function checkApplicable(
       `--quality applies to jpeg, webp, avif, mp4 and webm, not ${chosen.format}`,
     );
   if (chosen.animated) {
+    if (flags.has("alpha") && !ALPHA_FORMATS.includes(chosen.format))
+      throw new VisError(
+        `--alpha applies to webm and apng, not ${chosen.format}`,
+      );
     if (given("t"))
       throw new VisError(
         `--t applies to stills, not ${chosen.format} (an animation starts at 0)`,
