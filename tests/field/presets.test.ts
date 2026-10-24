@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { describe, expect, it } from "vitest";
 
 import { parseColor } from "../../src/core/index.js";
@@ -8,6 +10,7 @@ import {
   fieldPresets,
   flowPresets,
 } from "../../src/field/presets.js";
+import { paletteLut } from "../../src/field/lut.js";
 import { makeSampler, renderField } from "../../src/field/render.js";
 import { resolveField } from "../../src/field/spec.js";
 import { timeCoords } from "../../src/field/time.js";
@@ -36,14 +39,26 @@ const SPEC_ORDER = [
 /** Palettes whose sampled colours do not rise strictly in OKLab lightness: the order follows the reference tile. */
 const NOT_MONOTONE = [
   "lagoon",
+  "sunset-ring",
   "citrus-mist",
   "orchid",
-  "lilac-wave",
   "rose",
   "glacier",
   "rainbow-band",
   "pine",
 ];
+
+/** The presets reworked after the first release; every other preset is pinned verbatim below. */
+const REWORKED = [
+  "sunset-ring",
+  "lilac-wave",
+  "rainbow-band",
+  "cobalt",
+] as const;
+
+/** SHA-256 of `JSON.stringify` of the other 15 presets (a name-to-spec record in `fieldPresets` order), taken before the rework. */
+const UNCHANGED_SHA256 =
+  "cf41b4f70ca163ecbd05f2e30f285712c964d2b3458c7202c0329e8155cb1c73";
 
 /** Every colour string of a spec, in document order. */
 const HEX = /#[0-9a-fA-F]+/g;
@@ -175,6 +190,81 @@ describe("presets", () => {
         name,
       ).toBeUndefined();
     }
+  });
+
+  it("leaves the 15 presets that were not reworked byte for byte as shipped", () => {
+    const rest = Object.fromEntries(
+      Object.entries(fieldPresets).filter(
+        ([name]) => !(REWORKED as readonly string[]).includes(name),
+      ),
+    );
+    expect(Object.keys(rest)).toHaveLength(15);
+    expect(
+      createHash("sha256").update(JSON.stringify(rest)).digest("hex"),
+    ).toBe(UNCHANGED_SHA256);
+  });
+
+  describe.each(REWORKED)("%s (reworked)", (name) => {
+    it("validates and renders identical frames twice, at a size and at a second time", () => {
+      const spec = fieldPresets[name];
+      expect(() => resolveField(spec)).not.toThrow();
+      for (const t of [0, 1.5]) {
+        const a = renderField(spec, { width: 48, height: 27, t });
+        const b = renderField(spec, { width: 48, height: 27, t });
+        expect(Buffer.compare(Buffer.from(a.data), Buffer.from(b.data))).toBe(
+          0,
+        );
+      }
+    });
+  });
+
+  it("rainbow-band is a spectrum: saturated stops, and no grey mud between them", () => {
+    const palette = flowPresets["rainbow-band"].palette;
+    expect(palette).toHaveLength(6);
+    const chroma = (r: number, g: number, b: number): number => {
+      const [, a, bb] = rgbToOklab(r, g, b);
+      return Math.hypot(a, bb);
+    };
+    for (const hex of palette) {
+      const c = parseColor(hex);
+      expect(chroma(c.r, c.g, c.b), hex).toBeGreaterThan(0.09);
+    }
+    // Every one of the 256 interpolated entries stays colourful: the shipped minimum is
+    // 0.098 (the first release's blue-green ramp dipped to 0.047, which reads as grey mud).
+    const lut = paletteLut(palette);
+    for (let i = 0; i < 256; i++)
+      expect(
+        chroma(lut[i * 3]!, lut[i * 3 + 1]!, lut[i * 3 + 2]!),
+        `entry ${i}`,
+      ).toBeGreaterThan(0.09);
+  });
+
+  it("sunset-ring is a ring: brighter on the circle than at the centre or at the edge", () => {
+    const W = 160;
+    const H = 90;
+    const f = renderField(flowPresets["sunset-ring"], { width: W, height: H });
+    // Mean luma over pixels at a distance (in picture heights) from the centre.
+    const meanLuma = (from: number, to: number): number => {
+      let sum = 0;
+      let n = 0;
+      for (let y = 0; y < H; y++)
+        for (let x = 0; x < W; x++) {
+          const d = Math.hypot((x + 0.5 - W / 2) / H, (y + 0.5) / H - 0.5);
+          if (d < from || d >= to) continue;
+          const i = (y * W + x) * 4;
+          sum +=
+            0.2126 * f.data[i]! +
+            0.7152 * f.data[i + 1]! +
+            0.0722 * f.data[i + 2]!;
+          n++;
+        }
+      return sum / n;
+    };
+    const centre = meanLuma(0, 0.1);
+    const ring = meanLuma(0.25, 0.4);
+    const edge = meanLuma(0.7, 2);
+    expect(ring).toBeGreaterThan(centre + 30);
+    expect(ring).toBeGreaterThan(edge + 30);
   });
 
   it("pins every palette and a few pixels of every preset (within one level per channel)", () => {
