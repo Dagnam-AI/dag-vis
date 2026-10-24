@@ -82,16 +82,28 @@ export const Sheet: React.FC<SheetProps> = (p) => {
               outline: `1px solid ${THEME.foreground}33`,
             }}
           />
+          {/* Fixed box: two 25 px lines under 6 px of padding fill the caption height, and anything longer is clamped with an ellipsis instead of spilling into the next row. */}
           <div
             style={{
               height: SHEET_GEOMETRY.captionHeight,
-              fontSize: 20,
-              lineHeight: "28px",
+              boxSizing: "border-box",
               paddingTop: 6,
+              overflow: "hidden",
+              fontSize: 20,
+              lineHeight: "25px",
               opacity: 0.85,
             }}
           >
-            {String(i + 1)}. {tile.caption}
+            <div
+              style={{
+                display: "-webkit-box",
+                WebkitBoxOrient: "vertical",
+                WebkitLineClamp: 2,
+                overflow: "hidden",
+              }}
+            >
+              {String(i + 1)}. {tile.caption}
+            </div>
           </div>
         </div>
       ))}

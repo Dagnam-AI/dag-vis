@@ -40,3 +40,10 @@ export function sheetLayout(s: SheetSpec): SheetLayout {
     cells,
   };
 }
+
+/** Columns that keep a storyboard in two rows: 5-6 frames give 3, 7-8 give 4, never more columns than frames. */
+export function sheetColumns(count: number): number {
+  if (!Number.isInteger(count) || count < 1)
+    throw new Error(`count must be an integer >= 1, got ${String(count)}`);
+  return Math.min(count, Math.max(2, Math.ceil(count / 2)));
+}

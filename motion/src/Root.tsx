@@ -1,8 +1,11 @@
 import { Composition } from "remotion";
 
 import { loadBrandFonts } from "./bridge/fonts.ts";
+import { sheetColumns } from "./lib/sheet.ts";
 import { Sheet, sheetMetadata, type SheetProps } from "./sheet/Sheet.tsx";
+import { framesFor } from "./lib/timing.ts";
 import { Smoke } from "./videos/smoke/Smoke.tsx";
+import { TIMING as SMOKE } from "./videos/smoke/timing.ts";
 
 void loadBrandFonts();
 
@@ -11,10 +14,10 @@ export const Root: React.FC = () => (
     <Composition
       id="smoke"
       component={Smoke}
-      durationInFrames={30}
-      fps={30}
-      width={640}
-      height={360}
+      durationInFrames={framesFor(SMOKE.duration, SMOKE.fps)}
+      fps={SMOKE.fps}
+      width={SMOKE.width}
+      height={SMOKE.height}
     />
     <Composition
       id="sheet"
@@ -26,7 +29,7 @@ export const Root: React.FC = () => (
       defaultProps={{
         title: "sheet",
         tiles: [] as SheetProps["tiles"],
-        cols: 4,
+        cols: sheetColumns(6),
         tileWidth: 480,
         tileHeight: 270,
       }}
