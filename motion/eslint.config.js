@@ -10,14 +10,22 @@ const rootWithoutIgnores = root.filter(
   (c) => !(Object.keys(c).length === 1 && "ignores" in c),
 );
 
-const RELATIVE_SRC = {
+// `from` = the fewest `../` that can already leave motion/ for the library's
+// src/. A test mirrors motion/src with a relative path, so for files in
+// motion/tests/<k dirs> the first k+1 levels are motion's own src and only
+// deeper ones are the library's; everything under motion/src and motion/scripts
+// reaches the library through the alias from the first level.
+const relativeSrc = (from = 1) => ({
   group: [
-    ...[1, 2, 3, 4, 5, 6].map((n) => `${"../".repeat(n)}src/*`),
+    ...[1, 2, 3, 4, 5, 6]
+      .filter((n) => n >= from)
+      .map((n) => `${"../".repeat(n)}src/*`),
     "**/dist/**",
   ],
   message:
     "Reach the library through the `@dagnam/vis` alias, never a relative path into src/ or dist/.",
-};
+});
+const RELATIVE_SRC = relativeSrc();
 const SUBPATHS = {
   group: ["@dagnam/vis/*", "!@dagnam/vis/animate"],
   message:
@@ -36,6 +44,19 @@ export default tseslint.config(
       ],
     },
   },
+  ...[0, 1, 2, 3].map((depth) => ({
+    // motion/tests/<depth dirs>/x.ts: `../`*(depth+1) + src is motion's own src (what the test mirrors).
+    files: [
+      `motion/tests/${"*/".repeat(depth)}*.ts`,
+      `motion/tests/${"*/".repeat(depth)}*.tsx`,
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [relativeSrc(depth + 2), SUBPATHS] },
+      ],
+    },
+  })),
   {
     // Pure stratum: runs under plain `node` for the check scripts, so no alias, no React, no Remotion.
     // sigv4.ts is the one exception (node:crypto, scripts only; see the next block).

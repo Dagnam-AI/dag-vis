@@ -15,8 +15,8 @@
     "store": "node scripts/store.ts",
     "check:render": "node scripts/check-render.ts",
     "sheet": "node scripts/sheet.ts",
-    "test": "vitest run --passWithNoTests",
-    "test:coverage": "vitest run --coverage --passWithNoTests"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@remotion/bundler": "4.0.534",

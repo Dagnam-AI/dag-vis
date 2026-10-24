@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -52,6 +52,11 @@ describe("repository structure", () => {
     for (const m of text.matchAll(IMPORT_SPECIFIER)) {
       if (!m[1]!.startsWith(".")) continue;
       const target = join(dirname(file), m[1]!);
+      // A specifier that resolves outside src/ (e.g. into motion/) is a layering break, not a skip.
+      expect(
+        relative(SRC, target).startsWith(".."),
+        `${relative(ROOT, file)} imports outside src/: ${m[1]!}`,
+      ).toBe(false);
       const targetLayer = layerOf(target);
       if (targetLayer === layer || targetLayer.includes(".")) continue;
       expect(allowed, `${relative(ROOT, file)} -> ${m[1]!}`).toContain(
@@ -118,4 +123,103 @@ describe("repository structure", () => {
       ).toBe(true);
     },
   );
+});
+
+const MOTION = join(ROOT, "motion");
+const motionSources = walk(join(MOTION, "src")).filter((p) =>
+  /\.tsx?$/.test(p),
+);
+const motionScripts = existsSync(join(MOTION, "scripts"))
+  ? walk(join(MOTION, "scripts")).filter((p) => p.endsWith(".ts"))
+  : [];
+const motionFiles = [...motionSources, ...motionScripts];
+// Pins both trees must carry identically, or motion's tests run on a second React.
+const SHARED_PINS = [
+  "react",
+  "react-dom",
+  "@types/node",
+  "@types/react",
+  "@types/react-dom",
+  "vitest",
+  "@vitest/coverage-v8",
+  "jsdom",
+  "@testing-library/react",
+];
+const devDeps = (p: string): Record<string, string> =>
+  (
+    JSON.parse(readFileSync(p, "utf8")) as {
+      devDependencies: Record<string, string>;
+    }
+  ).devDependencies;
+
+describe("motion/", () => {
+  it("has source files to check", () => {
+    expect(motionSources.length).toBeGreaterThan(0);
+  });
+
+  it.each(motionFiles)(
+    "%s reaches the library only as @dagnam/vis or @dagnam/vis/animate",
+    (file) => {
+      for (const m of readFileSync(file, "utf8").matchAll(IMPORT_SPECIFIER)) {
+        const spec = m[1]!;
+        const at = `${relative(ROOT, file)} imports ${spec}`;
+        expect(spec, `${at}: relative import into src/`).not.toMatch(
+          /^(\.\.\/)+src\//,
+        );
+        expect(spec, `${at}: import of dist/`).not.toMatch(/\/dist\//);
+        expect(
+          spec.startsWith("@dagnam/vis/") && spec !== "@dagnam/vis/animate",
+          `${at}: a subpath of @dagnam/vis other than /animate`,
+        ).toBe(false);
+      }
+    },
+  );
+
+  it.each(motionSources.filter((p) => /\/src\/(lib|bridge)\//.test(p)))(
+    "%s is pure or bridge and has a mirrored test",
+    (file) => {
+      const mirror = join(
+        MOTION,
+        "tests",
+        relative(join(MOTION, "src"), file),
+      ).replace(/\.tsx?$/, (ext) => `.test${ext}`);
+      expect(
+        statSync(mirror).isFile(),
+        `missing ${relative(ROOT, mirror)}`,
+      ).toBe(true);
+      if (file.includes("/src/lib/")) {
+        // sigv4.ts alone may import node:crypto (scripts-only file).
+        const allowed = file.endsWith("/src/lib/sigv4.ts")
+          ? ["node:crypto"]
+          : [];
+        for (const m of readFileSync(file, "utf8").matchAll(IMPORT_SPECIFIER))
+          expect(
+            m[1]!.startsWith(".") || allowed.includes(m[1]!),
+            `${relative(ROOT, file)} must import siblings only: ${m[1]!}`,
+          ).toBe(true);
+      }
+    },
+  );
+
+  it.each(motionFiles)("%s stays under 500 lines", (file) => {
+    expect(readFileSync(file, "utf8").split("\n").length).toBeLessThanOrEqual(
+      500,
+    );
+  });
+
+  it("pins the shared toolchain identically in both package.json files", () => {
+    const root = devDeps(join(ROOT, "package.json"));
+    const motion = devDeps(join(MOTION, "package.json"));
+    for (const name of SHARED_PINS) expect(motion[name], name).toBe(root[name]);
+  });
+
+  it("keeps motion/ out of the package", () => {
+    const pkg = JSON.parse(
+      readFileSync(join(ROOT, "package.json"), "utf8"),
+    ) as { files: string[] };
+    expect(pkg.files).toEqual(["dist", "bin", "NOTICE"]);
+    expect(
+      readFileSync(join(ROOT, ".github/scripts/assert-tarball.sh"), "utf8"),
+    ).toMatch(/\^package\/\(tests\|src\|coverage\|motion\|/);
+  });
 });

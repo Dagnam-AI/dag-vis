@@ -26,6 +26,10 @@ const forbid = (layer, groups, browserSafe = true) => ({
             group: [`**/${g}/**`, `**/${g}`],
             message: `src/${layer} must not import from src/${g} (layer order: core <- brand <- gradient,pattern <- scene <- node; field, animate and react are separate entries).`,
           })),
+          {
+            group: ["**/motion/**", "**/motion"],
+            message: `src/${layer} must not import from motion/ (motion consumes the library, never the reverse).`,
+          },
           ...(browserSafe
             ? [
                 {
@@ -172,6 +176,11 @@ export default tseslint.config(
               ],
               message:
                 "The root barrel stays browser-safe and DOM-free and loads no third-party code: export, animate, react and node are separate.",
+            },
+            {
+              group: ["**/motion/**", "**/motion"],
+              message:
+                "The root barrel must not import from motion/ (motion consumes the library, never the reverse).",
             },
             {
               group: ["node:*", "@resvg/resvg-js"],
