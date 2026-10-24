@@ -50,6 +50,25 @@ describe("parseProbe", () => {
       /r_frame_rate/,
     );
   });
+  it("refuses what ffprobe could not determine instead of passing NaN on", () => {
+    expect(() => parseProbe(probe({ r_frame_rate: "0/0" }))).toThrow(
+      /r_frame_rate is not a usable fraction: 0\/0/,
+    );
+    expect(() => parseProbe(probe({ r_frame_rate: "30/0" }))).toThrow(
+      /r_frame_rate/,
+    );
+    expect(() => parseProbe(probe({ duration: "N/A" }))).toThrow(
+      /video duration is not a non-negative number: N\/A/,
+    );
+    expect(() => parseProbe(probe({ nb_frames: "N/A" }))).toThrow(/nb_frames/);
+    expect(() => parseProbe(probe({ nb_frames: "" }))).toThrow(/nb_frames/);
+    expect(() => parseProbe(probe({ width: "N/A" }))).toThrow(/width/);
+    expect(() => parseProbe(probe({ duration: "-1" }))).toThrow(/duration/);
+    const audioNA = probe().replace('"6.021000"', '"N/A"');
+    expect(() => parseProbe(audioNA)).toThrow(/audio duration/);
+    const rateNA = probe().replace('"48000"', '"N/A"');
+    expect(() => parseProbe(rateNA)).toThrow(/audio sample_rate/);
+  });
 });
 
 describe("checkSync", () => {
@@ -73,5 +92,29 @@ describe("checkSync", () => {
         expected,
       ),
     ).toEqual(["audio 6.5s vs video 6s (tolerance 0.083s)"]);
+  });
+  it("accepts a difference equal to the tolerance and refuses anything beyond", () => {
+    const at = (audio: string, fps: string, tolerant: number) => {
+      const p = parseProbe(
+        probe({ r_frame_rate: fps, duration: "4" }).replace(
+          '"6.021000"',
+          `"${audio}"`,
+        ),
+      );
+      return checkSync(p, { ...expected, fps: tolerant, frames: 180 });
+    };
+    // 20 fps: one frame + 50 ms is exactly 0.1 s.
+    expect(at("4.1", "20/1", 20)).toEqual([]);
+    expect(at("3.9", "20/1", 20)).toEqual([]);
+    expect(at("4.11", "20/1", 20)).toHaveLength(1);
+    // 30 fps, as ffprobe prints it (six decimals): 1/30 + 0.05 = 0.083333...
+    const sync = (audio: string) =>
+      checkSync(
+        parseProbe(probe().replace('"6.021000"', `"${audio}"`)),
+        expected,
+      );
+    expect(sync("6.083333")).toEqual([]);
+    expect(sync("5.916667")).toEqual([]);
+    expect(sync("6.084000")).toHaveLength(1);
   });
 });

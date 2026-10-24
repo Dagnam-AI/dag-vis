@@ -29,19 +29,30 @@ export function parseProbe(json: string): Probe {
       throw new Error(`probe: ${s.codec_type} stream lacks ${key}`);
     return String(v);
   };
+  // ffprobe prints "N/A" or "0/0" for what it cannot determine; NaN would
+  // sail through every comparison in checkSync, so it is refused here.
+  const num = (s: Stream, key: keyof Stream): number => {
+    const raw = need(s, key);
+    const n = Number(raw);
+    if (raw.trim() === "" || !Number.isFinite(n) || n < 0)
+      throw new Error(
+        `probe: ${s.codec_type} ${key} is not a non-negative number: ${raw}`,
+      );
+    return n;
+  };
   const rate = /^(\d+)\/(\d+)$/.exec(need(video, "r_frame_rate"));
-  if (!rate)
+  if (!rate || Number(rate[2]) === 0)
     throw new Error(
-      `probe: r_frame_rate is not a fraction: ${need(video, "r_frame_rate")}`,
+      `probe: video r_frame_rate is not a usable fraction: ${need(video, "r_frame_rate")}`,
     );
   return {
-    width: Number(need(video, "width")),
-    height: Number(need(video, "height")),
+    width: num(video, "width"),
+    height: num(video, "height"),
     fps: Number(rate[1]) / Number(rate[2]),
-    frames: Number(need(video, "nb_frames")),
-    videoDuration: Number(need(video, "duration")),
-    audioDuration: audio ? Number(need(audio, "duration")) : null,
-    audioSampleRate: audio ? Number(need(audio, "sample_rate")) : null,
+    frames: num(video, "nb_frames"),
+    videoDuration: num(video, "duration"),
+    audioDuration: audio ? num(audio, "duration") : null,
+    audioSampleRate: audio ? num(audio, "sample_rate") : null,
   };
 }
 
@@ -64,7 +75,8 @@ export function checkSync(p: Probe, e: Expected): string[] {
     problems.push(`frames ${String(p.frames)}, expected ${String(e.frames)}`);
   const tolerance = 1 / e.fps + 0.05;
   if (p.audioDuration === null) problems.push("no audio track");
-  else if (Math.abs(p.audioDuration - p.videoDuration) > tolerance)
+  // 1e-9 s: ffprobe prints six decimals, so "equal to the tolerance" must not hinge on float noise.
+  else if (Math.abs(p.audioDuration - p.videoDuration) > tolerance + 1e-9)
     problems.push(
       `audio ${String(p.audioDuration)}s vs video ${String(p.videoDuration)}s (tolerance ${tolerance.toFixed(3)}s)`,
     );

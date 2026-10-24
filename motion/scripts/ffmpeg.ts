@@ -1,14 +1,18 @@
 // Remotion's bundled ffmpeg/ffprobe (n7.1, size-reduced: loudnorm and silencedetect
 // are present; ebur128, astats and volumedetect are not). MOTION_FFMPEG /
 // MOTION_FFPROBE point at a system build instead. Arguments always go as an array.
+// The local remotion bin is spawned by path, never through npx, so a missing
+// install fails with an error instead of reaching for the registry.
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseLoudnorm, type Loudness } from "../src/lib/loudness.ts";
 
-// `npx remotion` finds the project from the cwd, so run from motion/ whatever the caller's cwd is.
+// Run from motion/ whatever the caller's cwd is: the remotion bin and the output folders are relative to it.
 export const MOTION = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+const REMOTION_BIN = resolve(MOTION, "node_modules/.bin/remotion");
 
 export interface Run {
   stdout: string;
@@ -27,11 +31,11 @@ const run = (cmd: string, args: string[]): Run => {
 export const ffmpeg = (args: string[]): Run =>
   process.env.MOTION_FFMPEG
     ? run(process.env.MOTION_FFMPEG, args)
-    : run("npx", ["remotion", "ffmpeg", ...args]);
+    : run(REMOTION_BIN, ["ffmpeg", ...args]);
 export const ffprobe = (args: string[]): Run =>
   process.env.MOTION_FFPROBE
     ? run(process.env.MOTION_FFPROBE, args)
-    : run("npx", ["remotion", "ffprobe", ...args]);
+    : run(REMOTION_BIN, ["ffprobe", ...args]);
 
 export const LOUDNORM_ARGS = (file: string): string[] => [
   "-hide_banner",
