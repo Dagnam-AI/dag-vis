@@ -373,8 +373,8 @@ export function resolvedField(v: unknown): ResolvedField | undefined {
   return typeof v === "object" && v !== null ? RESOLVED.get(v) : undefined;
 }
 
-/** Freeze `v` and everything below it (resolved specs are plain data: objects, arrays, numbers, strings). */
-function deepFreeze<T>(v: T): T {
+/** Freeze `v` and everything below it (specs are plain data: objects, arrays, numbers, strings). */
+export function deepFreeze<T>(v: T): T {
   if (typeof v === "object" && v !== null && !Object.isFrozen(v)) {
     Object.freeze(v);
     for (const k of Object.keys(v)) deepFreeze((v as Obj)[k]);

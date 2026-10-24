@@ -95,13 +95,22 @@ export type {
   Weight,
 } from "./scene/index.js";
 
-// field: the DOM-free still renderer. The noise, the samplers and the shader
+// field: the DOM-free still renderer, the presets and randomFlow. The noise, the samplers and the shader
 // text stay internal; the animated field is the `@dagnam/vis/animate` entry.
-export { FLOW_SHAPES, renderField, resolveField } from "./field/index.js";
+export {
+  FLOW_PRESET_NAMES,
+  FLOW_SHAPES,
+  fieldPresets,
+  flowPresets,
+  randomFlow,
+  renderField,
+  resolveField,
+} from "./field/index.js";
 export type {
   FieldHighlight,
   FieldSpec,
   FlowFieldSpec,
+  FlowPresetName,
   FlowShape,
   FluidFieldPoint,
   FluidFieldSpec,

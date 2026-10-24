@@ -29,6 +29,21 @@ describe("@dagnam/vis root barrel", () => {
     expect(frame.data).toHaveLength(16);
   });
 
+  it("exposes the presets and randomFlow from the root, and they work together", () => {
+    const name: vis.FlowPresetName = "brand";
+    expect(vis.FLOW_PRESET_NAMES).toContain(name);
+    expect(vis.flowPresets[name].kind).toBe("flow");
+    expect(vis.fieldPresets["fluted-ember"]?.kind).toBe("fluted");
+    const frame = vis.renderField(vis.randomFlow({ seed: 3, mood: "vivid" }), {
+      width: 2,
+      height: 2,
+    });
+    expect(frame.data).toHaveLength(16);
+    expect(
+      vis.renderField(vis.flowPresets.lunar, { width: 2, height: 2 }).data,
+    ).toHaveLength(16);
+  });
+
   it("keeps the internal field names out of the root: time coordinates and the per-kind resolved types", () => {
     const text = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "../src/index.ts"),
@@ -98,6 +113,7 @@ describe("@dagnam/vis root barrel", () => {
     expect(Object.keys(vis).sort()).toEqual([
       "BLENDS",
       "BRAND",
+      "FLOW_PRESET_NAMES",
       "FLOW_SHAPES",
       "FONT_FAMILY",
       "FREEFORM_PALETTES",
@@ -110,6 +126,8 @@ describe("@dagnam/vis root barrel", () => {
       "coverLayers",
       "coverSpec",
       "createRng",
+      "fieldPresets",
+      "flowPresets",
       "fmt",
       "freeformPalette",
       "freeformRandom",
@@ -123,6 +141,7 @@ describe("@dagnam/vis root barrel", () => {
       "parseColor",
       "pattern",
       "ramp",
+      "randomFlow",
       "renderField",
       "resolveField",
       "ribbon",
