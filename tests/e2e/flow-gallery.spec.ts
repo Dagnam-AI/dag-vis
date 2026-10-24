@@ -45,15 +45,20 @@ test("every preset gets a card with its name, kind and five export buttons", asy
   }
 });
 
+// A card's field is compiled on first use, which costs a few hundred milliseconds of software GL
+// (several seconds on a loaded runner, and live loops make every frame slower still), so the waits
+// for a card to come alive are generous and this walk uses frozen time (one frame per card, no loops).
+const COMPILE = { timeout: 45_000 };
+
 test("scrolling through every card: each canvas is non-blank, live cards stay under the cap, no context leaks", async ({
   page,
 }) => {
-  test.setTimeout(180_000);
-  await open(page);
+  test.setTimeout(240_000);
+  await open(page, "?t=1.25");
   for (const name of NAMES) {
     const c = card(page, name);
     await c.scrollIntoViewIfNeeded();
-    await expect(c).toHaveAttribute("data-state", "live");
+    await expect(c).toHaveAttribute("data-state", "still", COMPILE);
     // Read in the same task as the render: the drawing buffer is cleared after compositing.
     const { lit, spread } = await page.evaluate(
       (n) => window.__flow.sample(n, 1.25),
@@ -68,6 +73,7 @@ test("scrolling through every card: each canvas is non-blank, live cards stay un
   await expect(card(page, NAMES[0] ?? "")).toHaveAttribute(
     "data-state",
     "idle",
+    COMPILE,
   );
   const s = await page.evaluate(() => window.__flow.stats());
   expect(s.peak).toBeLessThanOrEqual(s.cap);
@@ -77,7 +83,6 @@ test("scrolling through every card: each canvas is non-blank, live cards stay un
   expect(s.open).toBe(s.live);
   expect(s.contexts).toBe(s.live);
   expect(s.released).toBe(s.created - s.live);
-  expect(s.running).toBe(s.live);
 });
 
 test("a viewport that shows every card still keeps only the cap live", async ({
@@ -89,6 +94,7 @@ test("a viewport that shows every card still keeps only the cap live", async ({
   const cap = await page.evaluate(() => window.__flow.stats().cap);
   await expect(page.locator('section.card[data-state="live"]')).toHaveCount(
     cap,
+    COMPILE,
   );
   await expect(page.locator('section.card[data-state="idle"]')).toHaveCount(
     NAMES.length - cap,
@@ -96,6 +102,8 @@ test("a viewport that shows every card still keeps only the cap live", async ({
   const s = await page.evaluate(() => window.__flow.stats());
   expect(s.peak).toBe(cap);
   expect(s.contexts).toBe(cap);
+  // Live mode: every live card runs its loop.
+  expect(s.running).toBe(cap);
 });
 
 test("reduced motion draws a still frame and starts no loop", async ({
@@ -104,7 +112,7 @@ test("reduced motion draws a still frame and starts no loop", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await open(page);
   const first = card(page, NAMES[0] ?? "");
-  await expect(first).toHaveAttribute("data-state", "still");
+  await expect(first).toHaveAttribute("data-state", "still", COMPILE);
   const s = await page.evaluate(() => window.__flow.stats());
   expect(s.live).toBeGreaterThan(0);
   expect(s.running).toBe(0);
@@ -120,6 +128,7 @@ test("?t freezes every card at one still frame", async ({ page }) => {
   await expect(card(page, NAMES[0] ?? "")).toHaveAttribute(
     "data-state",
     "still",
+    COMPILE,
   );
   expect(await page.evaluate(() => window.__flow.stats().running)).toBe(0);
 });
@@ -175,64 +184,82 @@ test("a keyboard export keeps focus on the pressed button", async ({
   expect(focused).toEqual({ tag: "BUTTON", format: "png", preset: NAMES[0] });
 });
 
+/**
+ * Waits for the page to settle, then checks that no card is paused while it shows clearly more than a
+ * live one, and that when 12 or fewer cards have half their area on screen all of them are live.
+ */
+async function expectMostVisibleLive(page: Page, label: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const vw = document.documentElement.clientWidth;
+          const vh = document.documentElement.clientHeight;
+          const cards = Array.from(
+            document.querySelectorAll<HTMLElement>("section.card"),
+          ).map((c) => {
+            const r = c.getBoundingClientRect();
+            const w = Math.max(0, Math.min(r.right, vw) - Math.max(r.left, 0));
+            const h = Math.max(0, Math.min(r.bottom, vh) - Math.max(r.top, 0));
+            return {
+              name: c.dataset.preset ?? "?",
+              share: (w * h) / (r.width * r.height),
+              live: c.dataset.state === "live",
+            };
+          });
+          const { cap, live } = window.__flow.stats();
+          const half = cards.filter((c) => c.share >= 0.5);
+          const weakestLive = Math.min(
+            1,
+            ...cards.filter((c) => c.live).map((c) => c.share),
+          );
+          const bad = [
+            ...cards
+              .filter((c) => !c.live && c.share > weakestLive + 0.02)
+              .map((c) => `${c.name} paused at ${c.share.toFixed(2)}`),
+            ...(half.length <= cap
+              ? half.filter((c) => !c.live).map((c) => `${c.name} half-visible`)
+              : []),
+          ];
+          return { bad, over: live > cap, halfVisible: half.length };
+        }),
+      { message: label, ...COMPILE },
+    )
+    .toMatchObject({ bad: [], over: false });
+}
+
 test("while scrolling at a laptop size the live cards are the ones most on screen", async ({
   page,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   await open(page);
   for (const y of [0, 400, 600, 800, 1000]) {
     await page.evaluate((top) => {
       window.scrollTo(0, top);
     }, y);
-    // Poll until the observer has caught up with the jump. Then no card may be paused while it shows
-    // more than a live one, and when 12 or fewer cards have half their area on screen, all of them are live.
-    await expect
-      .poll(
-        () =>
-          page.evaluate(() => {
-            const vw = document.documentElement.clientWidth;
-            const vh = document.documentElement.clientHeight;
-            const cards = Array.from(
-              document.querySelectorAll<HTMLElement>("section.card"),
-            ).map((c) => {
-              const r = c.getBoundingClientRect();
-              const w = Math.max(
-                0,
-                Math.min(r.right, vw) - Math.max(r.left, 0),
-              );
-              const h = Math.max(
-                0,
-                Math.min(r.bottom, vh) - Math.max(r.top, 0),
-              );
-              return {
-                name: c.dataset.preset ?? "?",
-                share: (w * h) / (r.width * r.height),
-                live: c.dataset.state === "live",
-              };
-            });
-            const { cap, live } = window.__flow.stats();
-            const half = cards.filter((c) => c.share >= 0.5);
-            const weakestLive = Math.min(
-              1,
-              ...cards.filter((c) => c.live).map((c) => c.share),
-            );
-            const bad = [
-              // a paused card showing clearly more than a live one
-              ...cards
-                .filter((c) => !c.live && c.share > weakestLive + 0.02)
-                .map((c) => `${c.name} paused at ${c.share.toFixed(2)}`),
-              // everything half visible is live whenever the cap allows it
-              ...(half.length <= cap
-                ? half
-                    .filter((c) => !c.live)
-                    .map((c) => `${c.name} half-visible`)
-                : []),
-            ];
-            return { bad, over: live > cap, halfVisible: half.length };
-          }),
-        { message: `scrollY ${String(y)}`, timeout: 15_000 },
-      )
-      .toMatchObject({ bad: [], over: false });
+    await expectMostVisibleLive(page, `scrollY ${String(y)}`);
+  }
+  const s = await page.evaluate(() => window.__flow.stats());
+  expect(s.peak).toBeLessThanOrEqual(s.cap);
+  expect(s.leaked).toBe(0);
+});
+
+test("resizing the window re-ranks the cards from fresh measurements", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  await open(page);
+  await page.evaluate(() => {
+    window.scrollTo(0, 400);
+  });
+  await expectMostVisibleLive(page, "scrollY 400");
+  // Fewer columns and a different height: no scroll event, only a resize.
+  for (const [width, height] of [
+    [800, 700],
+    [1280, 900],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expectMostVisibleLive(page, `${String(width)}x${String(height)}`);
   }
   const s = await page.evaluate(() => window.__flow.stats());
   expect(s.peak).toBeLessThanOrEqual(s.cap);

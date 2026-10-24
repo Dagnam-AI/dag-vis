@@ -71,7 +71,6 @@ function showError(error: string, into: HTMLElement): void {
 
 function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
   const cards: Card[] = [];
-  const byRoot = new Map<Element, Card>();
   const live = new Map<string, Handle>();
   /** Every canvas not yet released: cards' canvases and a running export's. */
   const open = new Set<HTMLCanvasElement>();
@@ -137,8 +136,7 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
     }
   }
 
-  const visible = new Set<Card>();
-  /** Pixels of the card inside the viewport. */
+  /** Pixels of the card inside the viewport, from a fresh measurement. */
   function shown(c: Card): number {
     const r = c.root.getBoundingClientRect();
     const w =
@@ -149,34 +147,62 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
       Math.max(r.top, 0);
     return Math.max(0, w) * Math.max(0, h);
   }
+  /** Squared distance from the card's centre to the viewport's. */
+  function offCentre(c: Card): number {
+    const r = c.root.getBoundingClientRect();
+    const dx =
+      (r.left + r.right) / 2 - document.documentElement.clientWidth / 2;
+    const dy =
+      (r.top + r.bottom) / 2 - document.documentElement.clientHeight / 2;
+    return dx * dx + dy * dy;
+  }
+
+  /** Cards waiting for a field, most visible first. One is started per task. */
+  let queue: Card[] = [];
+  let pump = 0;
   /**
    * Keeps the MAX_LIVE cards with the most pixels on screen (a sliver of a row loses to a full
-   * one), freeing what dropped out first so the live count never passes the cap on the way.
+   * one; ties go to the card nearest the middle), freeing what dropped out at once so the live
+   * count never passes the cap. Everything is measured now, not taken from observer ratios,
+   * which only change when a threshold is crossed.
    */
   function reconcile(): void {
-    const area = new Map([...visible].map((c) => [c, shown(c)]));
-    const ranked = [...visible].sort(
-      (a, b) => (area.get(b) ?? 0) - (area.get(a) ?? 0),
-    );
-    const wanted = new Set(ranked.slice(0, MAX_LIVE));
-    for (const c of cards) if (!wanted.has(c)) stop(c);
-    for (const c of wanted) start(c);
+    const area = new Map(cards.map((c) => [c, shown(c)]));
+    const ranked = cards
+      .filter((c) => (area.get(c) ?? 0) > 0)
+      .sort(
+        (a, b) =>
+          (area.get(b) ?? 0) - (area.get(a) ?? 0) ||
+          offCentre(a) - offCentre(b),
+      )
+      .slice(0, MAX_LIVE);
+    for (const c of cards) if (!ranked.includes(c)) stop(c);
+    queue = ranked.filter((c) => !c.handle && !c.failed);
+    if (pump === 0 && queue.length > 0) pump = window.setTimeout(startNext);
   }
-  const io = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) {
-        const c = byRoot.get(e.target);
-        if (!c) continue;
-        if (e.isIntersecting) visible.add(c);
-        else visible.delete(c);
-      }
-      reconcile();
-    },
-    {
-      // A card's share on screen changes between its enter and leave events: observe every tenth.
-      threshold: Array.from({ length: 11 }, (_, i) => i / 10),
-    },
-  );
+  /**
+   * Compiling a field's shader costs hundreds of milliseconds on a software GL, so cards start one
+   * per task: the page keeps answering, the card that matters most comes first, and a card that
+   * stops being wanted while it waits is never built.
+   */
+  function startNext(): void {
+    pump = 0;
+    const c = queue.shift();
+    if (c) start(c);
+    if (queue.length > 0) pump = window.setTimeout(startNext);
+  }
+  let frame = 0;
+  /** Scrolling, resizing and layout changes all land here, at most once per frame. */
+  function schedule(): void {
+    if (frame === 0)
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        reconcile();
+      });
+  }
+  const io = new IntersectionObserver(schedule);
+  addEventListener("scroll", schedule, { passive: true });
+  addEventListener("resize", schedule);
 
   async function runExport(
     c: Card,
@@ -293,7 +319,6 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
     root.append(title, stage, actions, result);
     into.append(root);
     cards.push(card);
-    byRoot.set(root, card);
     io.observe(root);
   }
 
