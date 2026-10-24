@@ -8,6 +8,7 @@ import {
   MAX_T,
   makeSampler,
   renderField,
+  renderResolved,
 } from "../../src/field/render.js";
 import { resolveField } from "../../src/field/spec.js";
 import { timeCoords } from "../../src/field/time.js";
@@ -46,7 +47,9 @@ describe("renderField", () => {
       const o = { width: 24, height: 14, t: 1.25 };
       const a = renderField(spec, o);
       expect(same(a.data, renderField(spec, o).data)).toBe(true);
-      expect(same(a.data, renderField(resolveField(spec), o).data)).toBe(true);
+      expect(same(a.data, renderResolved(resolveField(spec), o).data)).toBe(
+        true,
+      );
     },
   );
 
@@ -137,15 +140,19 @@ describe("renderField", () => {
   describe("recognising a resolved spec", () => {
     it("accepts what resolveField returned", () => {
       const r = resolveField(fluid);
-      expect(renderField(r, { width: 4, height: 4 }).data.length).toBe(64);
+      expect(renderResolved(r, { width: 4, height: 4 }).data.length).toBe(64);
+      // renderField still recognises the object by identity (its type is internal).
+      expect(renderField(r as never, { width: 4, height: 4 }).data.length).toBe(
+        64,
+      );
     });
 
     it("renders the copy taken at resolve time, whatever is done to the object afterwards", () => {
       const o = { width: 24, height: 14, t: 0.5 };
       const r = resolveField({ ...fluted, reeds: 6 }) as { reeds: number };
-      const before = renderField(r as never, o);
+      const before = renderResolved(r as never, o);
       r.reeds = 1e9;
-      expect(same(renderField(r as never, o).data, before.data)).toBe(true);
+      expect(same(renderResolved(r as never, o).data, before.data)).toBe(true);
     });
 
     it("rejects a copy of a resolved spec loudly instead of drawing another picture", () => {
@@ -153,10 +160,12 @@ describe("renderField", () => {
       for (const spec of [flow, fluid, fluted, flutedFluid]) {
         const r = resolveField({ ...spec, light: undefined });
         for (const copy of [structuredClone(r), { ...r }])
-          expect(() => renderField(copy, o)).toThrow(/pass the original/);
+          expect(() => renderField(copy as never, o)).toThrow(
+            /pass the original/,
+          );
       }
       const vignetted = resolveField({ ...flow, light: { vignette: 0.8 } });
-      expect(() => renderField(structuredClone(vignetted), o)).toThrow(
+      expect(() => renderField(structuredClone(vignetted) as never, o)).toThrow(
         /vignette/,
       );
     });

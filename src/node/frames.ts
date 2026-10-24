@@ -9,7 +9,7 @@ import {
 import {
   MAX_FRAME_PIXELS,
   MAX_T,
-  renderField,
+  renderResolved,
   resolveField,
 } from "../field/index.js";
 import { gradientSvg } from "../gradient/index.js";
@@ -122,7 +122,7 @@ export function frameSource(
   if (isField(named)) {
     const resolved = resolveField(spec);
     const frame = (t: number) =>
-      renderField(resolved, {
+      renderResolved(resolved, {
         width,
         height,
         t: instant(t),

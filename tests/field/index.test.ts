@@ -20,6 +20,7 @@ describe("field barrel", () => {
       "planGpu",
       "randomFlow",
       "renderField",
+      "renderResolved",
       "resolveField",
       "simplex4",
       "timeCoords",
@@ -34,13 +35,14 @@ describe("field barrel", () => {
       "flowPresets",
       "randomFlow",
       "renderField",
-      "resolveField",
     ] as const)
       expect(root[name]).toBe(field[name]);
   });
 
-  it("keeps the noise, the sampler factory and the constants out of the root", () => {
+  it("keeps the noise, the sampler factory, the resolved spec and the constants out of the root", () => {
     for (const name of [
+      "resolveField",
+      "renderResolved",
       "timeCoords",
       "hash4",
       "hash01",

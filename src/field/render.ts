@@ -77,12 +77,10 @@ export function makeSampler(
  * Render one frame on the CPU: the reference every exporter and the GPU parity
  * check compare against.
  *
- * `spec` is a raw spec, validated on every call, or the exact object `resolveField`
- * returned (recognised by identity, never by its shape: a clone or a hand-built
- * object is validated as a raw spec, and fails). A resolved spec is rendered from the
- * copy `resolveField` took, so editing it afterwards changes nothing. Sizes are whole pixels for every kind
- * (a fluted field needs them to pick its reeds; the others are held to it so a frame
- * means the same thing whatever the kind). Throws a VisError naming the parameter.
+ * `spec` is a raw spec, validated on every call (see `renderResolved` for one the
+ * exporters already resolved). Sizes are whole pixels for every kind (a fluted field needs
+ * them to pick its reeds; the others are held to it so a frame means the same thing
+ * whatever the kind). Throws a VisError naming the parameter.
  *
  * Pixel (x, y) is sampled at its centre, u = (x + 0.5) / width and
  * v = (y + 0.5) / height, with row 0 on top: the shader's `main` flips
@@ -92,7 +90,34 @@ export function makeSampler(
  * 255. The result is a pure function of the arguments, byte for byte.
  */
 export function renderField(
-  spec: FieldSpec | ResolvedField,
+  spec: FieldSpec,
+  opts: RenderFieldOptions,
+): FieldFrame {
+  return draw(() => snapshotOf(spec), opts);
+}
+
+/**
+ * `renderField` for the exact object `resolveField` returned (an internal type: the root
+ * entry does not export it), rendered from the private copy `resolveField` took, so editing
+ * the object afterwards changes nothing. Recognised by identity, never by shape: a clone or
+ * a hand-built look-alike is validated as a raw spec and fails. The exporters and the
+ * contact sheet resolve once and draw many frames with it.
+ */
+export function renderResolved(
+  spec: ResolvedField,
+  opts: RenderFieldOptions,
+): FieldFrame {
+  return draw(() => snapshotOf(spec), opts);
+}
+
+/** The validated snapshot behind a spec `resolveField` returned, else the raw spec validated now. */
+function snapshotOf(spec: unknown): ResolvedField {
+  return resolvedField(spec) ?? resolveField(spec);
+}
+
+/** The shared body: options are checked first, then `resolve` runs, so the first error is the same whichever door was used. */
+function draw(
+  resolve: () => ResolvedField,
   opts: RenderFieldOptions,
 ): FieldFrame {
   assertOptions(opts);
@@ -104,11 +129,7 @@ export function renderField(
     );
   const t = opts.t === undefined ? 0 : bounded("t", opts.t, -MAX_T, MAX_T);
   const tc = timeCoords(t, loopOf(opts.loop));
-  const sampler = makeSampler(
-    resolvedField(spec) ?? resolveField(spec),
-    width,
-    height,
-  );
+  const sampler = makeSampler(resolve(), width, height);
   sampler.prepare(tc);
   const data = new Uint8ClampedArray(width * height * 4);
   const out = new Float64Array(3);

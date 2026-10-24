@@ -104,7 +104,6 @@ export {
   flowPresets,
   randomFlow,
   renderField,
-  resolveField,
 } from "./field/index.js";
 export type {
   FieldHighlight,
@@ -120,5 +119,4 @@ export type {
   FieldFrame,
   RandomFlowOptions,
   RenderFieldOptions,
-  ResolvedField,
 } from "./field/index.js";

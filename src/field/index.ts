@@ -16,7 +16,13 @@ export type {
 export { GRAIN_FPS, TIME_RATE, timeCoords } from "./time.js";
 export type { TimeCoords } from "./time.js";
 export { fbm, hash01, hash4, simplex4 } from "./noise.js";
-export { MAX_FRAME_PIXELS, MAX_T, makeSampler, renderField } from "./render.js";
+export {
+  MAX_FRAME_PIXELS,
+  MAX_T,
+  makeSampler,
+  renderField,
+  renderResolved,
+} from "./render.js";
 export type { FieldFrame, RenderFieldOptions } from "./render.js";
 export type { Sampler } from "./cpu/types.js";
 export { FLOW_PRESET_NAMES, fieldPresets, flowPresets } from "./presets.js";

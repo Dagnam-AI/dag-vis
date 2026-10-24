@@ -52,7 +52,7 @@ describe("@dagnam/vis root barrel", () => {
     expect(vis.randomFlow(maybe)).toEqual(vis.randomFlow());
   });
 
-  it("keeps the internal field names out of the root: time coordinates and the per-kind resolved types", () => {
+  it("keeps the internal field names out of the root: time coordinates and the resolved spec types and function", () => {
     const text = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "../src/index.ts"),
       "utf8",
@@ -64,9 +64,10 @@ describe("@dagnam/vis root barrel", () => {
       "ResolvedFluid",
       "ResolvedFluted",
       "FlutedDirection",
+      "ResolvedField",
+      "resolveField",
     ])
       expect(text, name).not.toMatch(new RegExp(`\\b${name}\\b`));
-    expect(text).toMatch(/\bResolvedField\b/);
   });
 
   it("imports in plain Node with no DOM and no canvas", async () => {
@@ -153,7 +154,6 @@ describe("@dagnam/vis root barrel", () => {
       "ramp",
       "randomFlow",
       "renderField",
-      "resolveField",
       "ribbon",
       "ribbonCurves",
       "toCss",

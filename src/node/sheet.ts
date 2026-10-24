@@ -13,7 +13,7 @@ import {
   MAX_FRAME_PIXELS,
   MAX_T,
   fieldPresets,
-  renderField,
+  renderResolved,
   resolveField,
   type FieldFrame,
   type FieldSpec,
@@ -121,7 +121,7 @@ export function renderSheet(o: SheetOptions = {}): FieldFrame {
     data[i + 3] = 255;
   }
   specs.forEach((spec, k) => {
-    const frame = renderField(spec, { ...tile, t });
+    const frame = renderResolved(spec, { ...tile, t });
     const x0 = gap + (k % columns) * (tile.width + gap);
     const y0 = gap + Math.floor(k / columns) * (tile.height + gap);
     const row = tile.width * 4;
