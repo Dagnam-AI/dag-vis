@@ -115,3 +115,52 @@ export function redact(text: string, secrets: readonly string[]): string {
     .sort((a, b) => b.length - a.length)
     .reduce((out, s) => out.replaceAll(s, "[redacted]"), text);
 }
+
+/** What a HEAD of an object that already exists says about it (header values, null when absent or unreadable). */
+export interface RemoteObject {
+  /** `x-amz-meta-sha256`, set by our own PUT. */
+  sha256: string | null;
+  /** `ETag` as sent, quotes included. */
+  etag: string | null;
+  /** `Content-Length`. */
+  bytes: number | null;
+}
+export interface LocalObject {
+  sha256: string;
+  md5: string;
+  bytes: number;
+}
+
+/**
+ * Whether an object already in the bucket is this file. It is when our own
+ * sha256 metadata says so, or, for objects without it, when the size and a
+ * plain MD5 ETag match (a single-part PUT's ETag is the MD5 of the body; a
+ * multipart ETag has a dash and says nothing about the bytes). Returns the
+ * problem otherwise: nothing is overwritten and nothing is recorded as uploaded.
+ */
+export function existingObjectProblem(
+  remote: RemoteObject,
+  local: LocalObject,
+): string | null {
+  if (remote.sha256 === local.sha256) return null;
+  const etag = remote.etag?.replaceAll('"', "") ?? "";
+  if (
+    /^[0-9a-f]{32}$/i.test(etag) &&
+    etag.toLowerCase() === local.md5 &&
+    remote.bytes === local.bytes
+  )
+    return null;
+  return remote.sha256 === null
+    ? "the object there carries no sha256 metadata and its size and MD5 ETag do not match this file"
+    : "the object there has a different sha256 (a different file under the same name)";
+}
+
+/** Names of the files the ledger records for `video`, so a name already used is never used again. */
+export function ledgerNames(ledger: string, video: string): string[] {
+  return ledger
+    .split("\n")
+    .filter((line) => line !== "")
+    .map((line) => JSON.parse(line) as { video: string; file: string })
+    .filter((row) => row.video === video)
+    .map((row) => row.file.slice(row.file.lastIndexOf("/") + 1));
+}

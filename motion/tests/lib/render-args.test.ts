@@ -14,6 +14,7 @@ describe("parseRenderArgs", () => {
       props: {},
       crf: 18,
       preview: false,
+      allowDirty: false,
     });
   });
 
@@ -24,12 +25,29 @@ describe("parseRenderArgs", () => {
       props: { seed: 3, nested: { x: [1] } },
       crf: 23,
       preview: true,
+      allowDirty: true,
     };
     expect(
-      parseRenderArgs(["a", "--props", json, "--crf", "23", PREVIEW_FLAG]),
+      parseRenderArgs([
+        "a",
+        "--props",
+        json,
+        "--crf",
+        "23",
+        PREVIEW_FLAG,
+        "--allow-dirty",
+      ]),
     ).toEqual(want);
     expect(
-      parseRenderArgs([PREVIEW_FLAG, "--crf", "23", "--props", json, "a"]),
+      parseRenderArgs([
+        "--allow-dirty",
+        PREVIEW_FLAG,
+        "--crf",
+        "23",
+        "--props",
+        json,
+        "a",
+      ]),
     ).toEqual(want);
   });
 

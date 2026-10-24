@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   contentTypeFor,
+  existingObjectProblem,
+  ledgerNames,
   isVideoSlug,
   ledgerRow,
   markUploaded,
@@ -165,5 +167,64 @@ describe("redact", () => {
     const secrets = ["a", "bb"];
     redact("a bb", secrets);
     expect(secrets).toEqual(["a", "bb"]);
+  });
+});
+
+describe("existingObjectProblem", () => {
+  const local = { sha256: "aa", md5: "b".repeat(32), bytes: 5 };
+  it("accepts our own metadata, or a matching size and plain MD5 ETag", () => {
+    expect(
+      existingObjectProblem({ sha256: "aa", etag: null, bytes: null }, local),
+    ).toBeNull();
+    expect(
+      existingObjectProblem(
+        { sha256: null, etag: `"${"B".repeat(32)}"`, bytes: 5 },
+        local,
+      ),
+    ).toBeNull();
+    // a mismatching metadata value does not veto a byte-identical size + MD5
+    expect(
+      existingObjectProblem(
+        { sha256: "zz", etag: "b".repeat(32), bytes: 5 },
+        local,
+      ),
+    ).toBeNull();
+  });
+  it("says whether the metadata differs or is missing", () => {
+    expect(
+      existingObjectProblem({ sha256: "zz", etag: null, bytes: 5 }, local),
+    ).toMatch(/different sha256/);
+    expect(
+      existingObjectProblem({ sha256: null, etag: null, bytes: 5 }, local),
+    ).toMatch(/no sha256 metadata/);
+  });
+  it("rejects multipart, short, wrong or size-mismatched ETags", () => {
+    for (const etag of [
+      `"${"b".repeat(32)}-2"`,
+      "b".repeat(31),
+      "c".repeat(32),
+    ])
+      expect(
+        existingObjectProblem({ sha256: null, etag, bytes: 5 }, local),
+      ).not.toBeNull();
+    expect(
+      existingObjectProblem(
+        { sha256: null, etag: "b".repeat(32), bytes: 6 },
+        local,
+      ),
+    ).not.toBeNull();
+  });
+});
+
+describe("ledgerNames", () => {
+  it("lists the file names the ledger holds for one video", () => {
+    const line = (video: string, name: string) =>
+      JSON.stringify({ video, file: `out/${video}/${name}` });
+    const ledger = `${line("a", "a-20261023-v1.mp4")}\n\n${line("b", "b-20261023-v7.mp4")}\n${line("a", "a-20261023-v2.mp4")}\n`;
+    expect(ledgerNames(ledger, "a")).toEqual([
+      "a-20261023-v1.mp4",
+      "a-20261023-v2.mp4",
+    ]);
+    expect(ledgerNames("", "a")).toEqual([]);
   });
 });

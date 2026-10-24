@@ -1,6 +1,7 @@
 /** The only renderer a deliverable may be made with: software, so it is the same on every machine. */
 export const DELIVERABLE_RENDERER = "swangle";
 /** Named so a file made with it, and the command line, cannot be mistaken for a deliverable. */
+export const ALLOW_DIRTY_FLAG = "--allow-dirty";
 export const PREVIEW_FLAG = "--preview-not-a-deliverable";
 
 export interface RenderArgs {
@@ -9,14 +10,17 @@ export interface RenderArgs {
   props: Record<string, unknown>;
   crf: number;
   preview: boolean;
+  /** Render a deliverable although the checkout has uncommitted changes; the ledger records `dirty: true`. */
+  allowDirty: boolean;
 }
 
-/** `<video> [--props <json>] [--crf <1-51>] [--preview-not-a-deliverable]`, the arguments after the script name. Throws a message naming what is wrong. */
+/** `<video> [--props <json>] [--crf <1-51>] [--allow-dirty] [--preview-not-a-deliverable]`, the arguments after the script name. Throws a message naming what is wrong. */
 export function parseRenderArgs(argv: readonly string[]): RenderArgs {
   let video: string | undefined;
   let propsJson = "{}";
   let crf = "18";
   let preview = false;
+  let allowDirty = false;
   const rest = [...argv];
   for (let arg = rest.shift(); arg !== undefined; arg = rest.shift()) {
     if (arg === "--props") {
@@ -29,6 +33,8 @@ export function parseRenderArgs(argv: readonly string[]): RenderArgs {
       crf = value;
     } else if (arg === PREVIEW_FLAG) {
       preview = true;
+    } else if (arg === ALLOW_DIRTY_FLAG) {
+      allowDirty = true;
     } else if (arg.startsWith("-")) {
       throw new Error(`unknown option ${arg}`);
     } else if (video === undefined) {
@@ -55,6 +61,7 @@ export function parseRenderArgs(argv: readonly string[]): RenderArgs {
     props: props as Record<string, unknown>,
     crf: Number(crf),
     preview,
+    allowDirty,
   };
 }
 

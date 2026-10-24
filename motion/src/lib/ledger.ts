@@ -1,6 +1,15 @@
 import type { Loudness } from "./loudness.ts";
 import type { Probe } from "./probe.ts";
+import { DELIVERABLE_RENDERER } from "./render-args.ts";
 import { newStored, type Stored } from "./store.ts";
+
+/** The checkout a render was made from. */
+export interface Source {
+  /** HEAD. */
+  git: string;
+  /** Uncommitted changes (other than the ledger) were present: the commit does not describe the video. */
+  dirty: boolean;
+}
 
 /** What `scripts/check-render.ts --json` prints. */
 export interface CheckReport {
@@ -22,7 +31,11 @@ export function parseCheckReport(stdout: string, stderr: string): CheckReport {
   }
 }
 
-/** Why a `.check.json` does not vouch for its render: its problems, or that it cannot be read. Empty means it passed. */
+/**
+ * Why a `.check.json` does not vouch for its render: its problems, that it cannot
+ * be read, or that the renderer it names is not the deliverable one. Empty means
+ * it passed.
+ */
 export function storedCheckProblems(text: string): string[] {
   let record: unknown;
   try {
@@ -30,23 +43,35 @@ export function storedCheckProblems(text: string): string[] {
   } catch {
     return ["the check output is not valid JSON"];
   }
-  const problems = (record as { problems?: unknown } | null)?.problems;
+  const { problems, renderer } = (record ?? {}) as {
+    problems?: unknown;
+    renderer?: unknown;
+  };
   if (!Array.isArray(problems))
     return ["the check output has no list of problems"];
-  return problems.map(String);
+  return [
+    ...problems.map(String),
+    ...(renderer === DELIVERABLE_RENDERER
+      ? []
+      : [
+          `rendered with ${String(renderer)}, not ${DELIVERABLE_RENDERER}: not a deliverable`,
+        ]),
+  ];
 }
 
 /**
  * The `.check.json` kept beside a render: the report with the file named
- * relative to motion/ (no machine path leaves the machine) and the renderer
- * that made the picture.
+ * relative to motion/ (no machine path leaves the machine), the renderer that
+ * made the picture and the commit it was made from, with whether the tree had
+ * uncommitted changes.
  */
 export function checkRecord(
   report: CheckReport,
   file: string,
   renderer: string,
-): CheckReport & { renderer: string } {
-  return { ...report, file, renderer };
+  source: Source,
+): CheckReport & { renderer: string } & Source {
+  return { ...report, file, renderer, ...source };
 }
 
 export interface LedgerInput {
@@ -58,6 +83,7 @@ export interface LedgerInput {
   report: CheckReport;
   props: Record<string, unknown>;
   git: string;
+  dirty: boolean;
   remotion: string;
   gl: string;
   renderedAt: string;
@@ -88,6 +114,7 @@ export function ledgerLine(i: LedgerInput): {
     true_peak_dbtp: i.report.loudness.truePeak,
     props: i.props,
     git: i.git,
+    dirty: i.dirty,
     remotion: i.remotion,
     gl: i.gl,
     renderedAt: i.renderedAt,

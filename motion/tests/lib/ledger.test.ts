@@ -32,6 +32,7 @@ const INPUT: LedgerInput = {
   report: REPORT,
   props: { seed: 3 },
   git: "f6af669803dac125c06c08aac0d8b61f6254e962",
+  dirty: false,
   remotion: "4.0.534",
   gl: "swangle",
   renderedAt: "2026-10-23T12:00:00.000Z",
@@ -69,12 +70,17 @@ describe("parseCheckReport", () => {
 });
 
 describe("checkRecord", () => {
-  it("replaces the machine path by the motion-relative one and records the renderer", () => {
-    const record = checkRecord(REPORT, "out/a/a-20261023-v1.mp4", "swangle");
+  it("replaces the machine path by the motion-relative one and records the renderer, the commit and whether the tree was dirty", () => {
+    const record = checkRecord(REPORT, "out/a/a-20261023-v1.mp4", "swangle", {
+      git: "abc123",
+      dirty: true,
+    });
     expect(record).toEqual({
       ...REPORT,
       file: "out/a/a-20261023-v1.mp4",
       renderer: "swangle",
+      git: "abc123",
+      dirty: true,
     });
     expect(JSON.stringify(record)).not.toContain("/Users/");
   });
@@ -96,6 +102,7 @@ describe("ledgerLine", () => {
       "true_peak_dbtp",
       "props",
       "git",
+      "dirty",
       "remotion",
       "gl",
       "renderedAt",
@@ -114,6 +121,7 @@ describe("ledgerLine", () => {
       true_peak_dbtp: -2.3,
       props: { seed: 3 },
       git: "f6af669803dac125c06c08aac0d8b61f6254e962",
+      dirty: false,
       remotion: "4.0.534",
       gl: "swangle",
       renderedAt: "2026-10-23T12:00:00.000Z",
@@ -140,14 +148,26 @@ describe("ledgerLine", () => {
 });
 
 describe("storedCheckProblems", () => {
-  it("is empty for a record that passed", () => {
-    expect(storedCheckProblems(JSON.stringify({ ...REPORT }))).toEqual([]);
+  const record = (extra: object) =>
+    JSON.stringify({ ...REPORT, renderer: "swangle", ...extra });
+
+  it("is empty for a record that passed with the deliverable renderer", () => {
+    expect(storedCheckProblems(record({}))).toEqual([]);
   });
 
   it("lists the problems a failed record carries", () => {
     expect(
-      storedCheckProblems(JSON.stringify({ problems: ["no audio track", 3] })),
+      storedCheckProblems(record({ problems: ["no audio track", 3] })),
     ).toEqual(["no audio track", "3"]);
+  });
+
+  it("does not vouch for any other renderer, or none", () => {
+    expect(storedCheckProblems(record({ renderer: "angle" }))).toEqual([
+      "rendered with angle, not swangle: not a deliverable",
+    ]);
+    expect(storedCheckProblems(JSON.stringify({ problems: [] }))).toEqual([
+      "rendered with undefined, not swangle: not a deliverable",
+    ]);
   });
 
   it.each(["", "{nope", "null", "[]", "{}", '{"problems":"none"}'])(

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { sha256Hex, signRequest, signingKey } from "../../src/lib/sigv4.ts";
+import {
+  md5Hex,
+  sha256Hex,
+  signRequest,
+  signingKey,
+} from "../../src/lib/sigv4.ts";
 
 /*
  * Known answers, computed independently of sigv4.ts (Python stdlib, the SigV4 steps written out one by one) and
@@ -43,6 +48,15 @@ describe("sha256Hex", () => {
   });
 });
 
+describe("md5Hex", () => {
+  it("hashes strings and bytes", () => {
+    expect(md5Hex("hello")).toBe("5d41402abc4b2a76b9719d911017c592");
+    expect(md5Hex(new TextEncoder().encode("hello"))).toBe(
+      "5d41402abc4b2a76b9719d911017c592",
+    );
+  });
+});
+
 describe("signingKey", () => {
   it("matches the key AWS publishes for its IAM example", () => {
     expect(
@@ -74,6 +88,19 @@ describe("signRequest", () => {
       authorization:
         "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20261023/auto/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date, Signature=4f35b29eb618cbf12753046dc89c8ea52f5399036890a6ba878abc23da09de9f",
     });
+  });
+  it("signs an extra header in sorted position (known answer, Python reference)", () => {
+    const s = signRequest({
+      ...BASE,
+      method: "PUT",
+      payloadSha256: HELLO,
+      contentType: "video/mp4",
+      extraHeaders: { "x-amz-meta-sha256": HELLO },
+    });
+    expect(s.headers["x-amz-meta-sha256"]).toBe(HELLO);
+    expect(s.headers.authorization).toBe(
+      "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20261023/auto/s3/aws4_request, SignedHeaders=content-type;host;x-amz-content-sha256;x-amz-date;x-amz-meta-sha256, Signature=e146fc0b6e12188dfd5b04b482b3cf4985de2542de93eff5a56406ee55d65744",
+    );
   });
   it("signs an R2 HEAD without a content type (known answer)", () => {
     const s = signRequest({

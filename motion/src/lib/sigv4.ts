@@ -12,6 +12,8 @@ export interface SignInput {
   /** Hex SHA-256 of the body (of "" for GET/HEAD). */
   payloadSha256: string;
   contentType?: string | undefined;
+  /** Further headers to sign and send, lower-case names (e.g. `x-amz-meta-sha256`). */
+  extraHeaders?: Readonly<Record<string, string>> | undefined;
   now: Date;
 }
 export interface Signed {
@@ -27,6 +29,9 @@ const hmac = (key: string | Buffer, data: string): Buffer =>
 
 export const sha256Hex = (data: string | Uint8Array): string =>
   createHash("sha256").update(data).digest("hex");
+
+export const md5Hex = (data: string | Uint8Array): string =>
+  createHash("md5").update(data).digest("hex");
 
 export const signingKey = (
   secret: string,
@@ -51,15 +56,16 @@ export function signRequest(i: SignInput): Signed {
   const date = amzDate.slice(0, 8);
   const host = `${i.accountId}.r2.cloudflarestorage.com`;
   const path = `/${[i.bucket, ...i.key.split("/")].map(encodeSegment).join("/")}`;
-  const extra =
-    i.contentType === undefined ? {} : { "content-type": i.contentType };
-  // Inserted in alphabetical order, as SigV4 requires (content-type < host < x-amz-*); the known-answer tests fail if this drifts.
-  const entries = Object.entries({
-    ...extra,
-    host,
+  const sent: Record<string, string> = {
+    ...(i.contentType === undefined ? {} : { "content-type": i.contentType }),
+    ...i.extraHeaders,
     "x-amz-content-sha256": i.payloadSha256,
     "x-amz-date": amzDate,
-  });
+  };
+  // SigV4 wants the signed headers sorted by name; `host` is signed but added by fetch.
+  const entries = Object.entries({ ...sent, host }).sort(([a], [b]) =>
+    a < b ? -1 : 1,
+  );
   const signedHeaders = entries.map(([name]) => name).join(";");
   const canonical = [
     i.method,
@@ -83,9 +89,7 @@ export function signRequest(i: SignInput): Signed {
   return {
     url: `https://${host}${path}`,
     headers: {
-      ...extra,
-      "x-amz-content-sha256": i.payloadSha256,
-      "x-amz-date": amzDate,
+      ...sent,
       authorization: `AWS4-HMAC-SHA256 Credential=${i.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
     },
   };

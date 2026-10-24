@@ -3,19 +3,29 @@
 // Stores a finished render, its .props.json and its .check.json in TWO places:
 //   (a) the local folder $DAG_VIDEOS_DIR (default ../info/videos beside this checkout; gitignored there): always;
 //   (b) the owner's R2 bucket under videos/<video>/<file>: ONLY with --upload.
-// Nothing is overwritten, locally or in the bucket.
+// Nothing is overwritten, locally or in the bucket. A videos folder inside a git
+// work tree that does not ignore it is refused.
 //
 // --upload IS A REMOTE WRITE. It is run by the owner's own command, never by
 // render.ts, a test, CI or an agent that has not been told to by the owner.
 // Credentials come from the environment only (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
 // R2_SECRET_ACCESS_KEY, R2_VIDEOS_BUCKET): this script never reads, writes or
 // prints them, and every message it prints has them removed.
+//
+// The upload starts with a HEAD of each key, so the token needs READ as well as
+// write: grant it Object Read & Write on the videos bucket. A 403 on HEAD stops
+// the upload (it is never read as "absent"). An object that is already there
+// is left alone and counts as uploaded only if it is this file (our own
+// x-amz-meta-sha256, or a matching size and plain MD5 ETag); otherwise the
+// upload fails and nothing is recorded. Make the first --upload a throwaway
+// render, not a real video.
 import {
   constants,
   copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
+  renameSync,
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
@@ -23,7 +33,8 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { storedCheckProblems } from "../src/lib/ledger.ts";
-import { sha256Hex, signRequest } from "../src/lib/sigv4.ts";
+import { putIfAbsent, type HttpRequest } from "../src/lib/r2.ts";
+import { sha256Hex } from "../src/lib/sigv4.ts";
 import {
   contentTypeFor,
   ledgerRow,
@@ -33,6 +44,7 @@ import {
   videoKey,
 } from "../src/lib/store.ts";
 import { fail } from "./cli.ts";
+import { requireUsableVideosDir, videosDir } from "./videos-dir.ts";
 
 const USAGE =
   "node scripts/store.ts <out/<video>/<name>.mp4> [--upload] | --check";
@@ -59,20 +71,8 @@ const [target, ...extra] = parsed.positionals;
 if (extra.length > 0 || (check && target !== undefined))
   fail(USAGE, "expected one render file, or --check alone");
 
-// An empty variable counts as unset (resolve("") would be the current folder).
-const configured = process.env.DAG_VIDEOS_DIR;
-const videosDir = resolve(
-  configured === undefined || configured === ""
-    ? fileURLToPath(new URL("../../../info/videos", import.meta.url))
-    : configured,
-);
-if (!existsSync(dirname(videosDir))) {
-  console.error(
-    `DAG_VIDEOS_DIR: ${dirname(videosDir)} (the parent of ${videosDir}) does not exist. Clone info beside dag-vis, or set DAG_VIDEOS_DIR to <an existing folder>/videos.`,
-  );
-  process.exit(1);
-}
 if (check) {
+  requireUsableVideosDir("check/check.mp4");
   console.log(`videos folder ok: ${videosDir}`);
   process.exit(0);
 }
@@ -108,6 +108,8 @@ async function store(mp4: string): Promise<void> {
     throw new Error(
       `${basename(mp4)} did not pass its checks: ${problems.join("; ")}`,
     );
+
+  requireUsableVideosDir(`${video}/${basename(mp4)}`);
 
   // (a) local copy: never overwrite (COPYFILE_EXCL); an identical file is already stored, a different one is an error.
   mkdirSync(resolve(videosDir, video), { recursive: true });
@@ -145,54 +147,37 @@ async function store(mp4: string): Promise<void> {
       `${file} differs from its ledger line (sha256); not uploading`,
     );
 
-  const send = (
-    method: "HEAD" | "PUT",
-    key: string,
-    body?: Buffer,
-    contentType?: string,
-  ): Promise<Response> => {
-    const { url, headers } = signRequest({
-      method,
-      accountId: r2.accountId,
-      bucket: r2.bucket,
-      key,
-      accessKeyId: r2.accessKeyId,
-      secretAccessKey: r2.secretAccessKey,
-      payloadSha256: sha256Hex(body ?? ""),
-      contentType,
-      now: new Date(),
-    });
-    return fetch(url, {
-      method,
-      headers,
-      ...(body ? { body: new Uint8Array(body) } : {}),
-      signal: AbortSignal.timeout(10 * 60_000),
-    });
-  };
-  // HEAD then PUT: an object that exists is left alone. (Two owners uploading the same name at once could race; there is one owner.)
+  // HEAD then PUT, never an overwrite (putIfAbsent). Two owners uploading one name at once could race; there is one owner.
+  const send = (url: string, init: HttpRequest): Promise<Response> =>
+    fetch(url, { ...init, signal: AbortSignal.timeout(10 * 60_000) });
   for (const f of files) {
     const key = videoKey(video, basename(f));
-    const head = await send("HEAD", key);
-    if (head.status === 200) {
-      console.log(`r2: ${key} already exists, left untouched`);
-      continue;
-    }
-    if (head.status !== 404)
-      throw new Error(`r2 HEAD ${key}: HTTP ${String(head.status)}`);
-    const put = await send("PUT", key, readFileSync(f), contentTypeFor(f));
-    if (!put.ok)
-      throw new Error(
-        `r2 PUT ${key}: HTTP ${String(put.status)} ${(await put.text()).slice(0, 300)}`,
-      );
-    console.log(`r2: ${key} uploaded`);
+    const buf = readFileSync(f);
+    const bytes = new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
+    const done = await putIfAbsent(
+      r2,
+      key,
+      bytes,
+      contentTypeFor(f),
+      send,
+      () => new Date(),
+    );
+    console.log(
+      done === "uploaded"
+        ? `r2: ${key} uploaded`
+        : `r2: ${key} already exists and is this file, left untouched`,
+    );
   }
+  // Written beside the ledger and renamed over it, so an interrupted write cannot truncate it.
+  const next = `${ledgerPath}.tmp`;
   writeFileSync(
-    ledgerPath,
+    next,
     markUploaded(
       readFileSync(ledgerPath, "utf8"),
       file,
       videoKey(video, basename(mp4)),
     ),
   );
+  renameSync(next, ledgerPath);
   console.log("RENDERS.jsonl: stored.r2 recorded (commit it)");
 }

@@ -358,12 +358,12 @@ describe("motion/", () => {
       expect(lines, entry).toContain(entry);
   });
 
-  it("keeps sigv4.ts, the lib file with a node: import, out of the Remotion bundle", () => {
+  it("keeps the signing code (sigv4.ts, and r2.ts which signs through it) out of the Remotion bundle", () => {
     for (const file of motionSources.filter(
-      (p) => !p.endsWith("/src/lib/sigv4.ts"),
+      (p) => !/\/src\/lib\/(sigv4|r2)\.ts$/.test(p),
     )) {
       expect(readFileSync(file, "utf8"), relative(ROOT, file)).not.toMatch(
-        /sigv4/,
+        /sigv4|\/r2\.ts/,
       );
     }
   });
@@ -391,9 +391,11 @@ describe("motion/", () => {
       if (line === "") continue;
       const row = JSON.parse(line) as {
         gl: string;
+        dirty: unknown;
         stored: { local: string; r2: string | null };
       };
       expect(row.gl, line).toBe("swangle");
+      expect(typeof row.dirty, line).toBe("boolean");
       expect(row.stored.local, line).toMatch(/^[a-z0-9-]+\/[^/]+$/);
       expect(row.stored.r2 ?? "videos/", line).toMatch(/^videos\//);
       expect(line, "a ledger line never names a credential").not.toMatch(
