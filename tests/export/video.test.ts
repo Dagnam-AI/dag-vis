@@ -61,6 +61,8 @@ interface Init {
 
 class FakeEncoder {
   static supported = true;
+  /** isConfigSupported rejects, as it does for a malformed config */
+  static rejectSupport: Error | null = null;
   static instances: FakeEncoder[] = [];
   /** error callback fired from inside encode (a failing codec) */
   static failOnEncode = false;
@@ -83,6 +85,8 @@ class FakeEncoder {
     FakeEncoder.instances.push(this);
   }
   static isConfigSupported(c: unknown) {
+    if (FakeEncoder.rejectSupport !== null)
+      return Promise.reject(FakeEncoder.rejectSupport);
     return Promise.resolve({ supported: FakeEncoder.supported, config: c });
   }
   configure(c: unknown) {
@@ -144,6 +148,7 @@ beforeEach(() => {
   vi.stubGlobal("VideoFrame", FakeFrame);
   FakeEncoder.instances = [];
   FakeEncoder.supported = true;
+  FakeEncoder.rejectSupport = null;
   FakeEncoder.failOnEncode = false;
   FakeEncoder.throwOnEncode = false;
   FakeEncoder.rejectFlush = false;
@@ -205,13 +210,28 @@ describe("encodeVideo", () => {
     expect(first().closed).toBe(true);
   });
 
-  it("picks the level-5.1 profile above 1080p", async () => {
-    await encodeVideo({ ...base, format: "mp4", width: 3840, height: 2160 });
-    expect(first().config).toMatchObject({ codec: "avc1.640033" });
-    await encodeVideo({ ...base, format: "mp4", width: 1920, height: 1080 });
-    expect(FakeEncoder.instances[1]?.config).toMatchObject({
-      codec: "avc1.640028",
-    });
+  it.each([
+    ["1080p30", 1920, 1080, 30, "avc1.640028"],
+    ["1080p60", 1920, 1080, 60, "avc1.64002a"],
+    ["1080x1080 at 60", 1080, 1080, 60, "avc1.64002a"],
+    ["1080x1920 at 60", 1080, 1920, 60, "avc1.64002a"],
+    ["1922x1078 (8228 macroblocks)", 1922, 1078, 30, "avc1.64002a"],
+    ["4K at 1 fps (frame size forces 5.1)", 3840, 2160, 1, "avc1.640033"],
+    ["4K30", 3840, 2160, 30, "avc1.640033"],
+    ["4K60", 3840, 2160, 60, "avc1.640034"],
+    ["640x360 at 30", 640, 360, 30, "avc1.640028"],
+    ["8192x4320 at 60 (beyond every level)", 8192, 4320, 60, "avc1.640034"],
+  ])(
+    "picks the H.264 level for %s",
+    async (_name, width, height, fps, codec) => {
+      await encodeVideo({ ...base, format: "mp4", width, height, fps });
+      expect(first().config).toMatchObject({ codec });
+    },
+  );
+
+  it("uses VP9 profile 0 regardless of size", async () => {
+    await encodeVideo({ ...base, format: "webm", width: 3840, height: 2160 });
+    expect(first().config).toMatchObject({ codec: "vp09.00.10.08" });
   });
 
   it("encodes webm vp9 with optional alpha", async () => {
@@ -293,7 +313,7 @@ describe("encodeVideo", () => {
     ).rejects.toThrow(VisError);
     await expect(
       encodeVideo({ ...base, format: "mp4", height: 35 }),
-    ).rejects.toThrow(/even dimensions/);
+    ).rejects.toThrow(/even width and height/);
     FakeEncoder.supported = false;
     await expect(encodeVideo({ ...base, format: "mp4" })).rejects.toThrow(
       /unsupported/,
@@ -311,6 +331,42 @@ describe("encodeVideo", () => {
     expect(first().encoded).toHaveLength(1);
     expect(first().encoded[0]?.[0].closed).toBe(true);
     expect(mux.webm.finalized).toBe(false);
+  });
+
+  it("turns a rejecting support check into a video error", async () => {
+    FakeEncoder.rejectSupport = new TypeError("bad config");
+    await expect(encodeVideo({ ...base, format: "mp4" })).rejects.toThrow(
+      VisError,
+    );
+    await expect(encodeVideo({ ...base, format: "mp4" })).rejects.toThrow(
+      /could not check codec avc1.640028 support: bad config/,
+    );
+    FakeEncoder.rejectSupport = "plain text" as unknown as Error; // a codec may reject with anything
+    await expect(encodeVideo({ ...base, format: "mp4" })).rejects.toThrow(
+      /support: plain text/,
+    );
+    FakeEncoder.rejectSupport = null;
+    expect(FakeEncoder.instances).toHaveLength(0);
+  });
+
+  it("hands each frameAt result to VideoFrame, in order, with its own timestamp", async () => {
+    const sources = [
+      { n: 0 },
+      { n: 1 },
+      { n: 2 },
+    ] as unknown as OffscreenCanvas[];
+    await encodeVideo({
+      ...base,
+      format: "webm",
+      fps: 2,
+      count: 3,
+      frameAt: (i) => sources[i]!,
+    });
+    expect(first().encoded.map(([f]) => f.src)).toEqual(sources);
+    first().encoded.forEach(([f], i) => {
+      expect(f.src).toBe(sources[i]);
+      expect(f.init.timestamp).toBe(i * 500000);
+    });
   });
 
   it("reports a throwing encode, a rejecting flush and a throwing muxer as video errors", async () => {

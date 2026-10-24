@@ -18,6 +18,30 @@ export interface VideoOptions {
 /** Frames the encoder may hold before the loop waits for it: each queued frame is a full bitmap. */
 const MAX_QUEUE = 4;
 
+/**
+ * H.264 High profile levels, smallest first, with their limits in macroblocks
+ * (16x16) per frame and per second: [level byte, MaxFS, MaxMBPS].
+ */
+const H264_LEVELS = [
+  ["28", 8192, 245760], // 4.0
+  ["2a", 8704, 522240], // 4.2
+  ["33", 36864, 983040], // 5.1
+  ["34", 36864, 2073600], // 5.2
+] as const;
+
+/**
+ * The first level whose frame size and macroblock rate both fit; past the
+ * last one the highest is sent anyway and `isConfigSupported` has the say.
+ */
+function h264Codec(width: number, height: number, fps: number): string {
+  const mbs = Math.ceil(width / 16) * Math.ceil(height / 16);
+  const [level] =
+    H264_LEVELS.find(
+      ([, maxFs, maxMbps]) => mbs <= maxFs && mbs * fps <= maxMbps,
+    ) ?? H264_LEVELS[3];
+  return `avc1.6400${level}`;
+}
+
 function bitrateFor(o: VideoOptions): number {
   const q = o.quality ?? 0.8;
   return Math.round(o.width * o.height * o.fps * 0.1 * (0.5 + q));
@@ -71,15 +95,11 @@ export async function encodeVideo(o: VideoOptions): Promise<Blob> {
     );
   if (o.width % 2 !== 0 || o.height % 2 !== 0)
     throw new VisError(
-      `${o.format} needs even dimensions (yuv420), got ${o.width}x${o.height}`,
+      `${o.format} needs an even width and height (4:2:0 chroma), got ${o.width}x${o.height}; pass an even width and height`,
     );
   const isMp4 = o.format === "mp4";
   const alpha = !isMp4 && o.alpha === true;
-  const codec = isMp4
-    ? o.width * o.height <= 1920 * 1080
-      ? "avc1.640028"
-      : "avc1.640033"
-    : "vp09.00.10.08";
+  const codec = isMp4 ? h264Codec(o.width, o.height, o.fps) : "vp09.00.10.08";
   const config: VideoEncoderConfig = {
     codec,
     width: o.width,
@@ -89,7 +109,13 @@ export async function encodeVideo(o: VideoOptions): Promise<Blob> {
     ...(isMp4 ? { avc: { format: "avc" as const } } : {}),
     ...(alpha ? { alpha: "keep" as const } : {}),
   };
-  const support = await VideoEncoder.isConfigSupported(config);
+  const support = await VideoEncoder.isConfigSupported(config).catch(
+    (e: unknown) => {
+      throw new VisError(
+        `could not check codec ${codec} support: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    },
+  );
   if (!support.supported)
     throw new VisError(
       `codec ${codec}${alpha ? " with alpha" : ""} at ${o.width}x${o.height} is unsupported by this browser's encoder`,

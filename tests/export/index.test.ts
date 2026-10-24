@@ -284,7 +284,7 @@ describe("exportCanvas", () => {
     for (const quality of [-0.1, 1.1, Number.NaN])
       await expect(
         exportCanvas(ok, { format: "jpeg", quality }),
-      ).rejects.toThrow(/quality must be in 0\.\.1/);
+      ).rejects.toThrow(/quality must be a number in 0\.\.1/);
     for (const format of ["jpeg", "gif", "mp4"] as const)
       await expect(exportCanvas(ok, { format, alpha: true })).rejects.toThrow(
         new RegExp(`alpha is not supported by ${format}`),
@@ -296,6 +296,69 @@ describe("exportCanvas", () => {
     await expect(
       exportCanvas(ok, { format: "png", alpha: false }),
     ).resolves.toBeInstanceOf(Blob);
+  });
+
+  it("hands encodeVideo the scratch canvas, rendered and drawn per frame", async () => {
+    const { handle, renderAt } = fakeHandle();
+    await exportCanvas(handle, { format: "mp4", fps: 1, duration: 2 });
+    expect(renderAt).toHaveBeenCalledTimes(2);
+    const call = vi.mocked(encodeVideo).mock.calls[0]?.[0];
+    log = [];
+    expect(call?.frameAt(1)).toBe(scratch());
+    expect(log).toEqual(["render 1", "clear 0,0,8,4", "draw 0,0,8,4"]);
+  });
+
+  it("requires even sizes for mp4 and webm, naming width and height, before touching the environment", async () => {
+    vi.stubGlobal("OffscreenCanvas", undefined);
+    const ok = fakeHandle().handle;
+    for (const format of ["mp4", "webm"] as const) {
+      await expect(exportCanvas(ok, { format, width: 7 })).rejects.toThrow(
+        /even width and height.*got 7x4; pass an even/,
+      );
+      await expect(exportCanvas(ok, { format, height: 5 })).rejects.toThrow(
+        /got 8x5/,
+      );
+    }
+    // Other formats take odd sizes.
+    vi.stubGlobal("OffscreenCanvas", FakeOffscreen);
+    await expect(
+      exportCanvas(ok, { format: "png", width: 7, height: 5 }),
+    ).resolves.toBeInstanceOf(Blob);
+  });
+
+  it("rejects null options by name instead of falling back, and a missing options bag", async () => {
+    const ok = fakeHandle().handle;
+    const bad = (o: object) =>
+      o as unknown as Parameters<typeof exportCanvas>[1];
+    for (const key of [
+      "width",
+      "height",
+      "quality",
+      "alpha",
+      "fps",
+      "duration",
+      "warn",
+    ])
+      await expect(
+        exportCanvas(ok, bad({ format: "mp4", [key]: null })),
+      ).rejects.toThrow(new RegExp(`^${key} must`));
+    await expect(
+      exportCanvas(ok, bad({ format: "png", warn: "loud" })),
+    ).rejects.toThrow(/warn must be a function/);
+    await expect(
+      exportCanvas(ok, bad({ format: "mp4", alpha: 1 })),
+    ).rejects.toThrow(/alpha must be true or false/);
+    for (const options of [undefined, null, 3])
+      await expect(
+        exportCanvas(
+          ok,
+          options as unknown as Parameters<typeof exportCanvas>[1],
+        ),
+      ).rejects.toThrow(/^options must be an object/);
+    for (const handle of [null, undefined, 3])
+      await expect(
+        exportCanvas(handle as unknown as typeof ok, { format: "png" }),
+      ).rejects.toThrow(/handle must have a renderAt/);
   });
 
   it("names a canvas with no size", async () => {

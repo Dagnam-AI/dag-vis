@@ -1,6 +1,16 @@
 import { VisError } from "../core/index.js";
+import {
+  assertOptions,
+  bounded,
+  describeValue,
+  integerIn,
+  MAX_DIMENSION,
+  orDefault,
+  parseFlag,
+  positive,
+} from "../core/validate.js";
 import { encodeGif } from "./gif.js";
-import { animationPlan } from "./limits.js";
+import { animationPlan, MAX_FPS } from "./limits.js";
 import { encodeVideo } from "./video.js";
 import { zipStore } from "./zip.js";
 
@@ -28,7 +38,12 @@ export interface ExportCanvasOptions {
   height?: number | undefined;
   /** 0..1 for jpeg, webp, mp4 and webm. */
   quality?: number | undefined;
-  /** Keep transparency: png, webp, png-seq and webm. jpeg, gif and mp4 have none, so true is an error there. */
+  /**
+   * Only webm reads this: `true` asks the VP9 encoder to keep the alpha channel.
+   * png, webp and png-seq always keep whatever transparency the frame has (this
+   * flag does not strip it). jpeg, gif and mp4 cannot hold transparency (it
+   * renders as black), so `true` there throws instead of being ignored.
+   */
   alpha?: boolean | undefined;
   /** Receives advisories (default console.warn). */
   warn?: ((message: string) => void) | undefined;
@@ -50,17 +65,8 @@ const FORMATS: readonly string[] = [
 ];
 /** Formats that cannot hold transparency. */
 const OPAQUE: readonly string[] = ["jpeg", "gif", "mp4"];
-/** The largest canvas side browsers accept. */
-const MAX_SIDE = 16384;
 /** Browsers play a GIF delay under 2 centiseconds as 10. */
 const GIF_MAX_FPS = 50;
-
-function side(name: string, value: number): void {
-  if (!Number.isInteger(value) || value < 1 || value > MAX_SIDE)
-    throw new VisError(
-      `${name} must be an integer in 1..${MAX_SIDE}, got ${String(value)}`,
-    );
-}
 
 async function toBlob(
   c: OffscreenCanvas,
@@ -99,24 +105,56 @@ export async function exportCanvas(
   handle: ExportHandle,
   opts: ExportCanvasOptions,
 ): Promise<Blob> {
-  if (typeof handle.renderAt !== "function")
-    throw new VisError("exportCanvas handle must have a renderAt(t) method");
+  assertOptions(opts);
+  const h: unknown = handle;
+  if (
+    typeof h !== "object" ||
+    h === null ||
+    typeof (h as { renderAt?: unknown }).renderAt !== "function"
+  )
+    throw new VisError(
+      `exportCanvas handle must have a renderAt(t) method, got ${describeValue(h)}`,
+    );
   const given: unknown = opts.format; // typed, but plain JS callers pass anything
   if (!FORMATS.includes(given as string))
     throw new VisError(
-      `format must be one of ${FORMATS.join("|")}, got ${String(given)}`,
+      `format must be one of ${FORMATS.join("|")}, got ${describeValue(given)}`,
     );
   const src = handle.canvas;
-  const width = opts.width ?? src.width;
-  const height = opts.height ?? src.height;
-  side("width", width);
-  side("height", height);
-  const { quality } = opts;
-  if (quality !== undefined && !(quality >= 0 && quality <= 1))
-    throw new VisError(`quality must be in 0..1, got ${String(quality)}`);
-  if (opts.alpha === true && OPAQUE.includes(opts.format))
+  const width = integerIn(
+    "width",
+    orDefault(opts.width, src.width),
+    1,
+    MAX_DIMENSION,
+  );
+  const height = integerIn(
+    "height",
+    orDefault(opts.height, src.height),
+    1,
+    MAX_DIMENSION,
+  );
+  if (
+    (opts.format === "mp4" || opts.format === "webm") &&
+    (width % 2 !== 0 || height % 2 !== 0)
+  )
+    throw new VisError(
+      `${opts.format} needs an even width and height (4:2:0 chroma), got ${width}x${height}; pass an even width and height`,
+    );
+  const quality =
+    opts.quality === undefined
+      ? undefined
+      : bounded("quality", opts.quality, 0, 1);
+  const alpha = parseFlag("alpha", opts.alpha);
+  if (alpha && OPAQUE.includes(opts.format))
     throw new VisError(
       `alpha is not supported by ${opts.format}; use png, webp, png-seq or webm`,
+    );
+  const { fps } = opts;
+  if (fps !== undefined) integerIn("fps", fps, 1, MAX_FPS);
+  if (opts.duration !== undefined) positive("duration", opts.duration);
+  if (opts.warn !== undefined && typeof opts.warn !== "function")
+    throw new VisError(
+      `warn must be a function, got ${describeValue(opts.warn)}`,
     );
   const warn =
     opts.warn ??
@@ -197,7 +235,7 @@ export async function exportCanvas(
     fps: plan.fps,
     count: plan.count,
     quality,
-    alpha: opts.alpha,
+    alpha,
     frameAt: (i) => {
       frame(i / plan.fps);
       return scratch;
