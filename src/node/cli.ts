@@ -1,6 +1,4 @@
-import { constants } from "node:fs";
-import { mkdir, open, stat } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { resolve } from "node:path";
 
 import { palette } from "../brand/tokens.js";
 import { VisError } from "../core/errors.js";
@@ -14,19 +12,24 @@ import { ogCard } from "../scene/og-card.js";
 import {
   defined,
   oneLine,
+  parseArguments,
   parseFocus,
-  parseNumber,
-  parseOptions,
   wantsHelp,
 } from "./cli-args.js";
+import { EXPORT_COMMANDS } from "./cli-export.js";
+import {
+  numeric,
+  readSpec,
+  required,
+  requiredNumeric,
+  writeOut,
+} from "./cli-support.js";
+import type { CliIo, Command, Options } from "./cli-support.js";
 import { favicons } from "./favicons.js";
 import { renderPng } from "./render-png.js";
-import { messageOf, writeAtomic } from "./util.js";
+import { messageOf } from "./util.js";
 
-export interface CliIo {
-  stdout(s: string): void;
-  stderr(s: string): void;
-}
+export type { CliIo } from "./cli-support.js";
 
 export const USAGE = `Dagnam visuals from the command line (dag-vis <command> [options])
 
@@ -35,6 +38,10 @@ export const USAGE = `Dagnam visuals from the command line (dag-vis <command> [o
   dag-vis gradient --spec spec.json [--w W --h H] --out f.(svg|png)
   dag-vis pattern --spec spec.json --out f.(svg|png)
   dag-vis favicons --out DIR [--background C --color C]
+  dag-vis export <preset|spec.json> --out FILE [--format F] [--w N --h N | --size NAME]
+                 [--fps N --duration S --loop] [--quality Q] [--t S] [--alpha] [--poster FILE]
+  dag-vis presets
+  dag-vis sheet --out f.png [--tile 300x170 --gap 32 --columns 4]
 
 An --out must end in .svg or .png (any case), or the command exits 1 and writes
 nothing; .png is rasterised with the bundled Inter fonts (needs
@@ -47,18 +54,26 @@ that starts with "--"). A spec is a JSON object in a file of at most 1 MiB. To
 rasterise a gradient spec whose overlay has an image, give the image as a
 raster data: URI (data:image/png, jpeg, gif or webp; a URL, a path or an SVG
 data: URI cannot be rendered to PNG; SVG output keeps it as is).
+
+export renders a preset (dag-vis presets lists them) or a spec file ending in
+.json: a field (flow, fluid, fluted over either), gradient or ribbon spec.
+The format is the --out extension (png jpg jpeg webp avif svg gif apng mp4
+webm) or --format, which also takes png-seq (then --out is the folder that
+receives frame-00000.png and so on). The size is --size og|square|story|
+wallpaper|4k|header or --w and --h in whole pixels (default og, 1200x630).
+Animations take --fps (1..60, default 30), --duration in seconds (default 6),
+--loop (a seamless loop), --alpha (webm and apng) and --poster FILE (frame 0 as
+a PNG). Stills take --t, the second to draw; --loop with --duration picks the
+frame an animation of that length shows. --quality is 0..1 (default 0.8).
+jpg, webp and avif stills and apng, mp4 and webm animations need ffmpeg on the
+PATH (or its path in DAG_VIS_FFMPEG). An option that does not apply to the
+chosen format is an error. export writes through a temp file and a rename and
+does not create the folder of --out; sheet --out must end in .png and creates
+missing folders like the commands above. presets prints one name and kind per
+line, in the order of the sheet, which draws every preset in a grid.
+Warnings (a GIF faster than 50 fps) go to stderr and the exit status stays 0.
 Exit status 0 on success, 1 on any error (one line on stderr).
 `;
-
-type Options = ReadonlyMap<string, string>;
-
-/** The value of a required option; an empty one is as wrong as a missing one. */
-function required(opts: Options, name: string): string {
-  const v = opts.get(name);
-  if (v === undefined) throw new VisError(`--${name} is required`);
-  if (v === "") throw new VisError(`--${name} must not be empty`);
-  return v;
-}
 
 /** The file `--out` of a command that writes one: required, and .svg or .png in any case. */
 function outFile(opts: Options): string {
@@ -70,90 +85,10 @@ function outFile(opts: Options): string {
   return out;
 }
 
-function numeric(opts: Options, name: string): number | undefined {
-  const raw = opts.get(name);
-  return raw === undefined ? undefined : parseNumber(name, raw);
-}
-
-function requiredNumeric(opts: Options, name: string): number {
-  return parseNumber(name, required(opts, name));
-}
-
 function themeOption(opts: Options): "dark" | "light" | undefined {
   const v = opts.get("theme");
   if (v === undefined || v === "dark" || v === "light") return v;
   throw new VisError(`--theme must be dark or light, got ${describeValue(v)}`);
-}
-
-/** Rethrows a filesystem failure as a VisError: `<what>: <system message>`. */
-const failWith =
-  (what: string) =>
-  (error: unknown): never => {
-    throw new VisError(`${what}: ${messageOf(error)}`);
-  };
-
-/** Largest spec file read; a spec is a few hundred bytes in practice. */
-const MAX_SPEC_BYTES = 1024 * 1024;
-
-/**
- * Reads a spec file as JSON (`JSON.parse` only, never evaluated). The path is
- * user input: it must be a regular file (a directory, device or FIFO would
- * fail or block) of at most MAX_SPEC_BYTES, and hold a JSON object. The
- * generators validate the object's contents. The file is opened first, without
- * blocking (a FIFO with no writer would otherwise hang the open), and the
- * OPENED file is checked, so it cannot be swapped between the check and the read.
- */
-async function readSpec(path: string): Promise<object> {
-  const fail = failWith(`could not read ${path}`);
-  const handle = await open(
-    path,
-    constants.O_RDONLY | constants.O_NONBLOCK,
-  ).catch(fail);
-  const buffer = Buffer.alloc(MAX_SPEC_BYTES + 1);
-  try {
-    const info = await handle.stat().catch(fail);
-    if (!info.isFile()) throw new VisError(`${path} is not a regular file`);
-    const { bytesRead } = await handle
-      .read(buffer, 0, buffer.length, 0)
-      .catch(fail);
-    if (bytesRead > MAX_SPEC_BYTES)
-      throw new VisError(`${path} is larger than 1 MiB`);
-    return parseSpec(path, buffer.toString("utf8", 0, bytesRead));
-  } finally {
-    await handle.close();
-  }
-}
-
-/** `text` as a JSON object, or a VisError naming `path`. */
-function parseSpec(path: string, text: string): object {
-  let spec: unknown;
-  try {
-    spec = JSON.parse(text.startsWith("﻿") ? text.slice(1) : text);
-  } catch (error) {
-    throw new VisError(`invalid JSON in ${path}: ${messageOf(error)}`);
-  }
-  if (typeof spec !== "object" || spec === null || Array.isArray(spec))
-    throw new VisError(
-      `${path} must contain a JSON object, got ${Array.isArray(spec) ? "an array" : describeValue(spec)}`,
-    );
-  return spec;
-}
-
-/**
- * Writes `data` to `path` through a temp file in the same directory and a
- * rename, so a failure never leaves a truncated file under the real name.
- * Missing parent directories are created. The rename replaces the target (a
- * symlink is replaced, never written through); a directory there is refused.
- */
-async function writeOut(path: string, data: Buffer | string): Promise<void> {
-  const wrap = (error: unknown): VisError =>
-    new VisError(`could not write ${path}: ${messageOf(error)}`);
-  if ((await stat(path).catch(() => undefined))?.isDirectory())
-    throw new VisError(`could not write ${path}: it is a directory`);
-  await mkdir(dirname(path), { recursive: true }).catch((error: unknown) => {
-    throw wrap(error);
-  });
-  await writeAtomic(path, data, wrap);
 }
 
 /** Rasterises SVG that one of this package's generators produced (never a user's file). */
@@ -175,13 +110,9 @@ async function emit(svg: string, out: string, io: CliIo): Promise<void> {
   io.stdout(`wrote ${path}\n`);
 }
 
-interface Command {
-  options: readonly string[];
-  run(opts: Options, io: CliIo): Promise<void>;
-}
-
 // A Map, not an object: `constructor`, `__proto__` and friends must be unknown commands.
 const COMMANDS = new Map<string, Command>([
+  ...EXPORT_COMMANDS,
   [
     "og",
     {
@@ -304,7 +235,7 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
     io.stderr(USAGE);
     return 1;
   }
-  if (name === "help" || wantsHelp(argv)) {
+  if (name === "help" || wantsHelp(argv, COMMANDS.get(name)?.flags)) {
     io.stdout(USAGE);
     return 0;
   }
@@ -312,7 +243,11 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
     const command = COMMANDS.get(name);
     if (command === undefined)
       throw new VisError(`unknown command: ${name.slice(0, 80)}`);
-    await command.run(parseOptions(rest, command.options), io);
+    const parsed = parseArguments(rest, {
+      values: command.options,
+      ...defined({ flags: command.flags, positionals: command.positionals }),
+    });
+    await command.run(parsed.values, io, parsed);
     return 0;
   } catch (error) {
     const message =
