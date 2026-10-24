@@ -72,6 +72,24 @@ interface Live {
 
 const WRAPPER: CSSProperties = { overflow: "hidden" };
 
+/** The effects that draw with Canvas2D: their canvas never holds a WebGL context, and asking would make one. */
+const CANVAS_2D: ReadonlySet<VisEffect> = new Set(["glitch", "ribbon"]);
+
+/**
+ * Loses the WebGL context of a canvas the wrapper has just removed and will never reuse. `destroy()` leaves
+ * the context alive (the canvas may host another effect), so without this a removed canvas keeps its context
+ * until garbage collection and a page that mounts and unmounts backgrounds hits the browser's cap (16 in
+ * Chrome), which force-loses the OLDEST live context. Calling it for a context that is already lost is a
+ * no-op (the spec only warns), so there is nothing to catch.
+ */
+const releaseContext = (canvas: HTMLCanvasElement, effect: VisEffect): void => {
+  if (CANVAS_2D.has(effect)) return;
+  canvas
+    .getContext("webgl2")
+    ?.getExtension("WEBGL_lose_context")
+    ?.loseContext();
+};
+
 /** The option keys that carry a value: `update()` cannot take one away again (undefined keeps the current value). */
 const definedKeys = (options: object): string =>
   Object.entries(options)
@@ -87,7 +105,10 @@ const definedKeys = (options: object): string =>
  * default height. Every effect instance gets its own `<canvas>`
  * (`aria-hidden`, `pointer-events: none`), created in an effect, appended to
  * the wrapper and removed on cleanup, so StrictMode's mount, unmount, mount
- * and a switch of `effect` never reuse a canvas.
+ * and a switch of `effect` never reuse a canvas. Because a canvas is never
+ * reused, cleanup also loses its WebGL context (`WEBGL_lose_context`), so
+ * mounting and unmounting many backgrounds stays under the browser's cap on
+ * live contexts instead of getting the oldest one force-lost.
  *
  * - `effect="field"` takes `options.spec` (a `FieldSpec`, required): its seed and
  *   colours belong to the spec, so the shared `seed` and `colors` options do not
@@ -157,6 +178,8 @@ export function VisBackground({
     } catch (error) {
       handle?.destroy();
       canvas.remove();
+      // Without a handle the factory threw while validating, before any context existed: asking would make one.
+      if (handle) releaseContext(canvas, effect);
       failedRef.current = optionsKey;
       report(error);
       return;
@@ -167,8 +190,10 @@ export function VisBackground({
   const unmount = (): void => {
     const live = liveRef.current;
     liveRef.current = null;
-    live?.handle.destroy();
-    live?.canvas.remove();
+    if (!live) return;
+    live.handle.destroy();
+    live.canvas.remove();
+    releaseContext(live.canvas, effect);
   };
 
   // The effects run in this order within one commit, so they see the latest callback.

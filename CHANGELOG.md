@@ -23,6 +23,10 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 - Scenes: the brand card and `brandBackground` return to deep reds and clean edges. Defaults: accent `[BRAND.accent.dark]` (was the bright `#ef4444`, which washed pink), `band` 0.12 (was 0.35), `hairlines` 3 (was 4), `hairlineWidth` 1.8 (was 1.5), `glow` 0.85 (was 0.55) pooled at `glowAt` [0.98, 0.52] (was the focus) and eased to zero at its radius, hairline fade mid-stop 0.45 (was 0.3). The SVG of `brandBackground` and `ogCard` differs from 0.1.1.
 - Scenes: `ogCard` (without `cover`) is set entirely in the site's fonts: title, subtitle, eyebrow and footer in Unbounded 400, the wordmark in Moonhouse (`DAGNAM` + red `.AI`), lines wrapped by those fonts' advances and balanced so a short last line borrows words from the one above; a `•` in the footer is drawn in the brand red. Layout numbers changed (title 0.09 of the card, subtitle 0.04). Previously Inter bold/regular.
 
+### Fixed
+
+- React: `<VisBackground>` now loses the WebGL context of the canvas it removes (on unmount, on a switch of `effect` or a changed field spec, and when creation fails after the context was made). Each mount has its own canvas that is never reused, but the removed canvas kept its context until garbage collection, so a page that mounted and unmounted many backgrounds hit the browser's cap on live contexts (16 in Chrome) and got "Too many active WebGL contexts" with the oldest context force-lost. Canvas2D effects (`glitch`, `ribbon`) are untouched.
+
 ## [0.1.1] - 2026-10-24
 
 ### Changed

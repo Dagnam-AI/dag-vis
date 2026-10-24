@@ -16,7 +16,7 @@ import {
 import { VisError } from "../../src/core/index.js";
 import { VisBackground } from "../../src/react/index.js";
 import { installFakeDom, type FakeDom } from "../animate/fake-dom.js";
-import { installFakeGl, type FakeGl } from "../animate/fake-gl.js";
+import { FakeGl, installFakeGl } from "../animate/fake-gl.js";
 
 describe("<VisBackground>", () => {
   let dom: FakeDom;
@@ -37,6 +37,9 @@ describe("<VisBackground>", () => {
     });
   };
   const released = (gl: FakeGl): boolean => gl.calls.includes("deleteProgram");
+  /** How many times the wrapper asked this canvas's context to be lost, and whether it now is. */
+  const lostCalls = (gl: FakeGl): number =>
+    gl.calls.filter((c) => c === "loseContext").length;
 
   it("renders a wrapper with no inline position, creates its canvas in an effect and starts the effect", () => {
     const { container } = render(
@@ -107,7 +110,7 @@ describe("<VisBackground>", () => {
     expect(Math.abs(uTime(fake.gls[0]!) - first)).toBeGreaterThan(1);
   });
 
-  it("gives a switched effect a fresh canvas and releases the old one without losing its context", () => {
+  it("gives a switched effect a fresh canvas and loses the old one's context, not the new one's", () => {
     const { rerender, container, unmount } = render(
       <VisBackground effect="pixel" />,
     );
@@ -119,12 +122,54 @@ describe("<VisBackground>", () => {
     expect(fake.gls).toHaveLength(2);
     expect(released(fake.gls[0]!)).toBe(true);
     expect(released(fake.gls[1]!)).toBe(false);
+    // The wrapper never reuses a canvas, so it loses the old one's context; the new one stays live.
+    expect(fake.gls[0]?.isContextLost()).toBe(true);
+    expect(fake.gls[1]?.isContextLost()).toBe(false);
     expect(dom.pending()).toBe(1);
     unmount();
     expect(released(fake.gls[1]!)).toBe(true);
     expect(dom.pending()).toBe(0);
     expect(container.querySelector("canvas")).toBeNull();
-    for (const gl of fake.gls) expect(gl.calls).not.toContain("loseContext");
+    expect(fake.gls.map((gl) => gl.isContextLost())).toEqual([true, true]);
+    expect(fake.gls.map(lostCalls)).toEqual([1, 1]);
+  });
+
+  it("loses the context exactly once when a GL effect unmounts, after destroying the effect", () => {
+    const { unmount } = render(<VisBackground effect="dither" />);
+    frame();
+    const gl = fake.gls[0]!;
+    expect(gl.isContextLost()).toBe(false);
+    unmount();
+    expect(gl.isContextLost()).toBe(true);
+    expect(lostCalls(gl)).toBe(1);
+    expect(gl.calls.indexOf("deleteProgram")).toBeLessThan(
+      gl.calls.indexOf("loseContext"),
+    );
+  });
+
+  it("loses the context of a GL effect whose start() failed after the context was made", () => {
+    // Every shader fails to compile: createDither succeeds, start() throws once the context exists.
+    const compile = vi
+      .spyOn(FakeGl.prototype, "getShaderParameter")
+      .mockReturnValue(false);
+    const onError = vi.fn();
+    const { container } = render(
+      <VisBackground effect="dither" onError={onError} />,
+    );
+    compile.mockRestore();
+    expect(container.querySelectorAll("canvas")).toHaveLength(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(fake.gls).toHaveLength(1);
+    expect(fake.gls[0]?.isContextLost()).toBe(true);
+    expect(lostCalls(fake.gls[0]!)).toBe(1);
+  });
+
+  it("does not make a context for a canvas2d effect, nor lose one", () => {
+    const { unmount } = render(<VisBackground effect="glitch" />);
+    frame();
+    unmount();
+    expect(fake.gls).toHaveLength(0);
+    expect(fake.ctx2ds).toHaveLength(1);
   });
 
   it("recreates the effect when `loop` is turned off (update cannot clear it)", () => {
@@ -191,7 +236,9 @@ describe("<VisBackground>", () => {
     expect(fake.gls[1]?.calls.some((c) => c.startsWith("drawArrays"))).toBe(
       true,
     );
-    for (const gl of fake.gls) expect(gl.calls).not.toContain("loseContext");
+    // The first mount's canvas is gone for good (lost); the surviving mount's is live.
+    expect(fake.gls.map((gl) => gl.isContextLost())).toEqual([true, false]);
+    expect(fake.gls.map(lostCalls)).toEqual([1, 0]);
   });
 
   it("hydrates server markup without a mismatch, then adds its canvas", () => {
