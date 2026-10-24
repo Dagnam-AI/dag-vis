@@ -30,7 +30,7 @@ const ascii = (bytes: number[], from: number, to: number): string =>
 test("every preset gets a card with its name, kind and five export buttons", async ({
   page,
 }) => {
-  await open(page);
+  await open(page, "?t=1.25");
   expect(NAMES).toHaveLength(19);
   for (const name of NAMES) {
     const c = card(page, name);
@@ -171,7 +171,7 @@ test("keyboard focus on an export button is visible", async ({ page }) => {
 test("a keyboard export keeps focus on the pressed button", async ({
   page,
 }) => {
-  await open(page, "?w=160&h=90");
+  await open(page, "?w=160&h=90&t=1.25");
   await tabToButton(page);
   await page.keyboard.press("Enter");
   const first = card(page, NAMES[0] ?? "");
@@ -266,10 +266,12 @@ test("resizing the window re-ranks the cards from fresh measurements", async ({
   expect(s.leaked).toBe(0);
 });
 
+// The export tests freeze time (?t): an export does not depend on what the cards animate, and live loops on
+// a slow software GL leave the page too busy to answer the test's own round trips in time.
 test("png export: a PNG of the export size, a link, bytes shown, and the old link revoked by the next export", async ({
   page,
 }) => {
-  await open(page);
+  await open(page, "?t=1.25");
   const first = card(page, NAMES[0] ?? "");
   await first.scrollIntoViewIfNeeded();
   const png = first.getByRole("button", { name: "png" });
@@ -313,10 +315,54 @@ test("png export: a PNG of the export size, a link, bytes shown, and the old lin
   expect(s.leaked).toBe(0);
 });
 
+test("an export holds every other card's loop until its result is shown, then they run again", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await open(page, "?w=320&h=180&fps=10&duration=1");
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const s = window.__flow.stats();
+          return s.live === s.cap && s.running === s.live;
+        }),
+      COMPILE,
+    )
+    .toBe(true);
+  const before = await page.evaluate(() => window.__flow.stats());
+  const c = card(page, NAMES[0] ?? "");
+  // Click and look in the same task: the loops are held before the export's first await.
+  const during = await c
+    .getByRole("button", { name: "gif" })
+    .evaluate((gif: HTMLButtonElement) => {
+      gif.click();
+      const s = window.__flow.stats();
+      return {
+        running: s.running,
+        live: s.live,
+        states: Array.from(document.querySelectorAll("section.card")).map(
+          (card) => (card as HTMLElement).dataset.state,
+        ),
+      };
+    });
+  expect(during.running).toBe(0);
+  // Held, not released: the same cards stay live and keep their last frame.
+  expect(during.live).toBe(before.live);
+  expect(during.states.filter((s) => s === "live")).toHaveLength(before.live);
+  await expect(c.locator("a[download]")).toBeVisible(COMPILE);
+  await expect
+    .poll(() => page.evaluate(() => window.__flow.stats().running), COMPILE)
+    .toBe(before.live);
+  const after = await page.evaluate(() => window.__flow.stats());
+  expect(after.live).toBe(before.live);
+  expect(after.leaked).toBe(0);
+});
+
 test("export buttons are disabled while an export runs, on every card", async ({
   page,
 }) => {
-  await open(page, "?w=320&h=180&fps=10&duration=1");
+  await open(page, "?w=320&h=180&fps=10&duration=1&t=1.25");
   const c = card(page, NAMES[1] ?? "");
   await c.scrollIntoViewIfNeeded();
   // Click and look in the same task: a short export can finish between two polls.
@@ -346,7 +392,7 @@ test("a failed export is shown as visible text, never a dialog, and frees the bu
   await page.addInitScript(() => {
     Object.defineProperty(window, "OffscreenCanvas", { value: undefined });
   });
-  await open(page);
+  await open(page, "?t=1.25");
   const c = card(page, NAMES[0] ?? "");
   await c.scrollIntoViewIfNeeded();
   await c.getByRole("button", { name: "png" }).click();
@@ -360,7 +406,7 @@ test("a failed export is shown as visible text, never a dialog, and frees the bu
 
 test("gif export: a GIF header with the export size", async ({ page }) => {
   test.setTimeout(120_000);
-  await open(page, "?w=160&h=90&fps=10&duration=1");
+  await open(page, "?w=160&h=90&fps=10&duration=1&t=1.25");
   const c = card(page, NAMES[2] ?? "");
   await c.scrollIntoViewIfNeeded();
   await c.getByRole("button", { name: "gif" }).click();
@@ -398,7 +444,7 @@ for (const { format, probe, check, magic } of VIDEO) {
     page,
   }) => {
     test.setTimeout(120_000);
-    await open(page, "?w=160&h=90&fps=10&duration=1");
+    await open(page, "?w=160&h=90&fps=10&duration=1&t=1.25");
     const supported = await page.evaluate(async (p) => {
       if (typeof VideoEncoder === "undefined") return false;
       const r = await VideoEncoder.isConfigSupported({

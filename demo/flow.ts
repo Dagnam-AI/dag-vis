@@ -38,6 +38,8 @@ interface Card {
   url: string | null;
   /** Set when the live field could not start: the card keeps its error and is not retried. */
   failed: boolean;
+  /** Whether the card's field runs a loop (false for a still frame: frozen time or reduced motion). */
+  animate: boolean;
 }
 
 const grid = document.querySelector<HTMLElement>("#grid");
@@ -121,8 +123,10 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
       });
       // Reduced motion, or a frozen time: one still frame, no loop.
       const still = p.t !== null || matchMedia(REDUCED_MOTION).matches;
-      if (still) handle.renderAt(p.t ?? 0);
+      // An export in progress holds the loops back: this card shows its first frame until it ends.
+      if (still || exporting) handle.renderAt(p.t ?? 0);
       else handle.start();
+      c.animate = !still;
       c.canvas = canvas;
       c.handle = handle;
       live.set(c.name, handle);
@@ -134,6 +138,15 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
       setState(c, "error");
       say(c, e instanceof Error ? e.message : String(e), true);
     }
+  }
+
+  /** Runs or holds every loop. A held card keeps showing its last frame. */
+  function setLoops(on: boolean): void {
+    for (const c of cards)
+      if (c.handle && c.animate) {
+        if (on) c.handle.start();
+        else c.handle.stop();
+      }
   }
 
   /** Pixels of the card inside the viewport, from a fresh measurement. */
@@ -210,6 +223,8 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
     ext: string,
   ): Promise<void> {
     exporting = true;
+    // The export renders on the main thread and the GL the live cards use: hold their loops until it ends.
+    setLoops(false);
     // aria-disabled, not disabled: the button that was pressed keeps keyboard focus.
     for (const b of buttons) b.setAttribute("aria-disabled", "true");
     c.root.setAttribute("aria-busy", "true");
@@ -273,6 +288,7 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
         host.remove();
         c.root.removeAttribute("aria-busy");
         exporting = false;
+        setLoops(true);
         for (const b of buttons) b.removeAttribute("aria-disabled");
       }
     }
@@ -302,6 +318,7 @@ function build(p: FlowParams & { ok: true }, into: HTMLElement): void {
       handle: null,
       url: null,
       failed: false,
+      animate: false,
     };
     for (const { format, ext } of FORMATS) {
       const b = el("button", undefined, format);
