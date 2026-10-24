@@ -2,6 +2,9 @@
 //   npx eslint --config motion/eslint.config.js motion
 // The root config (type-checked rules, prettier) minus its global ignore of
 // motion/**, plus the motion layering rules.
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import tseslint from "typescript-eslint";
 
 import root from "../eslint.config.js";
@@ -10,22 +13,72 @@ const rootWithoutIgnores = root.filter(
   (c) => !(Object.keys(c).length === 1 && "ignores" in c),
 );
 
-// `from` = the fewest `../` that can already leave motion/ for the library's
-// src/. A test mirrors motion/src with a relative path, so for files in
-// motion/tests/<k dirs> the first k+1 levels are motion's own src and only
-// deeper ones are the library's; everything under motion/src and motion/scripts
-// reaches the library through the alias from the first level.
-const relativeSrc = (from = 1) => ({
-  group: [
-    ...[1, 2, 3, 4, 5, 6]
-      .filter((n) => n >= from)
-      .map((n) => `${"../".repeat(n)}src/*`),
-    "**/dist/**",
-  ],
+const ROOT = resolve(import.meta.dirname, "..");
+const LIBRARY_SRC = join(ROOT, "src");
+const LIBRARY_DIST = join(ROOT, "dist");
+const MOTION_LIB = join(ROOT, "motion", "src", "lib");
+
+const inside = (target, dir) => {
+  const rel = relative(dir, target);
+  return rel.split(/[\\/]/)[0] !== ".." && !isAbsolute(rel);
+};
+
+// A relative, absolute or file: specifier as the file it names, or undefined for a package name.
+const resolveSpec = (file, spec) => {
+  if (spec.startsWith("file:")) return fileURLToPath(spec);
+  if (spec.startsWith(".") || isAbsolute(spec))
+    return resolve(dirname(file), spec);
+  return undefined;
+};
+
+// Resolution-based boundary, independent of how deep the importing file is or
+// how the path is spelled (`./../..`, `a/../b`): no motion file may name a file
+// of the library's own src/ or dist/ (it goes through the `@dagnam/vis` alias),
+// and motion/src/lib may name only its own siblings. tests/structure.test.ts
+// makes the same decision and is the authoritative gate; this reports it at edit
+// time. Only string-literal specifiers can be resolved (a computed
+// `import(x)` or `createRequire(...)` call is invisible to both).
+const boundary = {
+  meta: {
+    type: "problem",
+    schema: [],
+    messages: {
+      library:
+        "Reach the library through the `@dagnam/vis` alias, never a path into its src/ or dist/ ({{ spec }}).",
+      lib: "motion/src/lib is pure: it imports only its own siblings ({{ spec }}).",
+    },
+  },
+  create(context) {
+    const file = context.filename;
+    const inLib = inside(file, MOTION_LIB);
+    const check = (node, spec) => {
+      if (typeof spec !== "string") return;
+      const target = resolveSpec(file, spec);
+      if (target === undefined) return;
+      const messageId =
+        inside(target, LIBRARY_SRC) || inside(target, LIBRARY_DIST)
+          ? "library"
+          : inLib && !inside(target, MOTION_LIB)
+            ? "lib"
+            : undefined;
+      if (messageId) context.report({ node, messageId, data: { spec } });
+    };
+    return {
+      ImportDeclaration: (n) => check(n, n.source.value),
+      ExportAllDeclaration: (n) => check(n, n.source.value),
+      ExportNamedDeclaration: (n) => check(n, n.source?.value),
+      ImportExpression: (n) => check(n, n.source.value),
+      TSImportType: (n) => check(n, n.argument.literal?.value),
+      TSExternalModuleReference: (n) => check(n, n.expression.value),
+    };
+  },
+};
+
+const DIST = {
+  group: ["**/dist/**"],
   message:
-    "Reach the library through the `@dagnam/vis` alias, never a relative path into src/ or dist/.",
-});
-const RELATIVE_SRC = relativeSrc();
+    "Reach the library through the `@dagnam/vis` alias, never a path into dist/.",
+};
 const SUBPATHS = {
   group: ["@dagnam/vis/*", "!@dagnam/vis/animate"],
   message:
@@ -38,35 +91,14 @@ export default tseslint.config(
   {
     files: ["motion/**/*.ts", "motion/**/*.tsx"],
     rules: {
-      "no-restricted-imports": [
-        "error",
-        { patterns: [RELATIVE_SRC, SUBPATHS] },
-      ],
+      "no-restricted-imports": ["error", { patterns: [DIST, SUBPATHS] }],
     },
   },
   {
-    // motion/scripts/x.ts: one `../` is motion's own src/ (what scripts import); deeper ones leave motion/.
-    files: ["motion/scripts/*.ts"],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        { patterns: [relativeSrc(2), SUBPATHS] },
-      ],
-    },
+    files: ["motion/**/*.{ts,tsx,mts,js,mjs,jsx}"],
+    plugins: { "motion-local": { rules: { boundary } } },
+    rules: { "motion-local/boundary": "error" },
   },
-  ...[0, 1, 2, 3].map((depth) => ({
-    // motion/tests/<depth dirs>/x.ts: `../`*(depth+1) + src is motion's own src (what the test mirrors).
-    files: [
-      `motion/tests/${"*/".repeat(depth)}*.ts`,
-      `motion/tests/${"*/".repeat(depth)}*.tsx`,
-    ],
-    rules: {
-      "no-restricted-imports": [
-        "error",
-        { patterns: [relativeSrc(depth + 2), SUBPATHS] },
-      ],
-    },
-  })),
   {
     // Pure stratum: runs under plain `node` for the check scripts, so no alias, no React, no Remotion.
     // sigv4.ts is the one exception (node:crypto, scripts only; see the next block).
@@ -77,7 +109,7 @@ export default tseslint.config(
         "error",
         {
           patterns: [
-            RELATIVE_SRC,
+            DIST,
             SUBPATHS,
             {
               group: [
@@ -105,7 +137,7 @@ export default tseslint.config(
         "error",
         {
           patterns: [
-            RELATIVE_SRC,
+            DIST,
             SUBPATHS,
             {
               group: [

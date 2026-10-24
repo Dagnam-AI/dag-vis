@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -27,14 +27,29 @@ const ALLOWED: Record<string, readonly string[]> = {
  * `import("...")` (also with a comment before the string, single quotes or backticks).
  */
 const IMPORT_SPECIFIER =
-  /(?:from|import)\s*\(?\s*(?:\/\*[^*]*\*\/\s*)?["'`]([^"'`]+)["'`]/g;
+  /(?:from|import)\s*\(?\s*(?:(?:\/\*[^*]*\*\/|\/\/[^\n]*\n)\s*)*["'`]([^"'`]+)["'`]/g;
 
-function walk(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const p = join(dir, name);
-    return statSync(p).isDirectory() ? walk(p) : [p];
-  });
+function walk(dir: string, skip: readonly string[] = []): string[] {
+  return readdirSync(dir)
+    .filter((name) => !skip.includes(name))
+    .flatMap((name) => {
+      const p = join(dir, name);
+      return statSync(p).isDirectory() ? walk(p, skip) : [p];
+    });
 }
+
+/** The file a relative, absolute or `file:` specifier names, resolved against the importing file; undefined for a package name. */
+function resolveSpec(file: string, spec: string): string | undefined {
+  if (spec.startsWith("file:")) return fileURLToPath(spec);
+  return spec.startsWith(".") || isAbsolute(spec)
+    ? resolve(dirname(file), spec)
+    : undefined;
+}
+
+const inside = (target: string, dir: string): boolean => {
+  const rel = relative(dir, target);
+  return rel.split(sep)[0] !== ".." && !isAbsolute(rel);
+};
 
 const sources = walk(SRC).filter((p) => /\.tsx?$/.test(p));
 const layerOf = (p: string): string => relative(SRC, p).split("/")[0]!;
@@ -51,13 +66,13 @@ describe("repository structure", () => {
       ? Object.keys(ALLOWED)
       : ALLOWED[layer]!;
     for (const m of text.matchAll(IMPORT_SPECIFIER)) {
-      if (!m[1]!.startsWith(".")) continue;
-      const target = join(dirname(file), m[1]!);
+      const target = resolveSpec(file, m[1]!);
+      if (target === undefined) continue;
       // A specifier that resolves outside src/ (e.g. into motion/) is a layering break, not a skip.
       expect(
-        relative(SRC, target).startsWith(".."),
+        inside(target, SRC),
         `${relative(ROOT, file)} imports outside src/: ${m[1]!}`,
-      ).toBe(false);
+      ).toBe(true);
       const targetLayer = layerOf(target);
       if (targetLayer === layer || targetLayer.includes(".")) continue;
       expect(allowed, `${relative(ROOT, file)} -> ${m[1]!}`).toContain(
@@ -133,7 +148,14 @@ const motionSources = walk(join(MOTION, "src")).filter((p) =>
 const motionScripts = existsSync(join(MOTION, "scripts"))
   ? walk(join(MOTION, "scripts")).filter((p) => p.endsWith(".ts"))
   : [];
+// Source and scripts hold the 500-line cap; every code file motion/ carries
+// (tests, config and plain-JS files included; not installed or rendered output)
+// is held to the import boundary.
 const motionFiles = [...motionSources, ...motionScripts];
+const motionCode = walk(MOTION, ["node_modules", "out", "public"]).filter((p) =>
+  /\.[cm]?[jt]sx?$/.test(p),
+);
+const LIB = join(MOTION, "src", "lib");
 // Pins both trees must carry identically, or motion's tests run on a second React.
 const SHARED_PINS = [
   "react",
@@ -146,30 +168,32 @@ const SHARED_PINS = [
   "jsdom",
   "@testing-library/react",
 ];
-const devDeps = (p: string): Record<string, string> =>
-  (
-    JSON.parse(readFileSync(p, "utf8")) as {
-      devDependencies: Record<string, string>;
-    }
-  ).devDependencies;
+const deps = (p: string): Record<string, string> => {
+  const pkg = JSON.parse(readFileSync(p, "utf8")) as {
+    dependencies?: Record<string, string>;
+    devDependencies?: Record<string, string>;
+  };
+  return { ...pkg.dependencies, ...pkg.devDependencies };
+};
 
 describe("motion/", () => {
   it("has source files to check", () => {
     expect(motionSources.length).toBeGreaterThan(0);
   });
 
-  it.each(motionFiles)(
+  it.each(motionCode)(
     "%s reaches the library only as @dagnam/vis or @dagnam/vis/animate",
     (file) => {
       for (const m of readFileSync(file, "utf8").matchAll(IMPORT_SPECIFIER)) {
         const spec = m[1]!;
         const at = `${relative(ROOT, file)} imports ${spec}`;
-        // From motion/scripts/, one `../` reaches motion's own src/; only deeper ones leave motion/.
-        expect(spec, `${at}: relative import into src/`).not.toMatch(
-          file.startsWith(join(MOTION, "scripts"))
-            ? /^(\.\.\/){2,}src\//
-            : /^(\.\.\/)+src\//,
-        );
+        // Resolved, so `./../..` spellings and any folder depth are judged by where they land.
+        const target = resolveSpec(file, spec);
+        expect(
+          target !== undefined &&
+            (inside(target, SRC) || inside(target, join(ROOT, "dist"))),
+          `${at}: a path into the library's src/ or dist/`,
+        ).toBe(false);
         expect(spec, `${at}: import of dist/`).not.toMatch(/\/dist\//);
         expect(
           spec.startsWith("@dagnam/vis/") && spec !== "@dagnam/vis/animate",
@@ -187,20 +211,23 @@ describe("motion/", () => {
         "tests",
         relative(join(MOTION, "src"), file),
       ).replace(/\.tsx?$/, (ext) => `.test${ext}`);
-      expect(
-        statSync(mirror).isFile(),
-        `missing ${relative(ROOT, mirror)}`,
-      ).toBe(true);
-      if (file.includes("/src/lib/")) {
-        // sigv4.ts alone may import node:crypto (scripts-only file).
-        const allowed = file.endsWith("/src/lib/sigv4.ts")
-          ? ["node:crypto"]
-          : [];
-        for (const m of readFileSync(file, "utf8").matchAll(IMPORT_SPECIFIER))
-          expect(
-            m[1]!.startsWith(".") || allowed.includes(m[1]!),
-            `${relative(ROOT, file)} must import siblings only: ${m[1]!}`,
-          ).toBe(true);
+      expect(existsSync(mirror), `missing ${relative(ROOT, mirror)}`).toBe(
+        true,
+      );
+    },
+  );
+
+  it.each(motionCode.filter((p) => inside(p, LIB)))(
+    "%s imports only its siblings in motion/src/lib",
+    (file) => {
+      // sigv4.ts alone may import node:crypto (scripts-only file).
+      const allowed = file.endsWith("/src/lib/sigv4.ts") ? ["node:crypto"] : [];
+      for (const m of readFileSync(file, "utf8").matchAll(IMPORT_SPECIFIER)) {
+        const target = resolveSpec(file, m[1]!);
+        expect(
+          target === undefined ? allowed.includes(m[1]!) : inside(target, LIB),
+          `${relative(ROOT, file)} must import siblings only: ${m[1]!}`,
+        ).toBe(true);
       }
     },
   );
@@ -212,9 +239,17 @@ describe("motion/", () => {
   });
 
   it("pins the shared toolchain identically in both package.json files", () => {
-    const root = devDeps(join(ROOT, "package.json"));
-    const motion = devDeps(join(MOTION, "package.json"));
-    for (const name of SHARED_PINS) expect(motion[name], name).toBe(root[name]);
+    const root = deps(join(ROOT, "package.json"));
+    const motion = deps(join(MOTION, "package.json"));
+    for (const name of SHARED_PINS) {
+      expect(
+        root[name],
+        `${name} missing from the root package.json`,
+      ).toBeDefined();
+      expect(motion[name], `${name} missing from motion/package.json`).toBe(
+        root[name],
+      );
+    }
   });
 
   it("never tracks a font, image, video or audio file under motion/", () => {
