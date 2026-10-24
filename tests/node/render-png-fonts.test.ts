@@ -148,6 +148,48 @@ describe("renderPng with the bundled display fonts", () => {
     expect(hi - lo).toBeGreaterThan(0.9 * predicted);
   });
 
+  it("draws the brand card's text in Unbounded and Moonhouse, not a fallback: every line's ink matches its font's advances", async () => {
+    const svg = ogCard({
+      title: "Build AI Systems Visually",
+      subtitle: "A simpler way to design and orchestrate modern AI workflows.",
+      footer: "Visual • Modular • Production-ready",
+    });
+    const raster = decode(await renderPng(svg));
+    // White-ish ink only: the red art, the red rule and the red ".AI" and bullets have
+    // little green and blue. Text sits over the dark left side of the card.
+    const light = (x: number, y: number): boolean => {
+      const p = pixel(raster, x, y);
+      return (p[1] ?? 0) > 100 && (p[2] ?? 0) > 100;
+    };
+    const lines = [
+      ...svg.matchAll(
+        /<text x="([\d.]+)" y="([\d.]+)" font-family="([^"]+)" font-size="([\d.]+)"[^>]*>(.*?)<\/text>/g,
+      ),
+    ].map((m) => ({
+      x: Number(m[1]),
+      y: Number(m[2]),
+      moon: m[3]?.startsWith("moonhouse") === true,
+      size: Number(m[4]),
+      // the wordmark's red ".AI" is not light ink: measure "DAGNAM" alone
+      text: (m[5] ?? "").replace(/<[^>]+>/g, "").replace(".AI", ""),
+    }));
+    expect(lines).toHaveLength(6);
+    for (const l of lines) {
+      let hi = -1;
+      for (let y = Math.floor(l.y - 0.7 * l.size); y < l.y; y++)
+        for (let x = Math.floor(l.x); x < 700 + l.x; x++)
+          if (light(x, y)) hi = Math.max(hi, x);
+      const predicted = fontWidth(
+        l.moon ? MOONHOUSE : UNBOUNDED,
+        l.text,
+        l.size,
+      );
+      // the ink ends where the advances say, less the last glyph's side bearing
+      expect(hi - l.x, l.text).toBeLessThanOrEqual(predicted);
+      expect(hi - l.x, l.text).toBeGreaterThan(0.88 * predicted);
+    }
+  });
+
   it("keeps the PNG identical between runs", async () => {
     const svg = ogCard({
       title: "Same",

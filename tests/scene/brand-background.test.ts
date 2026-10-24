@@ -14,18 +14,26 @@ describe("brandBackground", () => {
     expect(svg).toContain('width="1672" height="941"');
     expect(svg).toContain('<rect width="1672" height="941" fill="#08080a"/>'); // 1 base
     expect(svg).toContain('fill="url(#vis1-band)"'); // 2 band
-    // 3 hairlines: four stroked copies, none using vector-effect (resvg ignores it).
-    expect(svg.match(/stroke="url\(#vis1-hair\)"/g)).toHaveLength(4);
+    // 2b the outline: three strokes (glow, glow, crisp line), none using vector-effect
+    // (resvg ignores it), then 3 hairlines: three offset copies.
+    expect(svg.match(/stroke="url\(#vis1-hair\)"/g)).toHaveLength(6);
+    expect(
+      svg.match(/stroke="url\(#vis1-hair\)"[^>]*transform=/g),
+    ).toHaveLength(3);
     expect(svg).not.toContain("vector-effect");
-    // Stroke width is the requested 1.5 output px divided by the motif scale
-    // k = 1.5 * 941 / 628, so it renders 1.5 px wide.
-    expect(svg).toContain(
-      `stroke-width="${String(Number((1.5 / ((1.5 * 941) / 628)).toFixed(3)))}"`,
-    );
-    expect(svg).toContain('stroke="url(#vis1-hair)"'); // 3 hairlines fade in
+    // Stroke width is the requested 1.8 output px divided by the motif scale
+    // k = 1.5 * 941 / 628, so the crisp line renders 1.8 px wide; the glow strokes are 3.5 and 7 x that.
+    const motifScale = (1.5 * 941) / 628;
+    for (const widen of [1, 3.5, 7])
+      expect(svg).toContain(
+        `stroke-width="${String(Number(((1.8 * widen) / motifScale).toFixed(3)))}"`,
+      );
     expect(svg).toContain('fill="url(#vis1-glow)"'); // 4 glow
     expect(svg).not.toContain("-p)"); // 5 no pattern by default
     expect(svg).toContain('fill="url(#vis1-vig)"'); // 6 vignette
+    // the accent is the dark theme's deep red (#ca0303), not the bright BRAND.red
+    expect(svg).toContain('stop-color="#ca0303"');
+    expect(svg).not.toContain("#ef4444");
     // motif centre lands at focus (0.82, 0.5): translate is the top-left corner,
     // so centre = tx + (628/2)·k, with k = 1.5·941/628.
     const m = /translate\((-?[\d.]+) (-?[\d.]+)\) scale\(([\d.]+)\)/.exec(svg);
@@ -60,6 +68,7 @@ describe("brandBackground", () => {
       focus: [0.5, 0.5],
       scale: 1,
       hairlines: 0,
+      edge: 0,
       glow: 0,
       vignette: 0,
     });
@@ -78,10 +87,10 @@ describe("brandBackground", () => {
     expect(body.startsWith("<rect")).toBe(true);
   });
 
-  it("rasterises to a dark base with the glow right of centre and darker corners", () => {
+  it("rasterises to a dark base with the glow pooled at the right edge and darker corners", () => {
     const r = rasterize(brandBackground({ width: 800, height: 450 }));
     const [lr, lg, lb] = pixelAt(r, 40, 225);
-    const [gr, gg, gb] = pixelAt(r, 656, 225);
+    const [gr, gg, gb] = pixelAt(r, 780, 236);
     expect(lr).toBeLessThan(40);
     expect(lg).toBeLessThan(30);
     expect(lb).toBeLessThan(30);
@@ -107,6 +116,7 @@ describe("brandBackground", () => {
           band: 0,
           glow: 0,
           vignette: 0,
+          edge: 0,
           hairlines: 1,
           hairlineGap: 0,
           hairlineWidth: w,
@@ -139,6 +149,76 @@ describe("brandBackground", () => {
         ).toBeLessThan(0.75);
       }
     }
+  });
+
+  it("stays a deep saturated red: no pixel is washed towards pink", () => {
+    // The bright #ef4444 over a dark base reads pink (green/red of about 0.28); the dark
+    // theme's #ca0303 keeps green and blue within a tenth of red above the base wherever red shows at all.
+    const r = rasterize(brandBackground({ width: 1200, height: 630 }));
+    let reddest = 0;
+    for (let y = 0; y < r.height; y += 3)
+      for (let x = 0; x < r.width; x += 3) {
+        const [pr, pg, pb] = pixelAt(r, x, y);
+        reddest = Math.max(reddest, pr);
+        if (pr > 40) {
+          expect(pg - 10, `${x},${y}`).toBeLessThan(pr * 0.1);
+          expect(pb - 10, `${x},${y}`).toBeLessThan(pr * 0.1);
+        }
+      }
+    expect(reddest).toBeGreaterThan(100); // and it does reach a strong red at the glow
+  });
+
+  it("draws the outline as a crisp line with only a faint glow beside it", () => {
+    // White accent on black, outline only, motif centred so the right end (where the
+    // outline has faded in) is on the canvas: down a column near it the peak is the
+    // line at full strength and 7 px off it only the wide glow remains.
+    const width = 1672;
+    const height = 941;
+    const r = rasterize(
+      brandBackground({
+        width,
+        height,
+        base: "#000000",
+        palette: ["#ffffff"],
+        band: 0,
+        glow: 0,
+        vignette: 0,
+        hairlines: 0,
+        hairlineWidth: 2,
+        focus: [0.5, 0.5],
+      }),
+    );
+    const x = 1480;
+    const column = Array.from(
+      { length: height },
+      (_, y) => pixelAt(r, x, y)[0],
+    );
+    const peak = Math.max(...column);
+    const at = column.indexOf(peak);
+    expect(peak).toBeGreaterThan(200); // crisp: the line at the gradient's strength
+    expect(column[at - 7] ?? 255).toBeLessThan(40); // glow only, a few percent
+    expect(column[at - 7] ?? 0).toBeGreaterThan(0); // but there is a glow
+  });
+
+  it("edge 0 draws no outline strokes, and the outline follows the accent opacity", () => {
+    const strokes = (edge: number): number =>
+      (
+        brandBackground({ width: 200, height: 100, edge, hairlines: 0 }).match(
+          /stroke=/g,
+        ) ?? []
+      ).length;
+    expect(strokes(0)).toBe(0);
+    expect(strokes(1)).toBe(3);
+    const half = brandBackground({
+      width: 200,
+      height: 100,
+      palette: ["rgba(255, 255, 255, 0.5)"],
+      hairlines: 0,
+      edge: 0.8,
+    });
+    // glow 0.8 x 0.07 x 0.5, glow 0.8 x 0.14 x 0.5, line 0.8 x 1 x 0.5
+    for (const o of ["0.028", "0.056", "0.4"])
+      expect(half).toContain(`opacity="${o}"`);
   });
 
   it("fades the motif in from its left edge, which never shows as a hard edge", () => {
@@ -202,12 +282,37 @@ describe("brandBackground", () => {
       palette: ["rgba(239, 68, 68, 0.5)"],
       glowColor: "#10abba80",
       hairlines: 1,
+      band: 0.35,
+      glow: 0.55,
+      edge: 0,
     });
     expect(svg).toContain('fill="#000000" fill-opacity="0.5"');
     // band 0.35 x 0.5, hairline 0.5 x 0.5, glow 0.55 x 0.502
     expect(svg).toContain('stop-opacity="0.175"');
     expect(svg).toContain('opacity="0.25"');
     expect(svg).toContain('stop-color="#10abba" stop-opacity="0.276"');
+  });
+
+  it("pools the glow at the right edge by default, eased to zero at its radius", () => {
+    const svg = brandBackground({ width: 1000, height: 500 });
+    // glowAt [0.98, 0.52], radius 0.6 of the short side
+    expect(svg).toContain('cx="980" cy="260" r="300"');
+    // four stops easing from 0.85 to nothing, the last fully transparent: no wall at the radius
+    const glow = /<radialGradient id="vis1-glow".*?<\/radialGradient>/.exec(
+      svg,
+    );
+    expect(
+      [
+        ...(glow?.[0] ?? "").matchAll(
+          /offset="([\d.]+)".*?stop-opacity="([\d.]+)"/g,
+        ),
+      ].map((m) => [Number(m[1]), Number(m[2])]),
+    ).toEqual([
+      [0, 0.85],
+      [0.3, 0.51],
+      [0.6, 0.187],
+      [1, 0],
+    ]);
   });
 
   it("places the glow at glowAt with glowRadius of the short side", () => {
@@ -257,6 +362,8 @@ describe("brandBackground validation", () => {
     bad("width string", { ...ok, width: "9" }, /width.*"9"/);
     bad("height null", { ...ok, height: null }, /height.*null/);
     bad("band", { ...ok, band: 2 }, /band.*2/);
+    bad("edge", { ...ok, edge: 1.5 }, /edge.*1.5/);
+    bad("edge null", { ...ok, edge: null }, /edge.*null/);
     bad("glow", { ...ok, glow: -0.1 }, /glow.*-0.1/);
     bad("vignette", { ...ok, vignette: 1.5 }, /vignette.*1.5/);
     bad("vignette null", { ...ok, vignette: null }, /vignette.*null/);

@@ -296,16 +296,19 @@ describe("text measured against the bundled-Inter render", () => {
     });
     const png = await renderPng(svg);
     expect(dims(png)).toEqual([1200, 630]);
+    // The title lines: Unbounded 400 at 0.09 of the card height (56.7 px), 2 lines beside a subtitle.
     const lines = [
       ...svg.matchAll(
-        /<text x="([\d.]+)" y="[\d.]+" font-family="[^"]*" font-size="([\d.]+)" fill="#[0-9a-f]+" font-weight="700">([^<]*)<\/text>/g,
+        /<text x="([\d.]+)" y="[\d.]+" font-family="Unbounded, sans-serif" font-size="56\.7" font-weight="400" fill="#[0-9a-f]+">([^<]*)<\/text>/g,
       ),
     ];
-    expect(lines.length).toBeGreaterThan(1);
-    for (const [, x, size, line] of lines) {
-      // Draw this exact line alone, with the card's font settings, and look at the ink.
+    expect(lines.length).toBe(2);
+    for (const [, x, line] of lines) {
+      // Draw this exact line alone, in the same face, and look at the ink.
       const ink = inkWidth(
-        decode(await renderPng(textSvg(line ?? "", Number(size), 700))),
+        decode(
+          await renderPng(textSvg(line ?? "", 56.7, 400, "Unbounded", 1200)),
+        ),
       );
       expect(Number(x) + ink, line).toBeLessThanOrEqual(0.6 * 1200 + Number(x));
     }
