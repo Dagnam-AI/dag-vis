@@ -11,7 +11,7 @@ Everything below was checked on 2026-10-24 (UTC) on macOS (Apple M4 Pro), Node v
 Pin: **Remotion 4.0.534** (published 2026-10-07T09:16:48Z), the newest release at least 14 days old on 2026-10-24. 4.0.535 to 4.0.538 are 2 to 12 days old.
 
 ```sh
-node -e 'const t=JSON.parse(process.argv[1]);const cut=Date.now()-14*864e5;const ok=Object.entries(t).filter(([v,d])=>/^\d+\.\d+\.\d+$/.test(v)&&Date.parse(d)<cut).sort((a,b)=>Date.parse(a[1])-Date.parse(b[1])).at(-1);console.log(ok[0],ok[1])' "$(npm view remotion time --json)"
+node -e 'const t=JSON.parse(process.argv[1]);const cut=Date.parse(process.argv[2])-14*864e5;const ok=Object.entries(t).filter(([v,d])=>/^\d+\.\d+\.\d+$/.test(v)&&Date.parse(d)<cut).sort((a,b)=>Date.parse(a[1])-Date.parse(b[1])).at(-1);console.log(ok[0],ok[1])' "$(npm view remotion time --json)" 2026-10-24T00:00:00Z   # the date is an argument, so the answer does not drift
 for p in @remotion/cli @remotion/renderer @remotion/bundler @remotion/fonts; do npm view "$p@4.0.534" version license; done
 ```
 
@@ -36,9 +36,9 @@ Read on 2026-10-24 at <https://www.remotion.dev/docs/license> (now an index page
 
 The website's License FAQ and Terms and Conditions word the eligibility list slightly differently ("an individual, whether for personal or commercial use", "an organization or team of individuals with up to 3 people") and add that headcount means all personnel, including freelancers and contractors who work on the same Remotion project, and that a Company License is required once the combined headcount of the involved parties is 4 or more.
 
-Licence decision: the Free License applies. The owner is the sole person (decision 2026-10-23: "Dagnam has no employees just me"). There is no revenue threshold in the licence. Re-confirm before the 4th person joins or works on this project (headcount counts all personnel, contractors and freelancers included, per the Terms above) and before any Remotion 5.0 bump (`LICENSE.md`: "In Remotion 5.0, the license will slightly change").
+The Free License applies: as of 2026-10-24 Dagnam has no employees or contractors. There is no revenue threshold in the licence. Re-confirm before a 4th person (employee, contractor or freelancer, per the Terms above) joins or works on this project, and before any Remotion 5.0 bump (`LICENSE.md`: "In Remotion 5.0, the license will slightly change").
 
-Telemetry (<https://www.remotion.dev/docs/license/telemetry>): server-side `renderMedia()` / `renderStill()` send a render event only when a `licenseKey` option is set. This project never sets one.
+Telemetry (<https://www.remotion.dev/docs/license/telemetry>): server-side `renderMedia()` / `renderStill()` send a render event only when a `licenseKey` option is set. No `licenseKey` is configured at the time of writing.
 
 ### Alias into `src/`
 
@@ -69,8 +69,8 @@ Same composition, same props, same frame, same machine and same renderer flag: b
 | `swangle`                                   | yes                                                                                       | ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device)) |
 | `swiftshader`, `egl`, `vulkan`, `angle-egl` | **no** (`getContext("webgl2")` returns null; the effect throws "WebGL2 is not available") |                                                   |
 
-- CI has no GPU: use `swangle`, which is software and needs none. A flag on the command line overrides `Config.setChromiumOpenGlRenderer`. Remotion 4's own default is Chromium's choice (`null`); it only becomes `angle` in 5.0.
-- Output is deterministic **within** one renderer but not byte-identical **across** them. `angle` against `swangle` on the same machine: the Canvas2D ribbon differs in all 61 frames (frame 10: 11749 of 230400 pixels, 5.1 %, mean channel difference 0.29 of 255, antialiased edges); the WebGL2 dither differs in 9 of 61 frames by a handful of pixels (frame 1: 4 pixels, frame 52: 8 pixels, one channel difference of 156). So the renderer flag is part of a render's identity: pin one value for renders that are compared or reproduced, and record it.
+- GitHub-hosted runners have no GPU, so `swangle` (software) is the expected value there. It has been run on the machine above only; how it behaves in CI is verified by the CI job when it runs. A flag on the command line overrides `Config.setChromiumOpenGlRenderer`. Remotion 4's own default is Chromium's choice (`null`); it only becomes `angle` in 5.0.
+- On this machine, output was deterministic within one renderer (checked for the ribbon and the dither only) but not byte-identical across the two. `angle` against `swangle`: the Canvas2D ribbon differs in all 61 frames (frame 10: 11749 of 230400 pixels, 5.1 %, mean channel difference 0.29 of 255, antialiased edges); the WebGL2 dither differs in 9 of 61 frames by a handful of pixels (frame 1: 4 pixels, frame 52: 8 pixels, one channel difference of 156). So the renderer flag is part of a render's identity: pin one value for renders that are compared or reproduced, and record it.
 - Not measured: whether `swangle` output is byte-identical between different machines.
 
 ### Audio component name
@@ -95,7 +95,7 @@ npx remotion ffmpeg -hide_banner -i in.wav -af loudnorm=I=-16:TP=-1.5:LRA=11:pri
 
 `npm audit` on a project with `remotion`, `@remotion/cli`, `@remotion/bundler` and `@remotion/renderer` at 4.0.534 reports **10 high-severity** findings, all from one cause: `zod` below 4.6.6 ([GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5), "Zod can exhaust memory while validating oversized constrained collections", published 2026-10-01). `@remotion/studio` pins `zod` to exactly 4.5.4 in every release from 4.0.534 to 4.0.538, so no newer Remotion avoids it, and `npm audit`'s suggested fix is a downgrade to 4.0.277.
 
-With `"overrides": { "zod": "4.6.6" }` in `package.json`: `npm audit` reports 0 vulnerabilities, and renders (`still`, `render`, the Node API) work and give byte-identical output. Remotion then prints a version-mismatch warning on every command (`zod: installed 4.6.6, required 4.5.4`); it does not fail anything. `zod@4.6.6` was published 2026-10-11T16:18Z, so it passes a 14-day age rule from 2026-10-25T16:18Z; `4.6.5` and below are vulnerable.
+With `"overrides": { "zod": "4.6.6" }` in `package.json`: `npm audit` reports 0 vulnerabilities, and renders (`still`, `render`, the Node API) work and give byte-identical output. Remotion then prints a version-mismatch warning on every command (`zod: installed 4.6.6, required 4.5.4`); it does not fail anything. `zod@4.6.6` was published 2026-10-11T16:18Z, so it passes a 14-day age rule from 2026-10-25T16:18Z; `4.6.5` and below are vulnerable. `zod@4.6.7` (2026-10-12T16:29Z) also exists. The override is to be adopted once the 14-day window has passed.
 
 `npm` 11.19.1 also prints an `allowScripts` notice for the `esbuild` postinstall script; bundling and rendering work regardless.
 
