@@ -358,6 +358,50 @@ describe("motion/", () => {
       expect(lines, entry).toContain(entry);
   });
 
+  it("keeps sigv4.ts, the lib file with a node: import, out of the Remotion bundle", () => {
+    for (const file of motionSources.filter(
+      (p) => !p.endsWith("/src/lib/sigv4.ts"),
+    )) {
+      expect(readFileSync(file, "utf8"), relative(ROOT, file)).not.toMatch(
+        /sigv4/,
+      );
+    }
+  });
+
+  it("never uploads implicitly: no --upload in render.ts or any workflow, no network in tests", () => {
+    const render = join(MOTION, "scripts/render.ts");
+    if (existsSync(render))
+      expect(readFileSync(render, "utf8")).not.toMatch(/--upload/);
+    for (const workflow of readdirSync(join(ROOT, ".github/workflows")))
+      expect(
+        readFileSync(join(ROOT, ".github/workflows", workflow), "utf8"),
+        workflow,
+      ).not.toMatch(/--upload|R2_/);
+    for (const file of walk(join(MOTION, "tests")).filter((p) =>
+      /\.tsx?$/.test(p),
+    ))
+      expect(readFileSync(file, "utf8"), relative(ROOT, file)).not.toMatch(
+        /\bfetch\(|scripts\/store/,
+      );
+  });
+
+  it("keeps the render ledger to rendered facts: swangle, a local copy, an R2 key or null, no secret names", () => {
+    const ledger = join(MOTION, "RENDERS.jsonl");
+    for (const line of readFileSync(ledger, "utf8").split("\n")) {
+      if (line === "") continue;
+      const row = JSON.parse(line) as {
+        gl: string;
+        stored: { local: string; r2: string | null };
+      };
+      expect(row.gl, line).toBe("swangle");
+      expect(row.stored.local, line).toMatch(/^[a-z0-9-]+\/[^/]+$/);
+      expect(row.stored.r2 ?? "videos/", line).toMatch(/^videos\//);
+      expect(line, "a ledger line never names a credential").not.toMatch(
+        /R2_|AKIA|secretAccessKey/i,
+      );
+    }
+  });
+
   it("keeps motion/ out of the package", () => {
     const pkg = JSON.parse(
       readFileSync(join(ROOT, "package.json"), "utf8"),
