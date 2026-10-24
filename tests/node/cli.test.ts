@@ -500,4 +500,29 @@ describe("dag-vis CLI", () => {
     expect(await run(["og", "--title", "t", "--out", out], odd)).toBe(1);
     expect(t.err[1]).toBe("dag-vis: unexpected error: disk on fire\n");
   });
+
+  it("wires export, presets and sheet through run()", async () => {
+    const t = capture();
+    expect(await run(["presets"], t.io)).toBe(0);
+    expect(t.out.join("")).toContain("violet-dusk\tflow\n");
+    const out = join(tmp(), "l.png");
+    expect(
+      await run(
+        ["export", "lunar", "--out", out, "--w", "16", "--h", "9"],
+        t.io,
+      ),
+    ).toBe(0);
+    expect(dims(readFileSync(out))).toEqual([16, 9]);
+    const none = capture();
+    // the positional is missing: the usage line, exit 1
+    expect(await run(["export", "--out", out], none.io)).toBe(1);
+    expect(none.err.join("")).toMatch(/^dag-vis: usage: dag-vis export /);
+    // the older commands still reject positionals
+    expect(
+      await run(
+        ["og", "extra", "--title", "x", "--out", join(tmp(), "o.svg")],
+        none.io,
+      ),
+    ).toBe(1);
+  });
 });

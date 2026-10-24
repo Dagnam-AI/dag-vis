@@ -14,10 +14,19 @@ const ALLOWED: Record<string, readonly string[]> = {
   gradient: ["core", "brand"],
   pattern: ["core", "brand"],
   scene: ["core", "brand", "gradient", "pattern"],
-  animate: ["core", "scene"],
+  field: ["core"],
+  export: ["core"],
+  animate: ["core", "scene", "field", "export"],
   react: ["core", "animate", "gradient"],
-  node: ["core", "brand", "gradient", "pattern", "scene"],
+  node: ["core", "brand", "gradient", "pattern", "scene", "field", "export"],
 };
+
+/**
+ * Every module specifier: static `from "..."`, side-effect `import "..."` and dynamic
+ * `import("...")` (also with a comment before the string, single quotes or backticks).
+ */
+const IMPORT_SPECIFIER =
+  /(?:from|import)\s*\(?\s*(?:\/\*[^*]*\*\/\s*)?["'`]([^"'`]+)["'`]/g;
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -40,7 +49,8 @@ describe("repository structure", () => {
     const allowed = layer.includes(".")
       ? Object.keys(ALLOWED)
       : ALLOWED[layer]!;
-    for (const m of text.matchAll(/from\s+"(\.[^"]+)"/g)) {
+    for (const m of text.matchAll(IMPORT_SPECIFIER)) {
+      if (!m[1]!.startsWith(".")) continue;
       const target = join(dirname(file), m[1]!);
       const targetLayer = layerOf(target);
       if (targetLayer === layer || targetLayer.includes(".")) continue;
@@ -49,17 +59,21 @@ describe("repository structure", () => {
       );
     }
     if (layer !== "node" && !layer.includes(".")) {
-      expect(text, `${relative(ROOT, file)} uses a Node import`).not.toMatch(
-        /from\s+"node:/,
-      );
+      for (const m of text.matchAll(IMPORT_SPECIFIER))
+        expect(
+          m[1]!.startsWith("node:"),
+          `${relative(ROOT, file)} uses the Node import ${m[1]!}`,
+        ).toBe(false);
     }
   });
 
-  it("the root barrel imports nothing from animate, react or node", () => {
+  it("the root barrel imports nothing from export, animate, react or node", () => {
     // Their types name HTMLCanvasElement or React, so the root would stop
-    // type-checking in a DOM-free consumer. They are separate entry points.
+    // type-checking in a DOM-free consumer; export loads the third-party
+    // encoders, which the root entry must never pull in. They are separate
+    // entry points.
     const text = readFileSync(join(SRC, "index.ts"), "utf8");
-    for (const layer of ["animate", "react", "node"])
+    for (const layer of ["export", "animate", "react", "node"])
       expect(text, `src/index.ts imports ./${layer}`).not.toMatch(
         new RegExp(`(from|import)\\s*\\(?\\s*"\\./${layer}(/|")`),
       );

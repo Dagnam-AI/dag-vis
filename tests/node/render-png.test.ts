@@ -10,6 +10,7 @@ import {
   MAX_FONT_FILES,
   MAX_SVG_LENGTH,
   renderPng,
+  renderRgba,
 } from "../../src/node/render-png.js";
 import { ogCard } from "../../src/scene/og-card.js";
 import { measureText } from "../../src/scene/text.js";
@@ -482,5 +483,85 @@ describe("renderPng without or with a replaced @resvg/resvg-js", () => {
     await expect(draw.renderPng(sized(10, 10))).rejects.toThrow(
       "SVG could not be rendered: oom",
     );
+  });
+});
+
+describe("renderRgba", () => {
+  it("returns top-down RGBA at the requested width", async () => {
+    const svg = sized(
+      2,
+      2,
+      '<rect width="2" height="1" fill="#ff0000"/><rect y="1" width="2" height="1" fill="#0000ff"/>',
+    );
+    const { data, width, height } = await renderRgba(svg, { width: 4 });
+    expect([width, height]).toEqual([4, 4]);
+    expect(data).toBeInstanceOf(Uint8Array);
+    expect(data.length).toBe(4 * 4 * 4);
+    expect(Array.from(data.subarray(0, 4))).toEqual([255, 0, 0, 255]);
+    expect(Array.from(data.subarray(data.length - 4))).toEqual([
+      0, 0, 255, 255,
+    ]);
+  });
+
+  it("returns STRAIGHT alpha: a half-transparent red pixel keeps full red, and clear pixels are zero", async () => {
+    const svg = sized(
+      3,
+      1,
+      '<rect width="1" height="1" fill="#ff0000" fill-opacity="0.5"/><rect x="1" width="1" height="1" fill="#10c0ff" fill-opacity="0.25"/>',
+    );
+    const { data } = await renderRgba(svg);
+    // resvg itself holds premultiplied bytes (128, 0, 0, 128); the PNG and ffmpeg both mean straight.
+    expect(Array.from(data.subarray(0, 4))).toEqual([255, 0, 0, 128]);
+    const [r, g, b, a] = Array.from(data.subarray(4, 8)) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    expect(a).toBe(64);
+    expect(Math.abs(r - 0x10)).toBeLessThanOrEqual(2);
+    expect(Math.abs(g - 0xc0)).toBeLessThanOrEqual(2);
+    expect(b).toBe(255);
+    expect(Array.from(data.subarray(8, 12))).toEqual([0, 0, 0, 0]);
+    // The PNG encoder agrees: drawn back (premultiplied), each pixel is the straight bytes scaled by alpha.
+    const drawn = decode(await renderPng(svg));
+    for (const x of [0, 1, 2]) {
+      const straight = Array.from(data.subarray(x * 4, x * 4 + 4));
+      const back = pixel(drawn, x, 0);
+      expect(back[3]).toBe(straight[3]);
+      for (const c of [0, 1, 2])
+        expect(
+          Math.abs(
+            (back[c] ?? NaN) -
+              ((straight[c] ?? NaN) * (straight[3] ?? NaN)) / 255,
+          ),
+        ).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("composites onto the background: every pixel opaque and exact", async () => {
+    const svg = sized(
+      1,
+      1,
+      '<rect width="1" height="1" fill="#ff0000" fill-opacity="0.5"/>',
+    );
+    const { data } = await renderRgba(svg, { background: "#0000ff" });
+    const [r, g, b, a] = Array.from(data) as [number, number, number, number];
+    expect([g, a]).toEqual([0, 255]);
+    expect(Math.abs(r - 128)).toBeLessThanOrEqual(1);
+    expect(Math.abs(b - 127)).toBeLessThanOrEqual(1);
+  });
+
+  it("applies the same checks as renderPng", async () => {
+    await expect(renderRgba(sized(1, 1), { width: 0 })).rejects.toThrow(
+      VisError,
+    );
+    await expect(renderRgba(sized(1, 1), { width: 1.5 })).rejects.toThrow(
+      /width/,
+    );
+    await expect(renderRgba(42 as never)).rejects.toThrow(
+      /svg must be a string/,
+    );
+    await expect(renderRgba("<not svg", {})).rejects.toThrow(VisError);
   });
 });

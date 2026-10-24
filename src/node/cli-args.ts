@@ -1,42 +1,79 @@
 import { VisError } from "../core/errors.js";
 import { describeValue } from "../core/validate.js";
 
+/** What a command accepts: options with a value, options without one, and positional arguments. */
+export interface ArgumentSpec {
+  values: readonly string[];
+  /** Options that take no value (`--loop`); a value (`--loop=1`) is an error. Default none. */
+  flags?: readonly string[];
+  /** How many positional arguments (anything not starting with `--`) are accepted. Default 0. */
+  positionals?: number;
+}
+
+export interface Parsed {
+  values: Map<string, string>;
+  flags: Set<string>;
+  positionals: string[];
+}
+
 /**
- * Parses `--name value` / `--name=value` pairs. argv is user input, so every
- * deviation is an error naming the offender: a positional argument, an option
- * outside `allowed`, a repeated option, or a missing value (the end of argv, or
- * a following `--...`; write `--title=--x` for a value that starts with `--`).
- * Values are strings, kept as given; callers parse them (see `parseNumber`).
+ * Parses `--name value` / `--name=value` pairs, bare `--flag`s and positional
+ * arguments. argv is user input, so every deviation is an error naming the
+ * offender: a positional argument beyond the accepted count, an option outside
+ * the spec, a repeated option, a flag given a value, or a missing value (the
+ * end of argv, or a following `--...`; write `--title=--x` for a value that
+ * starts with `--`). Values are strings, kept as given; callers parse them
+ * (see `parseNumber`).
  */
-export function parseOptions(
+export function parseArguments(
   args: readonly string[],
-  allowed: readonly string[],
-): Map<string, string> {
-  const values = new Map<string, string>();
+  spec: ArgumentSpec,
+): Parsed {
+  const { flags: flagNames = [], positionals: room = 0 } = spec;
+  const parsed: Parsed = {
+    values: new Map(),
+    flags: new Set(),
+    positionals: [],
+  };
   const rest = [...args];
   for (let arg = rest.shift(); arg !== undefined; arg = rest.shift()) {
-    if (!arg.startsWith("--"))
-      throw new VisError(`unexpected argument: ${describeValue(arg)}`);
+    if (!arg.startsWith("--")) {
+      if (parsed.positionals.length >= room)
+        throw new VisError(`unexpected argument: ${describeValue(arg)}`);
+      parsed.positionals.push(arg);
+      continue;
+    }
     const eq = arg.indexOf("=");
     const name = eq === -1 ? arg.slice(2) : arg.slice(2, eq);
-    if (!allowed.includes(name))
+    const isFlag = flagNames.includes(name);
+    if (!isFlag && !spec.values.includes(name))
       throw new VisError(`unknown option: ${describeValue(`--${name}`)}`);
-    if (values.has(name)) throw new VisError(`duplicate option: --${name}`);
+    if (parsed.values.has(name) || parsed.flags.has(name))
+      throw new VisError(`duplicate option: --${name}`);
+    if (isFlag) {
+      if (eq !== -1) throw new VisError(`--${name} takes no value`);
+      parsed.flags.add(name);
+      continue;
+    }
     const value = eq === -1 ? rest.shift() : arg.slice(eq + 1);
     if (value === undefined || (eq === -1 && value.startsWith("--")))
       throw new VisError(`missing value for --${name}`);
-    values.set(name, value);
+    parsed.values.set(name, value);
   }
-  return values;
+  return parsed;
 }
 
 /**
  * Whether the user asked for help: `--help` or `-h` anywhere among the arguments,
  * except as the value of an option before it (`--title -h` sets a title). A
  * `--help` right after an option name still counts, since the parser would call
- * that a missing value.
+ * that a missing value. `flags` are the command's valueless options: they
+ * consume nothing, so `--loop -h` asks for help.
  */
-export function wantsHelp(args: readonly string[]): boolean {
+export function wantsHelp(
+  args: readonly string[],
+  flags: readonly string[] = [],
+): boolean {
   let isValue = false;
   for (const arg of args) {
     if (isValue) {
@@ -44,7 +81,10 @@ export function wantsHelp(args: readonly string[]): boolean {
       if (!arg.startsWith("--")) continue;
     }
     if (arg === "--help" || arg === "-h") return true;
-    isValue = arg.startsWith("--") && !arg.includes("=");
+    isValue =
+      arg.startsWith("--") &&
+      !arg.includes("=") &&
+      !flags.includes(arg.slice(2));
   }
   return false;
 }

@@ -1,0 +1,113 @@
+:root {
+  color-scheme: dark;
+  font:
+    14px/1.45 system-ui,
+    sans-serif;
+}
+body {
+  margin: 0;
+  background: #06061a;
+  color: #dcdcec;
+}
+header {
+  padding: 16px;
+  max-width: 72ch;
+}
+header p {
+  margin: 0 0 8px;
+}
+h1 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+a {
+  color: #9db4ff;
+}
+code {
+  overflow-wrap: anywhere;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 16px;
+  padding: 0 16px 24px;
+}
+.card {
+  min-width: 0;
+  background: #0f0f2a;
+  border: 1px solid #26264a;
+  padding: 12px;
+}
+.card h2 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.kind {
+  font-size: 12px;
+  font-weight: 400;
+  color: #9a9ac0;
+}
+.stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #000;
+}
+.stage canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+.card[data-state="idle"] .stage::after {
+  content: "preview paused";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #8c8cb0;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+button {
+  min-height: 32px;
+  padding: 4px 8px;
+  color: #dcdcec;
+  background: #1c1c3c;
+  border: 1px solid #3a3a68;
+  font: inherit;
+  cursor: pointer;
+}
+button:disabled,
+button[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid #ffd166;
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+.result {
+  min-height: 1.45em;
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+  color: #b8b8d8;
+}
+.result.error,
+.error {
+  color: #ff8a8a;
+}

@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it, vi } from "vitest";
 
 import * as vis from "../src/index.js";
@@ -12,6 +16,87 @@ describe("@dagnam/vis root barrel", () => {
     const svgOpts: vis.RibbonSvgOptions = { ...curveOpts, mesh: true };
     expect(vis.ribbonCurves(curveOpts)).toHaveLength(3);
     expect(vis.ribbon(svgOpts)).toContain("<svg");
+  });
+
+  it("exposes renderField with its option and frame types from the root", () => {
+    const dir: vis.FlutedFieldDirection = "vertical";
+    expect(dir).toBe("vertical");
+    const opts: vis.RenderFieldOptions = { width: 2, height: 2 };
+    const frame: vis.FieldFrame = vis.renderField(
+      { kind: "flow", palette: ["#000", "#fff"] },
+      opts,
+    );
+    expect(frame.data).toHaveLength(16);
+  });
+
+  it("types the preset names: FieldPresetName is exactly the keys of fieldPresets", () => {
+    // A name missing from, or extra in, this record fails the type check, so the
+    // union cannot drift from the object; the runtime check pins the same fact.
+    const names: Record<vis.FieldPresetName, true> = {
+      "violet-dusk": true,
+      lunar: true,
+      lagoon: true,
+      bronze: true,
+      "sunset-ring": true,
+      "citrus-mist": true,
+      orchid: true,
+      "lilac-wave": true,
+      "forest-glow": true,
+      rose: true,
+      emerald: true,
+      glacier: true,
+      "rainbow-band": true,
+      cobalt: true,
+      crimson: true,
+      pine: true,
+      brand: true,
+      "fluid-dawn": true,
+      "fluted-ember": true,
+    };
+    expect(Object.keys(names)).toEqual(Object.keys(vis.fieldPresets));
+    // Typed lookup: no undefined to guard, and a typo is a compile error.
+    expect(vis.fieldPresets["fluid-dawn"].kind).toBe("fluid");
+  });
+
+  it("exposes the presets and randomFlow from the root, and they work together", () => {
+    const name: vis.FlowPresetName = "brand";
+    expect(vis.FLOW_PRESET_NAMES).toContain(name);
+    expect(vis.flowPresets[name].kind).toBe("flow");
+    expect(vis.fieldPresets["fluted-ember"].kind).toBe("fluted");
+    const frame = vis.renderField(vis.randomFlow({ seed: 3, mood: "vivid" }), {
+      width: 2,
+      height: 2,
+    });
+    expect(frame.data).toHaveLength(16);
+    expect(
+      vis.renderField(vis.flowPresets.lunar, { width: 2, height: 2 }).data,
+    ).toHaveLength(16);
+  });
+
+  it("names the randomFlow options and mood types from the root", () => {
+    const mood: vis.FlowMood = "vivid";
+    const opts: vis.RandomFlowOptions = { seed: 4, mood };
+    const maybe: vis.RandomFlowOptions = { seed: undefined, mood: undefined };
+    expect(vis.randomFlow(opts).seed).toBe(4);
+    expect(vis.randomFlow(maybe)).toEqual(vis.randomFlow());
+  });
+
+  it("keeps the internal field names out of the root: time coordinates and the resolved spec types and function", () => {
+    const text = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/index.ts"),
+      "utf8",
+    );
+    for (const name of [
+      "timeCoords",
+      "TimeCoords",
+      "ResolvedFlow",
+      "ResolvedFluid",
+      "ResolvedFluted",
+      "FlutedDirection",
+      "ResolvedField",
+      "resolveField",
+    ])
+      expect(text, name).not.toMatch(new RegExp(`\\b${name}\\b`));
   });
 
   it("imports in plain Node with no DOM and no canvas", async () => {
@@ -42,10 +127,12 @@ describe("@dagnam/vis root barrel", () => {
       "RIBBON_DEFAULTS",
       "TERMINAL_DEFAULTS",
       "createDither",
+      "createField",
       "createGlitch",
       "createPixelBlast",
       "createRibbon",
       "createTerminal",
+      "exportCanvas",
       "loopTime",
     ]);
   });
@@ -66,6 +153,8 @@ describe("@dagnam/vis root barrel", () => {
     expect(Object.keys(vis).sort()).toEqual([
       "BLENDS",
       "BRAND",
+      "FLOW_PRESET_NAMES",
+      "FLOW_SHAPES",
       "FONT_FAMILY",
       "FREEFORM_PALETTES",
       "LOGO",
@@ -77,6 +166,8 @@ describe("@dagnam/vis root barrel", () => {
       "coverLayers",
       "coverSpec",
       "createRng",
+      "fieldPresets",
+      "flowPresets",
       "fmt",
       "freeformPalette",
       "freeformRandom",
@@ -90,6 +181,8 @@ describe("@dagnam/vis root barrel", () => {
       "parseColor",
       "pattern",
       "ramp",
+      "randomFlow",
+      "renderField",
       "ribbon",
       "ribbonCurves",
       "toCss",

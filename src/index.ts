@@ -94,3 +94,30 @@ export type {
   RibbonSvgOptions,
   Weight,
 } from "./scene/index.js";
+
+// field: the DOM-free still renderer, the presets and randomFlow. The noise, the samplers and the shader
+// text stay internal; the animated field is the `@dagnam/vis/animate` entry.
+export {
+  FLOW_PRESET_NAMES,
+  FLOW_SHAPES,
+  fieldPresets,
+  flowPresets,
+  randomFlow,
+  renderField,
+} from "./field/index.js";
+export type {
+  FieldHighlight,
+  FieldPresetName,
+  FieldSpec,
+  FlowFieldSpec,
+  FlowMood,
+  FlowPresetName,
+  FlowShape,
+  FluidFieldPoint,
+  FluidFieldSpec,
+  FlutedFieldDirection,
+  FlutedFieldSpec,
+  FieldFrame,
+  RandomFlowOptions,
+  RenderFieldOptions,
+} from "./field/index.js";

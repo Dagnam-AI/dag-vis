@@ -4,6 +4,7 @@ import { fmt } from "../core/format.js";
 import {
   bounded,
   describeValue,
+  finite,
   integerIn,
   orDefault,
   parseId,
@@ -92,13 +93,16 @@ const pathData = (pts: readonly (readonly [number, number])[]): string =>
  * The wave-mesh ribbon as a standalone SVG: `lines` thin curves stroked with a
  * gradient that runs along the spine, optionally over a background, optionally
  * with the cross-section family. The curves are exactly `ribbonCurves(opts)`.
- * Deterministic per seed. SVG only.
+ * Deterministic per seed. SVG only. `phase` (radians, any finite number,
+ * default 0) advances the motion exactly as `ribbonCurves` does: the same
+ * ribbon, moved, periodic with period 2*pi.
  *
  * @throws VisError naming the offending option and value; also when the
  *   drawing would exceed 100000 points (lower `lines`, `samples` or `meshLines`).
  */
-export function ribbon(opts: RibbonSvgOptions): string {
+export function ribbon(opts: RibbonSvgOptions, phase = 0): string {
   const cfg = parseRibbon(opts);
+  const shift = finite("phase", phase);
   const { width, height, lines, samples } = cfg;
   const id = parseId(
     "idPrefix",
@@ -183,7 +187,7 @@ export function ribbon(opts: RibbonSvgOptions): string {
     ),
   );
 
-  const curves = curvesAt(cfg, 0);
+  const curves = curvesAt(cfg, shift);
   const strokes = curves.map((c) => el("path", { d: pathData(c) }));
   // A cross-line joins one point per curve, so a single curve has none to draw.
   if (mesh && lines > 1)

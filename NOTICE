@@ -20,3 +20,46 @@ Moonhouse
   relying on it. Removing it is one directory (src/node/fonts/moonhouse) and one
   entry in FONT_FILES (src/node/render-png.ts); the social card's display text
   then falls back to another face.
+
+Third-party code. gifenc is installed as a dependency (not bundled into dist/;
+npm installs it with its own licence file). mp4-muxer and webm-muxer are
+bundled: their published ESM builds are copied unmodified into
+dist/export/vendor/ by scripts/vendor-muxers.mjs, and the licence text for both
+is below.
+
+gifenc 1.0.3
+  Copyright (c) 2017 Matt DesLauriers
+  Licence: MIT. Contains a port of PnnQuant.js (Copyright (C) 2004-2019 Mark
+  Tyler and Dmitry Groshev; Copyright (c) 2018-2021 Miller Cy Chan) and an LZW
+  encoder derived from Kevin Weiner's, Thibault Imbert's and Johan Nordberg's.
+  Used by: GIF export.
+
+mp4-muxer 5.2.2 (bundled: dist/export/vendor/mp4-muxer.mjs)
+  Copyright (c) 2023 Vanilagy
+  Licence: MIT (text below)
+  Used by: MP4 video export.
+
+webm-muxer 5.1.4 (bundled: dist/export/vendor/webm-muxer.mjs)
+  Copyright (c) 2022 Vanilagy
+  Licence: MIT (text below)
+  Used by: WebM video export.
+
+MIT licence text (mp4-muxer, webm-muxer; the copyright line is the one above):
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.

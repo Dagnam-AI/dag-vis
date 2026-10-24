@@ -5,15 +5,15 @@ import {
   oneLine,
   parseFocus,
   parseNumber,
-  parseOptions,
+  parseArguments,
   wantsHelp,
 } from "../../src/node/cli-args.js";
 
 const ALLOWED = ["title", "out", "w"];
 const parse = (args: string[]): Record<string, string> =>
-  Object.fromEntries(parseOptions(args, ALLOWED));
+  Object.fromEntries(parseArguments(args, { values: ALLOWED }).values);
 
-describe("parseOptions", () => {
+describe("parseArguments", () => {
   it("reads --name value and --name=value, in any order", () => {
     expect(parse(["--title", "Hi", "--out=a b.svg", "--w", "5"])).toEqual({
       title: "Hi",
@@ -45,7 +45,58 @@ describe("parseOptions", () => {
     [["stray"], 'unexpected argument: "stray"'],
     [["--title", "a", "stray"], 'unexpected argument: "stray"'],
   ])("rejects %j with %s", (args, message) => {
-    expect(() => parseOptions(args, ALLOWED)).toThrow(message);
+    expect(() => parseArguments(args, { values: ALLOWED })).toThrow(message);
+  });
+});
+
+describe("parseArguments with flags and positionals", () => {
+  const spec = {
+    values: ["out", "t"],
+    flags: ["loop", "alpha"],
+    positionals: 1,
+  };
+
+  it("collects values, flags and positionals in any order", () => {
+    const parsed = parseArguments(
+      ["--loop", "lunar", "--out", "a.png", "--alpha"],
+      spec,
+    );
+    expect(Object.fromEntries(parsed.values)).toEqual({ out: "a.png" });
+    expect([...parsed.flags].sort()).toEqual(["alpha", "loop"]);
+    expect(parsed.positionals).toEqual(["lunar"]);
+    const empty = parseArguments([], spec);
+    expect(empty.values.size + empty.flags.size).toBe(0);
+    expect(empty.positionals).toEqual([]);
+  });
+
+  it("does not take the next argument as a flag's value", () => {
+    const parsed = parseArguments(["--loop", "lunar", "--out", "-x"], spec);
+    expect(parsed.positionals).toEqual(["lunar"]);
+    expect(parsed.values.get("out")).toBe("-x");
+  });
+
+  it.each([
+    [["--loop=1"], "--loop takes no value"],
+    [["--loop="], "--loop takes no value"],
+    [["--loop", "--loop"], "duplicate option: --loop"],
+    [["--loop", "--loop=1"], "duplicate option: --loop"],
+    [["a", "b"], 'unexpected argument: "b"'],
+    [["-t", "-u"], 'unexpected argument: "-u"'],
+    [["--constructor"], 'unknown option: "--constructor"'],
+    [["--out", "--loop"], "missing value for --out"],
+  ])("rejects %j with %s", (args, message) => {
+    expect(() => parseArguments(args, { ...spec, positionals: 1 })).toThrow(
+      message,
+    );
+  });
+
+  it("accepts no positional unless the spec allows one", () => {
+    expect(() => parseArguments(["a"], { values: [] })).toThrow(
+      'unexpected argument: "a"',
+    );
+    expect(() => parseArguments(["--loop"], { values: [] })).toThrow(
+      'unknown option: "--loop"',
+    );
   });
 });
 
@@ -112,6 +163,15 @@ describe("helpers", () => {
   it("oneLine collapses line breaks and trims", () => {
     expect(oneLine(" a\nb\r\n  c \n")).toBe("a b c");
     expect(oneLine("already one line")).toBe("already one line");
+  });
+});
+
+describe("wantsHelp with flags", () => {
+  it("lets a valueless option pass over the next argument", () => {
+    expect(wantsHelp(["--loop", "-h"])).toBe(false);
+    expect(wantsHelp(["--loop", "-h"], ["loop"])).toBe(true);
+    expect(wantsHelp(["--loop", "--out", "-h"], ["loop"])).toBe(false);
+    expect(wantsHelp(["--out", "-h", "--loop"], ["loop"])).toBe(false);
   });
 });
 

@@ -14,10 +14,12 @@ describe("animate barrel", () => {
       "RIBBON_DEFAULTS",
       "TERMINAL_DEFAULTS",
       "createDither",
+      "createField",
       "createGlitch",
       "createPixelBlast",
       "createRibbon",
       "createTerminal",
+      "exportCanvas",
       "loopTime",
     ]);
   });

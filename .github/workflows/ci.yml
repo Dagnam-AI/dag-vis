@@ -36,15 +36,20 @@ jobs:
 
       - run: npm ci
 
+      # The Node export helpers pipe frames into the ffmpeg binary. Tests that
+      # encode for real need one on PATH; the mocked pipe tests do not.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       # eslint (layer rules) -> prettier --check -> tsc --noEmit -> vitest at
       # 100/100/100/100, the same gate as `npm run check` locally.
       - run: npm run check
 
-      # Goldens are generated artifacts. tests/helpers/golden.ts WRITES a golden
-      # that does not exist yet and passes, so a PR that adds a golden test but
-      # forgets the file would be green; `git diff` cannot see an untracked
-      # file. `git status` sees both a rewritten (modified) golden and a
-      # created (untracked) one. UPDATE_GOLDENS is never set in CI.
+      # Goldens are generated artifacts. tests/helpers/golden.ts writes one only
+      # under UPDATE_GOLDENS=1, which CI never sets, and a missing golden fails
+      # the test. This step is the backstop: it fails if a run ever rewrote or
+      # created a file under tests/goldens (`git diff` cannot see an untracked
+      # file; `git status` sees both a modified and an untracked one).
       - name: Assert the run neither rewrote nor created a golden
         run: |
           changed=$(git status --porcelain -- tests/goldens)
@@ -94,14 +99,16 @@ jobs:
           # Browser-safe means the root entry's import graph never reaches a
           # Node builtin, the node, animate or react entries or the native
           # rasteriser (the animate types name HTMLCanvasElement, so the root
-          # must not pull them in). The animate entry has no dependencies at
-          # all (no react, no bare import). Walk both.
+          # must not pull them in), nor the export layer (it loads the
+          # third-party encoders), and has no bare import at all. The animate
+          # entry may import only the export dependencies named below (no
+          # react, no other bare import). Walk both.
           cat > root-graph.mjs <<'EOF'
           import { readFileSync } from "node:fs";
           import { dirname, resolve } from "node:path";
           import { fileURLToPath } from "node:url";
           const dist = resolve(fileURLToPath(import.meta.url), "../node_modules/@dagnam/vis/dist");
-          const graph = (entry, forbidden, min) => {
+          const graph = (entry, forbidden, min, bare = []) => {
           const seen = new Set();
           const walk = (file) => {
             if (seen.has(file)) return;
@@ -111,7 +118,10 @@ jobs:
             const edge = /^(?:import|export)\s*(?:type\s+)?(?:\*(?:\s+as\s+\w+)?|\{[^}]*\}|[\w$]+)\s*from\s*["']([^"']+)["']|^import\s*["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)/gm;
             for (const m of src.matchAll(edge)) {
               const spec = m[1] ?? m[2] ?? m[3];
-              if (!spec.startsWith(".")) throw new Error(`${file} imports ${spec}`);
+              if (!spec.startsWith(".")) {
+                if (bare.includes(spec)) continue;
+                throw new Error(`${file} imports ${spec}`);
+              }
               const target = resolve(dirname(file), spec);
               for (const layer of forbidden)
                 if (target.startsWith(resolve(dist, layer))) throw new Error(`${file} reaches the ${layer} layer: ${spec}`);
@@ -123,19 +133,22 @@ jobs:
           if (seen.size < min) throw new Error(`only ${seen.size} modules found from ${entry}; the walker is broken`);
           console.log(`${entry} graph ok: ${seen.size} modules, no node: / resvg / ${forbidden.join(", ")} layer`);
           };
-          graph("index.js", ["node", "animate", "react"], 30);
-          graph("animate/index.js", ["node", "react"], 10);
+          graph("index.js", ["node", "animate", "react", "export"], 30);
+          // The only third-party code the package ships, listed by name: a new
+          // bare import anywhere else fails here until it is added on purpose.
+          graph("animate/index.js", ["node", "react"], 10, ["gifenc"]);
           EOF
           node root-graph.mjs
 
           cat > root.mjs <<'EOF'
-          import { brandBackground, gradient, ogCard, pattern, ribbon } from "@dagnam/vis";
+          import { brandBackground, fieldPresets, gradient, ogCard, pattern, renderField, ribbon } from "@dagnam/vis";
           const svg = brandBackground({ width: 1200, height: 630 });
           if (!svg.startsWith("<svg")) throw new Error("brandBackground did not render");
           if (!gradient({ kind: "linear", stops: ["#ef4444", "#10abba"] }).css.startsWith("background:")) throw new Error("gradient");
           if (!pattern({ kind: "dagMesh" }).cssBackground.startsWith("url(")) throw new Error("pattern");
           if (!ogCard({ title: "Smoke" }).includes("Smoke")) throw new Error("ogCard");
           if (!ribbon({ width: 100, height: 50, lines: 4, samples: 8 }).includes("<path")) throw new Error("ribbon");
+          if (renderField(fieldPresets.lunar, { width: 8, height: 4 }).data.length !== 8 * 4 * 4) throw new Error("renderField");
           console.log("root ok:", svg.length, "bytes");
           EOF
           node root.mjs
@@ -145,13 +158,61 @@ jobs:
           cat > animate.mjs <<'EOF'
           import * as animate from "@dagnam/vis/animate";
           import * as root from "@dagnam/vis";
-          for (const name of ["createDither", "createPixelBlast", "createTerminal", "createGlitch", "createRibbon"])
+          for (const name of ["createDither", "createPixelBlast", "createTerminal", "createGlitch", "createRibbon", "createField", "exportCanvas"])
             if (typeof animate[name] !== "function") throw new Error(`${name} missing from @dagnam/vis/animate`);
           if (animate.loopTime(5, { duration: 2 }) !== 1) throw new Error("loopTime");
           if ("createDither" in root) throw new Error("the root must not export the animate effects");
           console.log("animate ok, react not installed");
           EOF
           node animate.mjs
+
+          # gifenc has no exports map: plain Node loads its CommonJS file, where
+          # named imports do not exist. Encode one real GIF from the installed
+          # tarball to prove the interop shim works outside a bundler. The file
+          # is imported by path because the encoders have no public subpath.
+          cat > gif.mjs <<'EOF'
+          import { resolve } from "node:path";
+          import { pathToFileURL } from "node:url";
+          const { encodeGif } = await import(pathToFileURL(resolve("node_modules/@dagnam/vis/dist/export/gif.js")).href);
+          const frame = (i) => {
+            const d = new Uint8Array(4 * 4 * 4);
+            for (let p = 0; p < 16; p++) d.set([i * 60, p * 16, 200, 255], p * 4);
+            return d;
+          };
+          const bytes = await encodeGif({ width: 4, height: 4, fps: 10, count: 3, frameAt: frame });
+          if (new TextDecoder().decode(bytes.subarray(0, 6)) !== "GIF89a") throw new Error("not a GIF");
+          if (bytes.at(-1) !== 0x3b) throw new Error("GIF has no trailer");
+          console.log("gif ok:", bytes.length, "bytes through gifenc in plain Node");
+          EOF
+          node gif.mjs
+
+          # The two muxers are bundled into dist/export/vendor/, not installed:
+          # prove the shipped copies load as ESM from the tarball and write real
+          # containers (mp4 `ftyp` at offset 4, webm EBML magic), in plain Node.
+          cat > video-muxers.mjs <<'EOF'
+          import { resolve } from "node:path";
+          import { pathToFileURL } from "node:url";
+          const v = (n) => import(pathToFileURL(resolve(`node_modules/@dagnam/vis/dist/export/vendor/${n}.mjs`)).href);
+          const m = await v("mp4-muxer"), w = await v("webm-muxer");
+          const a = new m.Muxer({ target: new m.ArrayBufferTarget(), video: { codec: "avc", width: 16, height: 16 }, fastStart: "in-memory" });
+          a.addVideoChunkRaw(new Uint8Array([0, 0, 0, 1, 0x65, 0x88]), "key", 0, 100000, { decoderConfig: { codec: "avc1.42001f", description: new Uint8Array([1, 0x42, 0, 0x1f, 0xff, 0xe0, 0, 0, 1, 0]) } });
+          a.finalize();
+          if (new TextDecoder().decode(new Uint8Array(a.target.buffer, 4, 4)) !== "ftyp") throw new Error("mp4 has no ftyp box");
+          const b = new w.Muxer({ target: new w.ArrayBufferTarget(), video: { codec: "V_VP9", width: 16, height: 16 } });
+          b.addVideoChunkRaw(new Uint8Array([1, 2, 3]), "key", 0);
+          b.finalize();
+          if (new Uint8Array(b.target.buffer)[0] !== 0x1a) throw new Error("webm has no EBML header");
+          console.log("vendored muxers ok in plain Node:", a.target.buffer.byteLength, "mp4 bytes,", b.target.buffer.byteLength, "webm bytes");
+          EOF
+          node video-muxers.mjs
+
+          # The export declarations must not name a bare module: gifenc ships
+          # without types, so a consumer type-checking one would hit TS7016.
+          if grep -En "(from|import)[ (]*[\"'][^.\"']" node_modules/@dagnam/vis/dist/export/*.d.ts; then
+            echo "dist/export declarations import a bare module" >&2
+            exit 1
+          fi
+          echo "export declarations ok: no bare import"
 
           cat > node-missing.mjs <<'EOF'
           import { renderPng } from "@dagnam/vis/node";
@@ -169,7 +230,12 @@ jobs:
           cat > consumer.ts <<'EOF'
           import { gradient, ogCard, VisError } from "@dagnam/vis";
           import type { GradientSpec } from "@dagnam/vis";
-          import { favicons, renderPng } from "@dagnam/vis/node";
+          import { renderField, fieldPresets } from "@dagnam/vis";
+          import type { FieldFrame } from "@dagnam/vis";
+          import { exportStatic, favicons, renderPng } from "@dagnam/vis/node";
+          const frame: FieldFrame = renderField(fieldPresets.lunar, { width: 8, height: 4 });
+          const still: Promise<void> = exportStatic(fieldPresets.lunar, { width: 8, height: 4, format: "png", out: "still.png" });
+          export { frame, still };
           const spec: GradientSpec = { kind: "linear", stops: ["#ef4444", "#10abba"] };
           const css: string = gradient(spec).css;
           const card: string = ogCard({ title: css.slice(0, 4) });
@@ -183,13 +249,35 @@ jobs:
           npx tsc -p tsconfig.json
           echo "types ok (Node-only consumer, no DOM lib)"
 
+          # A DOM-free consumer with NO `types` field, in its own empty project:
+          # TypeScript then auto-includes every installed @types/* package. This
+          # fails (TS2304 on HTMLCanvasElement and friends) if the package ever
+          # pulls @types/dom-webcodecs back in through a dependency, as the
+          # muxers did before they were bundled into dist.
+          (
+            cd "$(mktemp -d)"
+            npm init -y >/dev/null
+            npm pkg set type=module >/dev/null
+            npm install "$tarball" typescript@5.9.3 >/dev/null
+            if ls node_modules/@types 2>/dev/null | grep -q .; then
+              echo "the package pulled in @types: $(ls node_modules/@types)"; exit 1
+            fi
+            echo 'import { gradient } from "@dagnam/vis"; export const css: string = gradient({ kind: "linear", stops: ["#ef4444", "#10abba"] }).css;' > index.ts
+            echo '{ "compilerOptions": { "module": "NodeNext", "moduleResolution": "NodeNext", "target": "ES2022", "lib": ["ES2022"], "strict": true, "noEmit": true, "skipLibCheck": false }, "files": ["index.ts"] }' > tsconfig.json
+            npx tsc -p tsconfig.json
+            echo "types ok (DOM-free consumer, no types field, no @types installed)"
+          )
+
           # A browser consumer (DOM lib) of the animate and react entries.
           npm install --save-dev react@19.3.1 @types/react@19.3.0 >/dev/null
           cat > consumer-dom.tsx <<'EOF'
-          import { createDither, type EffectHandle, type DitherOptions } from "@dagnam/vis/animate";
+          import { createDither, createField, exportCanvas, type EffectHandle, type DitherOptions } from "@dagnam/vis/animate";
+          import { fieldPresets } from "@dagnam/vis";
           import { VisBackground, Gradient } from "@dagnam/vis/react";
           const handle: EffectHandle<DitherOptions> = createDither(document.createElement("canvas"), { colors: ["#e64040"] });
           handle.renderAt(1);
+          const field = createField(document.createElement("canvas"), fieldPresets.lunar, { loop: { duration: 6 } });
+          export const clip: Promise<Blob> = exportCanvas(field, { format: "mp4", duration: 6 });
           export const view = (
             <>
               <VisBackground effect="dither" options={{ waveSpeed: 0.15 }} />
