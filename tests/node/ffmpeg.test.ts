@@ -121,6 +121,18 @@ describe("argument builders", () => {
     "-i",
     "-",
   ];
+  const bt709 = [
+    "-vf",
+    "scale=out_color_matrix=bt709:out_range=tv",
+    "-colorspace",
+    "bt709",
+    "-color_primaries",
+    "bt709",
+    "-color_trc",
+    "bt709",
+    "-color_range",
+    "tv",
+  ];
   it("mp4: libx264 yuv420p crf +faststart", () => {
     expect(videoArgs("mp4", 64, 36, 30, 0.8, false, "o.mp4")).toEqual([
       ...input,
@@ -128,6 +140,7 @@ describe("argument builders", () => {
       "libx264",
       "-pix_fmt",
       "yuv420p",
+      ...bt709,
       "-crf",
       "19",
       "-preset",
@@ -146,6 +159,7 @@ describe("argument builders", () => {
       "libvpx-vp9",
       "-pix_fmt",
       "yuv420p",
+      ...bt709,
       "-crf",
       "25",
       "-b:v",
@@ -160,6 +174,7 @@ describe("argument builders", () => {
       "libvpx-vp9",
       "-pix_fmt",
       "yuva420p",
+      ...bt709,
       "-crf",
       "25",
       "-b:v",

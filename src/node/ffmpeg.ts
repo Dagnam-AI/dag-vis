@@ -114,6 +114,26 @@ function checkQuality(quality: unknown): number {
   return bounded("quality", quality, 0, 1);
 }
 
+/**
+ * The RGB to YUV conversion and its tags for mp4 and webm. Left alone, ffmpeg
+ * converts with the BT.601 matrix and writes no colour tags, and players that
+ * assume BT.709 for untagged video then shift every colour (measured on
+ * #ef4444: decoded as 709 it came back as #fb533f). Converting with BT.709 and
+ * saying so makes the file mean what was drawn.
+ */
+const BT709 = [
+  "-vf",
+  "scale=out_color_matrix=bt709:out_range=tv",
+  "-colorspace",
+  "bt709",
+  "-color_primaries",
+  "bt709",
+  "-color_trc",
+  "bt709",
+  "-color_range",
+  "tv",
+];
+
 function rawInput(width: number, height: number, fps: number): string[] {
   return [
     "-y",
@@ -229,6 +249,7 @@ export function videoArgs(
         "libx264",
         "-pix_fmt",
         "yuv420p",
+        ...BT709,
         "-crf",
         String(crfFor("mp4", q)),
         "-preset",
@@ -246,6 +267,7 @@ export function videoArgs(
         "libvpx-vp9",
         "-pix_fmt",
         withAlpha ? "yuva420p" : "yuv420p",
+        ...BT709,
         "-crf",
         String(crfFor("webm", q)),
         "-b:v",
