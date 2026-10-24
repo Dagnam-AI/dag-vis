@@ -186,6 +186,18 @@ export async function renderPng(
   svg: string,
   opts: RenderPngOptions = {},
 ): Promise<Buffer> {
+  return rasterise(svg, opts, (image) => image.asPng());
+}
+
+/** What resvg's `render()` returns: the pixels, their size, and the PNG encoder. */
+type Rendered = ReturnType<Resvg["render"]>;
+
+/** Validate, parse and render `svg` (the checks and limits `renderPng` documents), then hand the image to `finish`. */
+async function rasterise<T>(
+  svg: string,
+  opts: RenderPngOptions,
+  finish: (image: Rendered) => T,
+): Promise<T> {
   const input: unknown = opts;
   if (typeof input !== "object" || input === null)
     throw new VisError(
@@ -247,8 +259,43 @@ export async function renderPng(
     );
 
   try {
-    return resvg.render().asPng();
+    return finish(resvg.render());
   } catch (error) {
     throw new VisError(`SVG could not be rendered: ${messageOf(error)}`);
   }
+}
+
+/** A raster as raw bytes: `data` is `width * height * 4` bytes of RGBA, row 0 on top, STRAIGHT (not premultiplied) alpha. */
+export interface RgbaImage {
+  data: Uint8Array;
+  width: number;
+  height: number;
+}
+
+/**
+ * The same render as `renderPng` (same checks, limits, fonts and `background`),
+ * as raw RGBA bytes: the frame source for ffmpeg and GIF. resvg hands back
+ * premultiplied pixels; they are converted to straight alpha here, because
+ * that is what ffmpeg's `rgba` input and the PNG format mean. Where the pixel
+ * is not fully opaque the conversion rounds, so a colour under a low alpha is
+ * only as exact as 8 bits allow; a `background` makes every pixel opaque and
+ * the conversion exact.
+ */
+export async function renderRgba(
+  svg: string,
+  opts: RenderPngOptions = {},
+): Promise<RgbaImage> {
+  return rasterise(svg, opts, (image) => {
+    const data = new Uint8Array(image.pixels);
+    for (let i = 0; i < data.length; i += 4) {
+      const alpha = Number(data[i + 3]);
+      if (alpha === 255) continue;
+      for (let c = i; c < i + 3; c++)
+        data[c] =
+          alpha === 0
+            ? 0
+            : Math.min(255, Math.round((Number(data[c]) * 255) / alpha));
+    }
+    return { data, width: image.width, height: image.height };
+  });
 }

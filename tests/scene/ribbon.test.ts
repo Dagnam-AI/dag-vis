@@ -49,6 +49,24 @@ describe("ribbon", () => {
     });
   });
 
+  it("phase advances the curve family: 0 is the default, 2*pi returns, and it draws what ribbonCurves returns", () => {
+    expect(ribbon(small, 0)).toBe(ribbon(small));
+    expect(ribbon(small, 1)).not.toBe(ribbon(small));
+    expect(paths(ribbon(small, 2 * Math.PI))).toEqual(paths(ribbon(small)));
+    const want = ribbonCurves(small, 1.25);
+    paths(ribbon(small, 1.25)).forEach((d, i) => {
+      points(d).forEach(([x, y], j) => {
+        expect(x).toBeCloseTo(want[i]?.[j]?.[0] ?? NaN, 3);
+        expect(y).toBeCloseTo(want[i]?.[j]?.[1] ?? NaN, 3);
+      });
+    });
+  });
+
+  it("rejects a phase that is not a finite number, naming it", () => {
+    for (const bad of [NaN, Infinity, "1" as never, null as never])
+      expect(() => ribbon(small, bad)).toThrow(/phase/);
+  });
+
   it("puts the stroke styling once on the group, in output px, with no vector-effect", () => {
     const svg = ribbon({ ...small, strokeWidth: 2.5, opacity: 0.4 });
     expect(svg).toContain(
