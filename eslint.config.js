@@ -59,6 +59,7 @@ export default tseslint.config(
       "node_modules/**",
       "bin/**",
       "demo/dist/**",
+      "motion/**",
     ],
   },
   js.configs.recommended,
