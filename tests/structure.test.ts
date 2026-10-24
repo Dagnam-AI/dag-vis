@@ -36,9 +36,53 @@ const ALLOWED: Record<string, readonly string[]> = {
  * Every module specifier: static `from "..."`, side-effect `import "..."`, dynamic
  * `import("...")` (also with line or block comments before the string, single quotes
  * or backticks) and `import x = require("...")`.
+ *
+ * A linear scan, not one regex: a keyword is found with a plain `\b(from|import|require)\b`
+ * and everything after it is read by hand (whitespace, one `(`, comments, then a quote),
+ * so no quantifier is nested and no input can make it backtrack. Each comment or
+ * string is crossed once, because the keyword search resumes after what was read.
+ * Keywords inside a comment that was read after another keyword are skipped with it; a
+ * commented-out import elsewhere still counts (fails closed).
  */
-const IMPORT_SPECIFIER =
-  /(?:from|import|=\s*require)\s*\(?\s*(?:(?:\/\*[\s\S]*?\*\/|\/\/[^\n]*\n)\s*)*["'`]([^"'`]+)["'`]/g;
+function importSpecifiers(text: string): string[] {
+  const specs: string[] = [];
+  const keyword = /\b(from|import|require)\b/g;
+  const isSpace = (c: string | undefined): boolean =>
+    c !== undefined && /\s/.test(c);
+  for (let m = keyword.exec(text); m !== null; m = keyword.exec(text)) {
+    let i = keyword.lastIndex;
+    // `require` only as `= require(...)`; a bare word `require` is not an import.
+    if (m[1] === "require") {
+      let k = m.index - 1;
+      while (isSpace(text[k])) k--;
+      if (text[k] !== "=") continue;
+    }
+    while (isSpace(text[i])) i++;
+    if (text[i] === "(") i++;
+    for (;;) {
+      while (isSpace(text[i])) i++;
+      if (text.startsWith("/*", i)) {
+        const end = text.indexOf("*/", i + 2);
+        if (end === -1) return specs;
+        i = end + 2;
+      } else if (text.startsWith("//", i)) {
+        const end = text.indexOf("\n", i);
+        if (end === -1) return specs;
+        i = end + 1;
+      } else break;
+    }
+    keyword.lastIndex = i;
+    const quote = text[i];
+    if (quote !== '"' && quote !== "'" && quote !== "`") continue;
+    const close = text.indexOf(quote, i + 1);
+    if (close === -1) continue;
+    const spec = text.slice(i + 1, close);
+    if (spec === "" || /["'`]/.test(spec)) continue;
+    specs.push(spec);
+    keyword.lastIndex = close + 1;
+  }
+  return specs;
+}
 
 /** Every file under `dir`; `skip` names top-level folders of `dir` only, never a folder of the same name deeper down. */
 function walk(dir: string, skip: readonly string[] = []): string[] {
@@ -72,8 +116,7 @@ describe("repository structure", () => {
   });
 
   it("scans every import spelling, including TS require and a block comment holding a star", () => {
-    const specs = (code: string): string[] =>
-      [...code.matchAll(IMPORT_SPECIFIER)].map((m) => m[1]!);
+    const specs = importSpecifiers;
     expect(specs('import a from "a"; import "b"; export * from "c";')).toEqual([
       "a",
       "b",
@@ -85,6 +128,45 @@ describe("repository structure", () => {
     expect(specs('const m = await import(\n// why\n"e");')).toEqual(["e"]);
     expect(specs('import fs = require("node:fs");')).toEqual(["node:fs"]);
     expect(specs("import x = require('f')")).toEqual(["f"]);
+  });
+
+  it("scans the other import spellings and keeps multi-line, quote and template forms", () => {
+    expect(importSpecifiers('import type { T } from "a";')).toEqual(["a"]);
+    expect(importSpecifiers('export { x } from "b";')).toEqual(["b"]);
+    expect(importSpecifiers('import {\n  a,\n  b,\n} from\n  "c";')).toEqual([
+      "c",
+    ]);
+    expect(importSpecifiers("import(`d`) + import('e')")).toEqual(["d", "e"]);
+    expect(importSpecifiers('import(/* a */ // b\n /* c */ "f")')).toEqual([
+      "f",
+    ]);
+    // A template literal that merely looks like an import is still read (fails closed).
+    expect(importSpecifiers('const s = `import "g"`;')).toEqual(["g"]);
+    // Not imports: a bare `require` word, `import.meta`, an unterminated string or comment.
+    expect(importSpecifiers('const require = "h"; import.meta.url;')).toEqual(
+      [],
+    );
+    expect(importSpecifiers('import "unterminated')).toEqual([]);
+    expect(importSpecifiers('import /* never closed "i"')).toEqual([]);
+    expect(importSpecifiers('import // no newline "j"')).toEqual([]);
+    expect(importSpecifiers('import ""; from "it\'s"')).toEqual([]);
+  });
+
+  it("scans adversarial input in linear time", () => {
+    // The previous single regex backtracked exponentially on `from/*` followed by many `*/ /*`.
+    const inputs = [
+      "from/*" + "*/ /*".repeat(50_000),
+      "from /*".repeat(50_000),
+      "import ".repeat(50_000) + '"x"',
+      'from "'.repeat(50_000),
+      "from //\n".repeat(50_000),
+      "= ".repeat(50_000) + "require",
+    ];
+    for (const input of inputs) {
+      const start = performance.now();
+      importSpecifiers(input);
+      expect(performance.now() - start).toBeLessThan(1000);
+    }
   });
 
   it("walk skips the named folders at the top only", () => {
@@ -110,25 +192,25 @@ describe("repository structure", () => {
     const allowed = layer.includes(".")
       ? Object.keys(ALLOWED)
       : ALLOWED[layer]!;
-    for (const m of text.matchAll(IMPORT_SPECIFIER)) {
-      const target = resolveSpec(file, m[1]!);
+    for (const spec of importSpecifiers(text)) {
+      const target = resolveSpec(file, spec);
       if (target === undefined) continue;
       // A specifier that resolves outside src/ (e.g. into motion/) is a layering break, not a skip.
       expect(
         inside(target, SRC),
-        `${relative(ROOT, file)} imports outside src/: ${m[1]!}`,
+        `${relative(ROOT, file)} imports outside src/: ${spec}`,
       ).toBe(true);
       const targetLayer = layerOf(target);
       if (targetLayer === layer || targetLayer.includes(".")) continue;
-      expect(allowed, `${relative(ROOT, file)} -> ${m[1]!}`).toContain(
+      expect(allowed, `${relative(ROOT, file)} -> ${spec}`).toContain(
         targetLayer,
       );
     }
     if (layer !== "node" && !layer.includes(".")) {
-      for (const m of text.matchAll(IMPORT_SPECIFIER))
+      for (const spec of importSpecifiers(text))
         expect(
-          m[1]!.startsWith("node:"),
-          `${relative(ROOT, file)} uses the Node import ${m[1]!}`,
+          spec.startsWith("node:"),
+          `${relative(ROOT, file)} uses the Node import ${spec}`,
         ).toBe(false);
     }
   });
@@ -141,7 +223,7 @@ describe("repository structure", () => {
     const text = readFileSync(join(SRC, "index.ts"), "utf8");
     for (const layer of ["export", "animate", "react", "node"])
       expect(text, `src/index.ts imports ./${layer}`).not.toMatch(
-        new RegExp(`(from|import)\\s*\\(?\\s*"\\./${layer}(/|")`),
+        new RegExp(`(from|import)[\\s(]*"\\./${layer}(/|")`),
       );
   });
 
@@ -233,8 +315,7 @@ describe("motion/", () => {
   it.each(motionCode)(
     "%s reaches the library only as @dagnam/vis or @dagnam/vis/animate",
     (file) => {
-      for (const m of readFileSync(file, "utf8").matchAll(IMPORT_SPECIFIER)) {
-        const spec = m[1]!;
+      for (const spec of importSpecifiers(readFileSync(file, "utf8"))) {
         const at = `${relative(ROOT, file)} imports ${spec}`;
         // Resolved, so `./../..` spellings and any folder depth are judged by where they land.
         const target = resolveSpec(file, spec);
@@ -271,11 +352,11 @@ describe("motion/", () => {
     (file) => {
       // sigv4.ts alone may import node:crypto (scripts-only file).
       const allowed = file.endsWith("/src/lib/sigv4.ts") ? ["node:crypto"] : [];
-      for (const m of readFileSync(file, "utf8").matchAll(IMPORT_SPECIFIER)) {
-        const target = resolveSpec(file, m[1]!);
+      for (const spec of importSpecifiers(readFileSync(file, "utf8"))) {
+        const target = resolveSpec(file, spec);
         expect(
-          target === undefined ? allowed.includes(m[1]!) : inside(target, LIB),
-          `${relative(ROOT, file)} must import siblings only: ${m[1]!}`,
+          target === undefined ? allowed.includes(spec) : inside(target, LIB),
+          `${relative(ROOT, file)} must import siblings only: ${spec}`,
         ).toBe(true);
       }
     },
