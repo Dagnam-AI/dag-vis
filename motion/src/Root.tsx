@@ -2,22 +2,23 @@ import { Composition } from "remotion";
 
 import { loadBrandFonts } from "./bridge/fonts.ts";
 import { sheetColumns } from "./lib/sheet.ts";
-import { framesFor } from "./lib/timing.ts";
+import { loopFrames } from "./lib/timing.ts";
 import { Sheet, sheetMetadata, type SheetProps } from "./sheet/Sheet.tsx";
-import { Smoke } from "./videos/smoke/Smoke.tsx";
-import { TIMING as SMOKE } from "./videos/smoke/timing.ts";
+import { PipelineProof } from "./videos/pipeline-proof/PipelineProof.tsx";
+import { TIMING as PROOF } from "./videos/pipeline-proof/timing.ts";
 
 void loadBrandFonts();
 
 export const Root: React.FC = () => (
   <>
     <Composition
-      id="smoke"
-      component={Smoke}
-      durationInFrames={framesFor(SMOKE.duration, SMOKE.fps)}
-      fps={SMOKE.fps}
-      width={SMOKE.width}
-      height={SMOKE.height}
+      id="pipeline-proof"
+      component={PipelineProof}
+      durationInFrames={loopFrames(PROOF.duration, PROOF.fps)}
+      fps={PROOF.fps}
+      width={PROOF.width}
+      height={PROOF.height}
+      defaultProps={{ seed: 1 }}
     />
     <Composition
       id="sheet"

@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   motion:
-    name: motion/ - lint, types, 100% pure-logic coverage, audit, one still under swangle
+    name: motion/ - lint, types, 100% pure-logic coverage, audit, the sound bed and one still under swangle
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -45,4 +45,4 @@ jobs:
       # GitHub runners have no GPU: swangle (SwiftShader) is the renderer everywhere.
       # assets copies the fonts from the checked-out library into this job's workspace only;
       # this job never uploads motion/public or motion/out as an artifact.
-      - run: cd motion && npm run assets && MOTION_GL=swangle npx remotion still smoke out/ci-smoke.png
+      - run: cd motion && npm run assets && npm run audio -- pipeline-proof && MOTION_GL=swangle npx remotion still pipeline-proof out/ci-proof.png --frame=90
