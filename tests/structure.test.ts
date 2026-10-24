@@ -14,6 +14,7 @@ const ALLOWED: Record<string, readonly string[]> = {
   gradient: ["core", "brand"],
   pattern: ["core", "brand"],
   scene: ["core", "brand", "gradient", "pattern"],
+  field: ["core"],
   animate: ["core", "scene"],
   react: ["core", "animate", "gradient"],
   node: ["core", "brand", "gradient", "pattern", "scene"],
