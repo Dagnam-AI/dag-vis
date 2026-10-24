@@ -134,6 +134,8 @@ describe("argument builders", () => {
       "medium",
       "-movflags",
       "+faststart",
+      "-f",
+      "mp4",
       "o.mp4",
     ]);
   });
@@ -148,6 +150,8 @@ describe("argument builders", () => {
       "25",
       "-b:v",
       "0",
+      "-f",
+      "webm",
       "o.webm",
     ]);
     expect(videoArgs("webm", 64, 36, 30, 0.8, true, "o.webm")).toEqual([
@@ -162,6 +166,8 @@ describe("argument builders", () => {
       "0",
       "-auto-alt-ref",
       "0",
+      "-f",
+      "webm",
       "o.webm",
     ]);
   });
@@ -170,8 +176,24 @@ describe("argument builders", () => {
       ...input,
       "-c:v",
       "apng",
+      "-pix_fmt",
+      "rgb24",
       "-plays",
       "0",
+      "-f",
+      "apng",
+      "o.apng",
+    ]);
+    expect(videoArgs("apng", 64, 36, 30, 0.8, true, "o.apng")).toEqual([
+      ...input,
+      "-c:v",
+      "apng",
+      "-pix_fmt",
+      "rgba",
+      "-plays",
+      "0",
+      "-f",
+      "apng",
       "o.apng",
     ]);
     expect(videoArgs("apng", 63, 35, 30, 0.8, false, "o.apng")).toContain(
@@ -196,8 +218,14 @@ describe("argument builders", () => {
     ];
     expect(stillArgs("jpeg", 64, 36, 0.8, "o.jpg")).toEqual([
       ...one,
+      "-c:v",
+      "mjpeg",
       "-q:v",
       "8",
+      "-f",
+      "image2",
+      "-update",
+      "1",
       "o.jpg",
     ]);
     expect(stillArgs("webp", 64, 36, 0.8, "o.webp")).toEqual([
@@ -206,18 +234,24 @@ describe("argument builders", () => {
       "libwebp",
       "-quality",
       "80",
+      "-f",
+      "webp",
       "o.webp",
     ]);
     expect(stillArgs("avif", 64, 36, 0.8, "o.avif")).toEqual([
       ...one,
       "-c:v",
       "libaom-av1",
+      "-pix_fmt",
+      "yuv420p",
       "-still-picture",
       "1",
       "-crf",
       "26",
       "-cpu-used",
       "6",
+      "-f",
+      "avif",
       "o.avif",
     ]);
     expect(stillArgs("jpeg", 63, 35, 1, "o.jpg")).toContain("63x35");
@@ -277,6 +311,23 @@ describe("argument builders", () => {
         /quality must be a number in 0\.\.1/,
       );
     }
+  });
+  it("names the container whatever the extension says, and keeps a path pattern out of jpeg's way", () => {
+    const wrong = (a: string[]): string[] => a.slice(-3, -1);
+    expect(wrong(stillArgs("jpeg", 8, 8, 0.8, "x.png"))).toEqual([
+      "-update",
+      "1",
+    ]);
+    expect(stillArgs("jpeg", 8, 8, 0.8, "frame%d.jpg")).toContain("-update");
+    expect(videoArgs("mp4", 8, 8, 30, 0.8, false, "x.webm")).toContain("mp4");
+    expect(videoArgs("apng", 8, 8, 30, 0.8, false, "x")).toContain("apng");
+  });
+  it("rejects alpha for mp4, naming the parameter, but not for webm or apng", () => {
+    expect(() => videoArgs("mp4", 64, 36, 30, 0.8, true, "o.mp4")).toThrow(
+      /alpha is not supported by mp4/,
+    );
+    expect(() => videoArgs("webm", 64, 36, 30, 0.8, true, "o")).not.toThrow();
+    expect(() => videoArgs("apng", 64, 36, 30, 0.8, true, "o")).not.toThrow();
   });
   it("rejects a non-boolean alpha and an unknown format", () => {
     expect(() => videoArgs("webm", 64, 36, 30, 0.8, 1 as never, "o")).toThrow(

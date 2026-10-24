@@ -36,8 +36,8 @@ jobs:
 
       - run: npm ci
 
-      # The Node export helpers pipe frames into the ffmpeg binary; the unit
-      # suite runs it for real, so the runner needs one on PATH.
+      # The Node export helpers pipe frames into the ffmpeg binary. Tests that
+      # encode for real need one on PATH; the mocked pipe tests do not.
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 

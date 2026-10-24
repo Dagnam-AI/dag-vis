@@ -130,7 +130,12 @@ function rawInput(width: number, height: number, fps: number): string[] {
   ];
 }
 
-/** Arguments for one RGBA frame on stdin → one still image at `out`. */
+/**
+ * Arguments for one RGBA frame on stdin → one still image at `out`. The codec
+ * and container are named explicitly, so the file extension never decides
+ * them. avif needs an ffmpeg with the avif muxer (6.0 or later). Alpha is kept
+ * by webp only; jpeg and avif drop it.
+ */
 export function stillArgs(
   format: StillFormat,
   width: number,
@@ -144,7 +149,18 @@ export function stillArgs(
   const base = [...rawInput(width, height, 1), "-frames:v", "1"];
   switch (format) {
     case "jpeg":
-      return [...base, "-q:v", String(Math.round(2 + 29 * (1 - q))), path];
+      return [
+        ...base,
+        "-c:v",
+        "mjpeg",
+        "-q:v",
+        String(Math.round(2 + 29 * (1 - q))),
+        "-f",
+        "image2",
+        "-update",
+        "1",
+        path,
+      ];
     case "webp":
       return [
         ...base,
@@ -152,6 +168,8 @@ export function stillArgs(
         "libwebp",
         "-quality",
         String(Math.round(100 * q)),
+        "-f",
+        "webp",
         path,
       ];
     case "avif":
@@ -159,12 +177,16 @@ export function stillArgs(
         ...base,
         "-c:v",
         "libaom-av1",
+        "-pix_fmt",
+        "yuv420p",
         "-still-picture",
         "1",
         "-crf",
         String(crfFor("avif", q)),
         "-cpu-used",
         "6",
+        "-f",
+        "avif",
         path,
       ];
     default:
@@ -174,7 +196,12 @@ export function stillArgs(
   }
 }
 
-/** Arguments for RGBA frames on stdin → a video (or APNG) at `out`. mp4 and webm need even sizes. */
+/**
+ * Arguments for RGBA frames on stdin → a video (or APNG) at `out`; the
+ * container is named explicitly, so the file extension never decides it. mp4
+ * and webm need even sizes. `alpha` keeps transparency in webm and apng
+ * (apng without it writes opaque rgb24); mp4 cannot and throws.
+ */
 export function videoArgs(
   format: VideoFormat,
   width: number,
@@ -188,6 +215,10 @@ export function videoArgs(
   bounded("fps", positive("fps", fps), 0, MAX_FPS);
   const q = checkQuality(quality);
   const withAlpha = parseFlag("alpha", alpha);
+  if (withAlpha && format === "mp4")
+    throw new VisError(
+      "alpha is not supported by mp4 (H.264 yuv420p holds no transparency); use webm or apng",
+    );
   const path = checkOut(out);
   const base = rawInput(width, height, fps);
   switch (format) {
@@ -204,6 +235,8 @@ export function videoArgs(
         "medium",
         "-movflags",
         "+faststart",
+        "-f",
+        "mp4",
         path,
       ];
     case "webm":
@@ -218,10 +251,23 @@ export function videoArgs(
         "-b:v",
         "0",
         ...(withAlpha ? ["-auto-alt-ref", "0"] : []),
+        "-f",
+        "webm",
         path,
       ];
     case "apng":
-      return [...base, "-c:v", "apng", "-plays", "0", path];
+      return [
+        ...base,
+        "-c:v",
+        "apng",
+        "-pix_fmt",
+        withAlpha ? "rgba" : "rgb24",
+        "-plays",
+        "0",
+        "-f",
+        "apng",
+        path,
+      ];
     default:
       throw new VisError(
         `video format must be mp4|webm|apng, got ${describeValue(format)}`,
