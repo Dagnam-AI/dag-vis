@@ -3,13 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createField } from "../../src/animate/field.js";
 import { VisError } from "../../src/core/index.js";
-import type { FieldSpec } from "../../src/field/index.js";
+import type { FieldPresetName, FieldSpec } from "../../src/field/index.js";
 import { fieldPresets } from "../../src/field/presets.js";
 import { timeCoords } from "../../src/field/time.js";
 import { installFakeDom, type FakeDom } from "./fake-dom.js";
 import { FakeGl, installFakeGl } from "./fake-gl.js";
 
-const preset = (name: string): FieldSpec => fieldPresets[name]!;
+const preset = (name: FieldPresetName): FieldSpec => fieldPresets[name];
 const uniforms = (calls: string[]) =>
   calls.filter((c) => c.startsWith("uniform"));
 const names = (calls: string[]) => uniforms(calls).map((c) => c.split(" ")[1]!);

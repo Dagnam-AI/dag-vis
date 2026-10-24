@@ -7,6 +7,7 @@ import { VisError } from "../../src/core/index.js";
 import {
   fieldPresets,
   renderField,
+  type FieldPresetName,
   type FieldSpec,
 } from "../../src/field/index.js";
 import { renderSheet, type SheetOptions } from "../../src/node/sheet.js";
@@ -14,11 +15,11 @@ import { renderSheet, type SheetOptions } from "../../src/node/sheet.js";
 const GOLDEN = fileURLToPath(
   new URL("../goldens/field-sheet.sha256", import.meta.url),
 );
-const NAMES = Object.keys(fieldPresets);
+const NAMES = Object.keys(fieldPresets) as FieldPresetName[];
 const sha256 = (data: Uint8ClampedArray): string =>
   createHash("sha256").update(data).digest("hex");
 /** A real preset by name (every name here comes from `fieldPresets`). */
-const preset = (name: string): FieldSpec => fieldPresets[name]!;
+const preset = (name: FieldPresetName): FieldSpec => fieldPresets[name];
 /** `renderSheet` with options a JS caller could pass but the types refuse. */
 const call = (o: unknown): ReturnType<typeof renderSheet> =>
   renderSheet(o as SheetOptions);

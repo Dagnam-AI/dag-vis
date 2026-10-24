@@ -4,6 +4,7 @@ import { VisError } from "../core/errors.js";
 import { describeValue } from "../core/validate.js";
 import { SIZES, sizeOf } from "../export/limits.js";
 import { fieldPresets } from "../field/index.js";
+import type { FieldPresetName } from "../field/index.js";
 import { defined, oneLine, parseNumber } from "./cli-args.js";
 import type { Parsed } from "./cli-args.js";
 import { numeric, readSpec, required, writeOut } from "./cli-support.js";
@@ -28,7 +29,8 @@ const USAGE_EXPORT =
  * with JSON.parse only). The export itself validates the contents.
  */
 export async function loadSpec(target: string): Promise<unknown> {
-  if (Object.hasOwn(fieldPresets, target)) return fieldPresets[target];
+  if (Object.hasOwn(fieldPresets, target))
+    return fieldPresets[target as FieldPresetName]; // own key, checked above
   if (!/\.json$/i.test(target))
     throw new VisError(
       `unknown preset ${describeValue(target)} (run \`dag-vis presets\`) and not a .json file`,

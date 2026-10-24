@@ -39,7 +39,7 @@ const hasEncoder = (name: string): boolean =>
 const dir = await mkdtemp(join(tmpdir(), "dag-vis-ffmpeg-"));
 afterAll(() => rm(dir, { recursive: true, force: true }));
 
-const cobalt = fieldPresets.cobalt!;
+const cobalt = fieldPresets.cobalt;
 /** Ribbon strokes at half opacity in pure red: every drawn pixel is straight (255, 0, 0) at some alpha <= 128. */
 const red = {
   kind: "ribbon",

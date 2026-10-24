@@ -27,6 +27,8 @@ export const FLOW_PRESET_NAMES = Object.freeze([
   "brand",
 ] as const);
 export type FlowPresetName = (typeof FLOW_PRESET_NAMES)[number];
+/** Every preset name: the flow presets, `fluid-dawn` and `fluted-ember`; the keys of `fieldPresets`. */
+export type FieldPresetName = FlowPresetName | "fluid-dawn" | "fluted-ember";
 
 const flow = (p: Omit<FlowFieldSpec, "kind">): FlowFieldSpec => ({
   kind: "flow",
@@ -288,11 +290,9 @@ export const flowPresets: Readonly<Record<FlowPresetName, FlowFieldSpec>> =
  * `fluid-dawn` and `fluted-ember`. Prototype-free like `flowPresets`: test a name with
  * `name in fieldPresets` or `Object.hasOwn(fieldPresets, name)`.
  */
-export const fieldPresets: Readonly<Record<string, FieldSpec>> = frozenRecord<
-  string,
-  FieldSpec
->({
-  ...flowPresets,
-  "fluid-dawn": FLUID_DAWN,
-  "fluted-ember": FLUTED_EMBER,
-});
+export const fieldPresets: Readonly<Record<FieldPresetName, FieldSpec>> =
+  frozenRecord<FieldPresetName, FieldSpec>({
+    ...flowPresets,
+    "fluid-dawn": FLUID_DAWN,
+    "fluted-ember": FLUTED_EMBER,
+  });

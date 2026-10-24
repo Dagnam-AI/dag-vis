@@ -6,11 +6,13 @@ import { GLSL_FLOW } from "../../../src/field/glsl/flow.js";
 import { planGpu } from "../../../src/field/glsl/program.js";
 import { paletteLut } from "../../../src/field/lut.js";
 import { fieldPresets } from "../../../src/field/presets.js";
+import type { FieldPresetName } from "../../../src/field/presets.js";
 import { resolveField } from "../../../src/field/spec.js";
 import { timeCoords } from "../../../src/field/time.js";
 import type { ResolvedFluid, ResolvedFluted } from "../../../src/field/spec.js";
 
-const plan = (name: string) => planGpu(resolveField(fieldPresets[name]));
+const plan = (name: FieldPresetName) =>
+  planGpu(resolveField(fieldPresets[name]));
 const nums = (v: unknown): number[] => Array.from(v as ArrayLike<number>);
 
 describe("planGpu: flow", () => {

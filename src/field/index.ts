@@ -26,7 +26,7 @@ export {
 export type { FieldFrame, RenderFieldOptions } from "./render.js";
 export type { Sampler } from "./cpu/types.js";
 export { FLOW_PRESET_NAMES, fieldPresets, flowPresets } from "./presets.js";
-export type { FlowPresetName } from "./presets.js";
+export type { FieldPresetName, FlowPresetName } from "./presets.js";
 export { randomFlow } from "./random.js";
 export type { FlowMood, RandomFlowOptions } from "./random.js";
 // Internal GPU assembly for the live effect: not a root name, its output is not a stable contract.

@@ -1,5 +1,5 @@
 import { createField } from "../src/animate/index.js";
-import { fieldPresets } from "../src/index.js";
+import { fieldPresets, type FieldPresetName } from "../src/index.js";
 
 // Renders one preset on the GPU and reads back RGB at the given pixels (top-left origin, as the CPU frame
 // is indexed), then the drawing-buffer size (gl.drawingBufferWidth/Height, the size the shader and
@@ -7,9 +7,9 @@ import { fieldPresets } from "../src/index.js";
 window.__parity = (name, t, loop, points) => {
   if (!Object.hasOwn(fieldPresets, name))
     throw new Error(`unknown preset ${name}`);
-  const spec = fieldPresets[name];
+  const spec = fieldPresets[name as FieldPresetName];
   const stage = document.getElementById("stage");
-  if (!spec || !stage) throw new Error("parity page is not ready");
+  if (!stage) throw new Error("parity page is not ready");
   const canvas = document.createElement("canvas");
   stage.replaceChildren(canvas);
   const handle = createField(

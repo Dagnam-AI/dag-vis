@@ -73,11 +73,9 @@ test.describe("field presets: CPU and GPU agree (64 points per preset, within 2/
 // host uploads) and must land on the frame the CPU draws: one preset per kind, at two whole
 // loops plus T. The shader itself never sees t, only the CPU-computed coordinates.
 test.describe("field presets: CPU and GPU agree after the loop wraps", () => {
-  for (const name of ["violet-dusk", "fluid-dawn", "fluted-ember"]) {
+  for (const name of ["violet-dusk", "fluid-dawn", "fluted-ember"] as const) {
     test(`${name} at t beyond the loop`, async ({ page }) => {
-      const spec = fieldPresets[name];
-      if (!spec) throw new Error(`unknown preset ${name}`);
-      await expectParity(page, name, spec, T + 2 * LOOP);
+      await expectParity(page, name, fieldPresets[name], T + 2 * LOOP);
     });
   }
 });

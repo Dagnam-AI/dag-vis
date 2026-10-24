@@ -107,6 +107,7 @@ export {
 } from "./field/index.js";
 export type {
   FieldHighlight,
+  FieldPresetName,
   FieldSpec,
   FlowFieldSpec,
   FlowMood,

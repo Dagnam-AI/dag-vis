@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { parseColor } from "../../src/core/index.js";
 import { rgbToOklab } from "../../src/field/oklab.js";
-import type { FlowPresetName } from "../../src/field/presets.js";
+import type { FieldPresetName } from "../../src/field/presets.js";
 import {
   FLOW_PRESET_NAMES,
   fieldPresets,
@@ -31,7 +31,7 @@ const SPEC_ORDER = [
   "crimson",
   "pine",
   "brand",
-];
+] as const;
 
 /** Palettes whose sampled colours do not rise strictly in OKLab lightness: the order follows the reference tile. */
 const NOT_MONOTONE = [
@@ -70,10 +70,10 @@ describe("presets", () => {
       "fluid-dawn",
       "fluted-ember",
     ]);
-    expect(fieldPresets["fluid-dawn"]?.kind).toBe("fluid");
-    expect(fieldPresets["fluted-ember"]?.kind).toBe("fluted");
+    expect(fieldPresets["fluid-dawn"].kind).toBe("fluid");
+    expect(fieldPresets["fluted-ember"].kind).toBe("fluted");
     for (const name of SPEC_ORDER)
-      expect(fieldPresets[name]).toBe(flowPresets[name as FlowPresetName]);
+      expect(fieldPresets[name]).toBe(flowPresets[name]);
   });
 
   it("brand uses the Dagnam red on near-black", () => {
@@ -94,12 +94,12 @@ describe("presets", () => {
 
   it("runs each flow palette from dark to light, except the ones that follow the tile", () => {
     const deviating = SPEC_ORDER.filter((name) => {
-      const ls = flowPresets[name as FlowPresetName].palette.map(lightness);
+      const ls = flowPresets[name].palette.map(lightness);
       return ls.some((l, i) => i > 0 && l < ls[i - 1]!);
     });
     expect(deviating).toEqual(NOT_MONOTONE);
     for (const name of SPEC_ORDER) {
-      const ls = flowPresets[name as FlowPresetName].palette.map(lightness);
+      const ls = flowPresets[name].palette.map(lightness);
       // Whatever the order, the last colour is never darker than the first.
       if (name !== "rainbow-band")
         expect(ls.at(-1), name).toBeGreaterThan(ls[0]!);
@@ -180,7 +180,7 @@ describe("presets", () => {
   it("pins every palette and a few pixels of every preset (within one level per channel)", () => {
     expect(Object.keys(GOLDEN)).toEqual(Object.keys(fieldPresets));
     for (const [name, golden] of Object.entries(GOLDEN)) {
-      const spec = fieldPresets[name] as never;
+      const spec = fieldPresets[name as FieldPresetName] as never;
       expect(JSON.stringify(spec).match(HEX) ?? [], name).toEqual(golden.hexes);
       const f = renderField(spec, { width: 16, height: 9 });
       for (const [x, y, r, g, b] of golden.pixels) {

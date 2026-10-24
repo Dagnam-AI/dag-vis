@@ -29,11 +29,40 @@ describe("@dagnam/vis root barrel", () => {
     expect(frame.data).toHaveLength(16);
   });
 
+  it("types the preset names: FieldPresetName is exactly the keys of fieldPresets", () => {
+    // A name missing from, or extra in, this record fails the type check, so the
+    // union cannot drift from the object; the runtime check pins the same fact.
+    const names: Record<vis.FieldPresetName, true> = {
+      "violet-dusk": true,
+      lunar: true,
+      lagoon: true,
+      bronze: true,
+      "sunset-ring": true,
+      "citrus-mist": true,
+      orchid: true,
+      "lilac-wave": true,
+      "forest-glow": true,
+      rose: true,
+      emerald: true,
+      glacier: true,
+      "rainbow-band": true,
+      cobalt: true,
+      crimson: true,
+      pine: true,
+      brand: true,
+      "fluid-dawn": true,
+      "fluted-ember": true,
+    };
+    expect(Object.keys(names)).toEqual(Object.keys(vis.fieldPresets));
+    // Typed lookup: no undefined to guard, and a typo is a compile error.
+    expect(vis.fieldPresets["fluid-dawn"].kind).toBe("fluid");
+  });
+
   it("exposes the presets and randomFlow from the root, and they work together", () => {
     const name: vis.FlowPresetName = "brand";
     expect(vis.FLOW_PRESET_NAMES).toContain(name);
     expect(vis.flowPresets[name].kind).toBe("flow");
-    expect(vis.fieldPresets["fluted-ember"]?.kind).toBe("fluted");
+    expect(vis.fieldPresets["fluted-ember"].kind).toBe("fluted");
     const frame = vis.renderField(vis.randomFlow({ seed: 3, mood: "vivid" }), {
       width: 2,
       height: 2,
