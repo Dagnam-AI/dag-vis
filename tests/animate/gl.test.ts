@@ -45,7 +45,7 @@ describe("getGl / createProgram", () => {
     expect(gl).toBe(first(fake));
   });
 
-  it("reuses the canvas context for the same alpha mode, and refuses the other one (M1)", () => {
+  it("reuses the canvas context for the same alpha mode, and refuses the other one", () => {
     fake = installFakeGl();
     const canvas = document.createElement("canvas");
     const gl = getGl(canvas, true);
