@@ -11,6 +11,10 @@ const spec = (seed: number): FieldSpec => ({
 });
 
 // The stage has a size so the effect draws at a real resolution; the wrapper fills it.
+// The runtime skips a frame that comes sooner than 1000 / fps ms after the last draw; a skipped frame would leave the
+// drawing buffer cleared for sample(). At 1000 the gate (now - last >= 0) never skips, whatever the display rate.
+const FPS = 1000;
+
 const FILL = { width: "100%", height: "100%" } as const;
 
 function Demo() {
@@ -39,7 +43,7 @@ function Demo() {
           <VisBackground
             effect="field"
             style={FILL}
-            options={{ spec: spec(seed) }}
+            options={{ spec: spec(seed), fps: FPS }}
           />
         )}
       </div>
@@ -64,7 +68,7 @@ window.__visBg = {
           <VisBackground
             effect="field"
             style={FILL}
-            options={{ spec: spec(i) }}
+            options={{ spec: spec(i), fps: FPS }}
           />,
         );
       });

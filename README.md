@@ -168,9 +168,11 @@ h.destroy(); // releases the effect's GPU objects and observers
 - **`destroy()`** deletes the effect's GPU objects and removes its listeners but does not call `WEBGL_lose_context`:
   the canvas keeps its context, so recreating an effect on the same canvas works as long as it needs the same alpha
   mode (`createDither` and `createPixelBlast` are premultiplied, `createTerminal` is not; the other mode throws a
-  `VisError`, use a fresh canvas; a 2D effect cannot share a canvas with a WebGL one). To release the context itself,
-  remove the canvas and drop every reference to it, including `handle.canvas`; give each mount its own canvas
-  (`VisBackground` does).
+  `VisError`, use a fresh canvas; a 2D effect cannot share a canvas with a WebGL one). When you are done with a canvas,
+  lose its context yourself after `destroy()`
+  (`canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext()`): a removed canvas otherwise
+  keeps its context until garbage collection, and browsers cap live contexts (16 in Chrome, which then force-loses
+  the oldest). `VisBackground` gives each mount its own canvas and does this on cleanup.
 - **`fps`** is a cap on the display rate: `fps: 60` on a 120 Hz display draws every second frame (60 fps). Raise it to
   follow such a display.
 
@@ -272,8 +274,9 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
 ```
 
 - **One canvas per mount.** Each effect instance creates its own `<canvas>` (`aria-hidden`, `pointer-events: none`)
-  in an effect and removes it on cleanup, so StrictMode and switching `effect` are safe. The server renders an empty
-  wrapper and every DOM access happens in effects.
+  in an effect, and on cleanup removes it and loses its WebGL context, so StrictMode and switching `effect` are
+  safe and mounting and unmounting many backgrounds stays under the browser's cap on live contexts. The server
+  renders an empty wrapper and every DOM access happens in effects.
 - **Options.** A changed value is applied with `update()` on the running effect (`seed` re-phases, `colors`
   recolours); equal re-renders do nothing. Adding or removing an option key (turning `loop` on or off, dropping
   `colors`) recreates the effect, because `update()` cannot clear a value.

@@ -134,6 +134,27 @@ describe("<VisBackground>", () => {
     expect(fake.gls.map(lostCalls)).toEqual([1, 1]);
   });
 
+  it("loses a GL canvas's context when the effect switches to a Canvas2D one, and makes none for the new canvas", () => {
+    const { rerender, container, unmount } = render(
+      <VisBackground effect="dither" />,
+    );
+    const first = container.querySelector("canvas");
+    rerender(<VisBackground effect="glitch" />);
+    frame();
+    const canvases = container.querySelectorAll("canvas");
+    expect(canvases).toHaveLength(1);
+    expect(canvases[0]).not.toBe(first);
+    expect(fake.gls).toHaveLength(1);
+    expect(fake.gls[0]?.canvas).toBe(first);
+    expect(fake.gls[0]?.isContextLost()).toBe(true);
+    expect(lostCalls(fake.gls[0]!)).toBe(1);
+    expect(fake.ctx2ds).toHaveLength(1);
+    expect(fake.ctx2ds[0]?.canvas).toBe(canvases[0]);
+    expect(dom.pending()).toBe(1);
+    unmount();
+    expect(fake.gls).toHaveLength(1);
+  });
+
   it("loses the context exactly once when a GL effect unmounts, after destroying the effect", () => {
     const { unmount } = render(<VisBackground effect="dither" />);
     frame();

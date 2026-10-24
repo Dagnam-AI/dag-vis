@@ -66,13 +66,18 @@ const FACTORIES: Record<Exclude<VisEffect, "field">, Factory> = {
 interface Live {
   handle: EffectHandle;
   canvas: HTMLCanvasElement;
+  /** The effect the canvas was made for: its release must not depend on which render's cleanup runs. */
+  effect: VisEffect;
   /** The options key last applied to the handle. */
   key: string;
 }
 
 const WRAPPER: CSSProperties = { overflow: "hidden" };
 
-/** The effects that draw with Canvas2D: their canvas never holds a WebGL context, and asking would make one. */
+/**
+ * The effects that draw with Canvas2D. They never make a WebGL context, so there is nothing to lose; asking a
+ * canvas whose 2d context was never made (a failed start) would create one just to lose it.
+ */
 const CANVAS_2D: ReadonlySet<VisEffect> = new Set(["glitch", "ribbon"]);
 
 /**
@@ -185,7 +190,7 @@ export function VisBackground({
       return;
     }
     failedRef.current = null;
-    liveRef.current = { handle, canvas, key: optionsKey };
+    liveRef.current = { handle, canvas, effect, key: optionsKey };
   };
   const unmount = (): void => {
     const live = liveRef.current;
@@ -193,7 +198,7 @@ export function VisBackground({
     if (!live) return;
     live.handle.destroy();
     live.canvas.remove();
-    releaseContext(live.canvas, effect);
+    releaseContext(live.canvas, live.effect);
   };
 
   // The effects run in this order within one commit, so they see the latest callback.

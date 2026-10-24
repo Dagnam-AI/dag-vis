@@ -14,13 +14,13 @@ async function open(page: Page): Promise<void> {
 /** Marks the canvas now in #stage so the page can still ask about it after it is replaced or removed. */
 const holdStageCanvas = (page: Page): Promise<void> =>
   page.evaluate(() => {
-    (window as unknown as { __held: Element | null }).__held =
-      document.querySelector("#stage canvas");
+    window.__held = document.querySelector("#stage canvas");
   });
 
 const heldContextLost = (page: Page): Promise<boolean> =>
   page.evaluate(() => {
-    const held = (window as unknown as { __held: HTMLCanvasElement }).__held;
+    const held = window.__held;
+    if (!held) throw new Error("no canvas was held");
     // getContext returns the canvas's existing context; none is ever created here.
     const gl = held.getContext("webgl2");
     return gl === null ? false : gl.isContextLost();
@@ -48,16 +48,10 @@ test("a changed spec replaces the canvas: the new one draws and the old one's co
   await holdStageCanvas(page);
   await page.click("#flip");
   await page.waitForFunction(
-    () =>
-      document.querySelector("#stage canvas") !==
-      (window as unknown as { __held: Element }).__held,
+    () => document.querySelector("#stage canvas") !== window.__held,
   );
   await expect(page.locator("#stage canvas")).toHaveCount(1);
-  expect(
-    await page.evaluate(
-      () => (window as unknown as { __held: Element }).__held.isConnected,
-    ),
-  ).toBe(false);
+  expect(await page.evaluate(() => window.__held?.isConnected)).toBe(false);
   expect(await heldContextLost(page)).toBe(true);
   const { lost, distinct } = await drawn(page, "#stage canvas");
   expect(lost).toBe(false);
@@ -99,4 +93,8 @@ test("mounting and unmounting 24 times (past Chrome's 16-context cap) never warn
   );
   expect(state.slice(0, -1).every((s) => !s.connected && s.lost)).toBe(true);
   expect(state.at(-1)).toEqual({ connected: true, lost: false });
+  // Chrome force-loses the OLDEST live context first: without the fix that is the page's own background.
+  const stage = await drawn(page, "#stage canvas");
+  expect(stage.lost).toBe(false);
+  expect(stage.distinct).toBeGreaterThan(8);
 });
