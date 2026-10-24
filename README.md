@@ -237,8 +237,8 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
 
 <div className="relative h-64">
   <VisBackground
-    effect="dither" // "dither" | "pixel" (createPixelBlast) | "terminal" | "glitch" | "ribbon"
-    options={{ waveSpeed: 0.15, colors: ["#e64040"] }} // that effect's options, typed per effect
+    effect="dither" // "dither" | "pixel" (createPixelBlast) | "terminal" | "glitch" | "ribbon" | "field"
+    options={{ waveSpeed: 0.15, colors: ["#e64040"] }} // that effect's options, typed per effect (a field needs `spec`)
     className="absolute inset-0" // layout is yours: the wrapper only sets overflow: hidden
     onError={(e) => report(e)} // optional: no WebGL2, invalid options
   />
@@ -262,6 +262,11 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
 - **Options.** A changed value is applied with `update()` on the running effect (`seed` re-phases, `colors`
   recolours); equal re-renders do nothing. Adding or removing an option key (turning `loop` on or off, dropping
   `colors`) recreates the effect, because `update()` cannot clear a value.
+- **`effect="field"`** takes `options.spec`, a `FieldSpec` (required; for example `fieldPresets["fluid-dawn"]`), and
+  the common options except `seed` and `colors`, which belong to the spec. A field's spec is fixed for the life of a
+  handle, so a spec that changes by value recreates the effect (the canvas is replaced, and one frame of flash is
+  possible); an equal spec in a fresh object does nothing, and the other options still go through `update()`. An
+  invalid new spec is contained like any creation failure.
 - **Failures stay local.** Invalid options (or a missing WebGL2) when the effect is created leave no canvas, call
   `onError` once (`console.error` without it) and keep the rest of the page rendering; changing the options retries.
   An invalid update keeps the canvas and the last valid options and calls `onError` once. An `onError` that itself
@@ -346,7 +351,7 @@ Options and gradient specs are validated at the boundary, including ones that co
 
 ## Layering
 
-`core ← brand ← gradient, pattern ← scene ← node`, with `field` and `export` beside that chain: each imports `core` only, and `animate` and `node` import them (the root imports `field` but never `export`). Enforced by eslint `no-restricted-imports` per layer and `tests/structure.test.ts`; `node:*` and `@resvg/resvg-js` are imported only under `src/node/`. No file is over 500 lines and every source file has a mirrored test.
+`core ← brand ← gradient, pattern ← scene ← node`, with `field` and `export` beside that chain: each imports `core` only, and `animate` and `node` import them (the root imports `field` but never `export`; `react` imports `field` for the `FieldSpec` type only). Enforced by eslint `no-restricted-imports` per layer and `tests/structure.test.ts`; `node:*` and `@resvg/resvg-js` are imported only under `src/node/`. No file is over 500 lines and every source file has a mirrored test.
 
 ## Develop
 

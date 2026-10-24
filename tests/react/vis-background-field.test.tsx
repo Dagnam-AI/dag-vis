@@ -1,0 +1,162 @@
+// @vitest-environment jsdom
+import { cleanup, render } from "@testing-library/react";
+import { type ReactElement } from "react";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
+
+import { createField, type EffectHandle } from "../../src/animate/index.js";
+import { VisError } from "../../src/core/index.js";
+import { fieldPresets, type FieldSpec } from "../../src/field/index.js";
+import { VisBackground } from "../../src/react/index.js";
+
+// jsdom has no WebGL2 and the fake GL does not run the field shader: createField is replaced
+// (the other effects are tested against the fake GL in vis-background.test.tsx).
+vi.mock("../../src/animate/field.js", () => ({ createField: vi.fn() }));
+
+describe('<VisBackground effect="field">', () => {
+  const dawn = fieldPresets["fluid-dawn"];
+  const spec = (seed: number): FieldSpec => ({ ...dawn, seed });
+  const mocked = vi.mocked(createField);
+  interface Made {
+    handle: EffectHandle;
+    canvas: HTMLCanvasElement;
+    start: ReturnType<typeof vi.fn>;
+    update: ReturnType<typeof vi.fn>;
+    destroy: ReturnType<typeof vi.fn>;
+  }
+  let made: Made[];
+  const create = (canvas: HTMLCanvasElement): EffectHandle => {
+    const start = vi.fn();
+    const update = vi.fn();
+    const destroy = vi.fn();
+    const handle = {
+      canvas,
+      running: false,
+      start,
+      stop: vi.fn(),
+      update,
+      renderAt: vi.fn(),
+      destroy,
+    } as EffectHandle;
+    made.push({ handle, canvas, start, update, destroy });
+    return handle;
+  };
+  let error: MockInstance<typeof console.error>;
+  beforeEach(() => {
+    made = [];
+    error = vi.spyOn(console, "error").mockImplementation(() => {
+      /* asserted per test */
+    });
+    mocked.mockReset();
+    mocked.mockImplementation(create);
+  });
+  afterEach(() => {
+    cleanup();
+    error.mockRestore();
+  });
+
+  const view = (
+    options: { spec: FieldSpec; speed?: number },
+    onError?: (e: unknown) => void,
+  ): ReactElement => (
+    <VisBackground
+      effect="field"
+      options={options}
+      {...(onError ? { onError } : {})}
+    />
+  );
+
+  it("creates the field with the canvas, the spec and the options, starts it once and destroys it on unmount", () => {
+    const options = { spec: spec(1), speed: 0.5 };
+    const { container, unmount } = render(view(options));
+    const canvases = container.querySelectorAll("canvas");
+    expect(canvases).toHaveLength(1);
+    expect(mocked).toHaveBeenCalledTimes(1);
+    expect(mocked).toHaveBeenCalledWith(canvases[0], options.spec, options);
+    expect(made[0]?.start).toHaveBeenCalledTimes(1);
+    expect(made[0]?.destroy).not.toHaveBeenCalled();
+    unmount();
+    expect(made[0]?.destroy).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("canvas")).toBeNull();
+  });
+
+  it("applies a changed non-spec option with update() and does not recreate", () => {
+    const s = spec(1);
+    const { rerender, container } = render(view({ spec: s, speed: 0.5 }));
+    const canvas = container.querySelector("canvas");
+    rerender(view({ spec: s, speed: 0.9 }));
+    expect(mocked).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("canvas")).toBe(canvas);
+    expect(made[0]?.update).toHaveBeenCalledTimes(1);
+    expect(made[0]?.update).toHaveBeenCalledWith({ spec: s, speed: 0.9 });
+    expect(made[0]?.destroy).not.toHaveBeenCalled();
+  });
+
+  it("does nothing for an equal spec in a fresh object", () => {
+    const { rerender, container } = render(view({ spec: spec(1), speed: 0.5 }));
+    const canvas = container.querySelector("canvas");
+    for (let i = 0; i < 3; i++) rerender(view({ spec: spec(1), speed: 0.5 }));
+    expect(mocked).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("canvas")).toBe(canvas);
+    expect(made[0]?.update).not.toHaveBeenCalled();
+    expect(made[0]?.destroy).not.toHaveBeenCalled();
+  });
+
+  it("recreates the effect when the spec value changes, without calling update() with the new spec", () => {
+    const { rerender, container } = render(view({ spec: spec(1), speed: 0.5 }));
+    const first = container.querySelector("canvas");
+    rerender(view({ spec: spec(2), speed: 0.5 }));
+    expect(mocked).toHaveBeenCalledTimes(2);
+    expect(mocked.mock.calls[1]?.[1]).toEqual(spec(2));
+    expect(made[0]?.destroy).toHaveBeenCalledTimes(1);
+    expect(made[1]?.destroy).not.toHaveBeenCalled();
+    expect(first?.isConnected).toBe(false);
+    const canvases = container.querySelectorAll("canvas");
+    expect(canvases).toHaveLength(1);
+    expect(canvases[0]).toBe(made[1]?.canvas);
+    expect(made[1]?.start).toHaveBeenCalledTimes(1);
+    expect(made[0]?.update).not.toHaveBeenCalled();
+    expect(made[1]?.update).not.toHaveBeenCalled();
+    // The new handle is a live one: a later non-spec change updates it.
+    rerender(view({ spec: spec(2), speed: 0.7 }));
+    expect(made[1]?.update).toHaveBeenCalledTimes(1);
+    expect(mocked).toHaveBeenCalledTimes(2);
+  });
+
+  it("contains an invalid new spec, then mounts again for a valid one", () => {
+    const rejected = new VisError("spec.seed is not valid");
+    mocked.mockImplementation((canvas, s) => {
+      if (s.seed === 99) throw rejected;
+      return create(canvas);
+    });
+    const onError = vi.fn();
+    const { rerender, container } = render(view({ spec: spec(1) }, onError));
+    rerender(view({ spec: spec(99) }, onError));
+    expect(made[0]?.destroy).toHaveBeenCalledTimes(1);
+    expect(container.querySelectorAll("canvas")).toHaveLength(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(rejected);
+    // Same invalid spec again: no retry, no second report.
+    rerender(view({ spec: spec(99) }, onError));
+    expect(onError).toHaveBeenCalledTimes(1);
+    rerender(view({ spec: spec(3) }, onError));
+    expect(container.querySelectorAll("canvas")).toHaveLength(1);
+    expect(made).toHaveLength(2);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it("types the spec as required for the field effect", () => {
+    // @ts-expect-error `options.spec` is required for effect="field"
+    const noOptions = <VisBackground effect="field" />;
+    // @ts-expect-error a field takes no `seed` option: it belongs to the spec
+    const seeded = view({ spec: spec(1), seed: 1 });
+    expect([noOptions, seeded]).toHaveLength(2);
+  });
+});
