@@ -36,13 +36,16 @@ const flow = (p: Omit<FlowFieldSpec, "kind">): FlowFieldSpec => ({
 });
 
 /**
- * Colours sampled from the reference tiles and ordered dark to light, so the noise ramp
- * (`0.5 + 0.8 * n`) reproduces each tile. Eight palettes (lagoon, citrus-mist, orchid,
- * rose, glacier, pine, and the reworked sunset-ring and rainbow-band) are not strictly
- * dark to light by OKLab lightness: each dips at one or more stops (sunset-ring on
- * purpose, its last stop is the dark core inside the ring). Shape, warp and light values
- * are a first tuning, subject to visual review; rainbow-band, sunset-ring, lilac-wave
- * and cobalt were retuned by eye against contact-sheet renders.
+ * The colours of the other 15 presets were sampled from the reference tiles and ordered
+ * dark to light, so the noise ramp (`0.5 + 0.8 * n`) reproduces each tile. Eight palettes
+ * (lagoon, citrus-mist, orchid, rose, glacier, pine, and the reworked sunset-ring and
+ * rainbow-band) are not strictly dark to light by OKLab lightness: each dips at one or
+ * more stops (sunset-ring on purpose, its last stop is the dark core inside the ring).
+ * Shape, warp and light values are a first tuning, subject to visual review. The four
+ * reworked presets (rainbow-band, sunset-ring, lilac-wave, cobalt) were retuned by eye
+ * against contact-sheet renders and are kept dark enough for white text: at most about
+ * 10% of the central area of a frame is lighter than 3 to 1 against white (pinned by
+ * a test).
  */
 const FLOWS: Record<FlowPresetName, FlowFieldSpec> = {
   "violet-dusk": flow({
@@ -85,8 +88,9 @@ const FLOWS: Record<FlowPresetName, FlowFieldSpec> = {
   // A ring, not a blob: `bloom` is brightest at the centre, so the palette peaks (orange)
   // at the middle of the noise range and falls to dark plum at the top, which leaves a
   // dark core inside a luminous ring that fades through magenta and violet to indigo.
+  // The ring is a deep ember orange, not a bright one, so white text stays readable on it.
   "sunset-ring": flow({
-    palette: ["#0c0830", "#2a1272", "#a8307e", "#ff8030", "#3a0f48", "#1a0a3a"],
+    palette: ["#0c0830", "#2a1272", "#9a2a78", "#e8602a", "#561450", "#1a0a3a"],
     shape: "bloom",
     warp: { octaves: 2, strength: 0.35, scale: 0.5 },
     scale: 0.9,
@@ -118,8 +122,9 @@ const FLOWS: Record<FlowPresetName, FlowFieldSpec> = {
     seed: 7,
   }),
   // Broad diagonal waves: `band` repeats dark plum troughs and lilac crests across the frame.
+  // The crest stays a mid lilac (about 3.5 to 1 against white) so text over it stays readable.
   "lilac-wave": flow({
-    palette: ["#1f0a3a", "#4a1f80", "#7e48c0", "#a070d8", "#c49aec"],
+    palette: ["#1f0a3a", "#4a1f80", "#6e3cb8", "#8a5ccc", "#a272d6"],
     shape: "band",
     warp: { octaves: 2, strength: 0.5, scale: 0.4 },
     scale: 2.8,
@@ -172,7 +177,7 @@ const FLOWS: Record<FlowPresetName, FlowFieldSpec> = {
   // Red, amber, green, cyan, blue, violet at near-equal OKLab chroma, so every neighbouring
   // pair blends through a clean in-between hue (orange, teal, azure, indigo) and never grey.
   "rainbow-band": flow({
-    palette: ["#c51d28", "#c18a04", "#039039", "#068b96", "#0e4ec8", "#6f049f"],
+    palette: ["#c51d28", "#bb7400", "#039039", "#068b96", "#0e4ec8", "#6f049f"],
     shape: "band",
     warp: { octaves: 2, strength: 0.4, scale: 0.55 },
     rotation: -0.75,
@@ -181,9 +186,10 @@ const FLOWS: Record<FlowPresetName, FlowFieldSpec> = {
     seed: 13,
   }),
   // Folded silk: `aurora` stretches the noise into long folds, so the deep cobalt base
-  // carries navy creases and only a few cyan-white highlights.
+  // carries navy creases and sky-blue sheen; the lightest stop is capped so the highlights
+  // do not take text below 3 to 1.
   cobalt: flow({
-    palette: ["#020618", "#061258", "#0f2a9a", "#1f4fd6", "#5cb0ff", "#e8fbff"],
+    palette: ["#020618", "#06125a", "#0e2a9c", "#1c4cd0", "#2e6ee0", "#4c96e6"],
     shape: "aurora",
     warp: { octaves: 3, strength: 1.0, scale: 1.0 },
     rotation: 0.9,

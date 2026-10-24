@@ -9,7 +9,7 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ### Changed
 
-- Fields: reworked four flow presets; the other 15 are byte for byte unchanged. `rainbow-band` is now a broad, smooth spectral band flowing diagonally, red through amber, green, cyan and blue to violet at even OKLab chroma (no grey mid-tones). `sunset-ring` is now a luminous orange ring with a dark plum core, fading through magenta and violet to an indigo edge. `lilac-wave` keeps its lilac but gains depth: dark plum troughs and lilac crests in flowing diagonal waves. `cobalt` is now folded silk: a deep ultramarine base with navy creases and a few cyan-white highlights. Frames drawn from these four names differ from 0.1.0; the CPU/GPU parity tolerance is unchanged.
+- Fields: reworked rainbow-band, sunset-ring, lilac-wave and cobalt; the other 15 presets are byte for byte unchanged. `rainbow-band` is now a broad, smooth spectral band flowing diagonally, red through amber, green, cyan and blue to violet at even OKLab chroma (no grey mid-tones). `sunset-ring` is now a luminous ember-orange ring with a dark plum core, fading through magenta and violet to an indigo edge. `lilac-wave` keeps its lilac but gains depth: dark plum troughs and mid-lilac crests in flowing diagonal waves. `cobalt` is now folded silk: a deep ultramarine base with navy creases and a sky-blue sheen. These four are tuned for use behind text: in a test, at most about 10% of the central area of any frame in the loop is lighter than 3 to 1 against white. A dark scrim or overlay is still recommended behind body copy. Frames drawn from these four names differ from 0.1.0; the CPU/GPU parity tolerance is unchanged.
 
 ## [0.1.0] - 2026-10-24
 

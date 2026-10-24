@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 
 import { parseColor } from "../../src/core/index.js";
+import { paletteLut } from "../../src/field/lut.js";
 import { rgbToOklab } from "../../src/field/oklab.js";
 import type { FieldPresetName } from "../../src/field/presets.js";
 import {
@@ -10,7 +11,6 @@ import {
   fieldPresets,
   flowPresets,
 } from "../../src/field/presets.js";
-import { paletteLut } from "../../src/field/lut.js";
 import { makeSampler, renderField } from "../../src/field/render.js";
 import { resolveField } from "../../src/field/spec.js";
 import { timeCoords } from "../../src/field/time.js";
@@ -237,6 +237,80 @@ describe("presets", () => {
         chroma(lut[i * 3]!, lut[i * 3 + 1]!, lut[i * 3 + 2]!),
         `entry ${i}`,
       ).toBeGreaterThan(0.09);
+  });
+
+  it("rainbow-band covers the whole hue circle, not one colour in six shades", () => {
+    const lut = paletteLut(flowPresets["rainbow-band"].palette);
+    const bands = new Set<number>();
+    for (let i = 0; i < 256; i++) {
+      const [, a, b] = rgbToOklab(
+        lut[i * 3]!,
+        lut[i * 3 + 1]!,
+        lut[i * 3 + 2]!,
+      );
+      const hue = ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360;
+      bands.add(Math.floor(hue / 30));
+    }
+    // 12 bands of 30 degrees: red through violet leaves out only the magenta and pink
+    // side of the circle.
+    expect(bands.size).toBeGreaterThanOrEqual(9);
+  });
+
+  describe("white text stays readable on the reworked backgrounds", () => {
+    // Luminance above which white text is under 3 to 1 (1.05 / (Y + 0.05) = 3).
+    const LIMIT = 1.05 / 3 - 0.05;
+    const W = 128;
+    const H = 72;
+    const linear = (c: number): number => {
+      const v = c / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    };
+    /** Share of the pixels in a centred box (as fractions of the frame) that are under 3 to 1 against white. */
+    const glareShare = (
+      data: Uint8ClampedArray,
+      boxW: number,
+      boxH: number,
+    ): number => {
+      const x0 = Math.floor((W * (1 - boxW)) / 2);
+      const x1 = W - x0;
+      const y0 = Math.floor((H * (1 - boxH)) / 2);
+      const y1 = H - y0;
+      let bad = 0;
+      let n = 0;
+      for (let y = y0; y < y1; y++)
+        for (let x = x0; x < x1; x++) {
+          const i = (y * W + x) * 4;
+          const lum =
+            0.2126 * linear(data[i]!) +
+            0.7152 * linear(data[i + 1]!) +
+            0.0722 * linear(data[i + 2]!);
+          if (lum > LIMIT) bad++;
+          n++;
+        }
+      return bad / n;
+    };
+
+    it.each(REWORKED)(
+      "%s: at most 10% of the central 60% x 40% area and of a headline-sized 38% x 12% strip is under 3 to 1, in six frames of the loop",
+      (name) => {
+        for (let t = 0; t < 6; t++) {
+          const f = renderField(fieldPresets[name], {
+            width: W,
+            height: H,
+            t,
+            loop: 6,
+          });
+          expect(
+            glareShare(f.data, 0.6, 0.4),
+            `${name} t=${t} area`,
+          ).toBeLessThanOrEqual(0.1);
+          expect(
+            glareShare(f.data, 0.38, 0.12),
+            `${name} t=${t} headline`,
+          ).toBeLessThanOrEqual(0.1);
+        }
+      },
+    );
   });
 
   it("sunset-ring is a ring: brighter on the circle than at the centre or at the edge", () => {
