@@ -41,7 +41,8 @@ describe("repository structure", () => {
     const allowed = layer.includes(".")
       ? Object.keys(ALLOWED)
       : ALLOWED[layer]!;
-    for (const m of text.matchAll(/from\s+"(\.[^"]+)"/g)) {
+    // Static `from "..."`, side-effect `import "..."` and dynamic `import("...")` alike.
+    for (const m of text.matchAll(/(?:from|import)\s*\(?\s*"(\.[^"]+)"/g)) {
       const target = join(dirname(file), m[1]!);
       const targetLayer = layerOf(target);
       if (targetLayer === layer || targetLayer.includes(".")) continue;
