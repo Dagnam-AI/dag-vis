@@ -21,9 +21,10 @@ import { messageOf } from "./util.js";
  * Inter (SIL OFL 1.1, ./fonts/OFL.txt), Unbounded 400 (SIL OFL 1.1,
  * ./fonts/OFL-Unbounded.txt) and Moonhouse (NimaVisual, bundled unmodified at the
  * package owner's instruction, terms in ./fonts/moonhouse/LICENSE-NOTE.txt). The
- * last two are what `ogCard`'s social layout is set in. To drop Moonhouse, delete
- * its entry here and the ./fonts/moonhouse directory (and the social layout loses
- * its display face).
+ * last two are what `ogCard` is set in: Unbounded is the text of both layouts,
+ * Moonhouse the brand card's wordmark and the social layout's title. To drop
+ * Moonhouse, delete its entry here and the ./fonts/moonhouse directory (and both
+ * layouts lose their display face).
  */
 export const FONT_FILES: readonly string[] = [
   "Inter-Regular.ttf",

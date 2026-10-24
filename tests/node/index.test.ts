@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import * as node from "../../src/node/index.js";
 import { FAVICON_FILES, favicons } from "../../src/node/favicons.js";
+import { appIcon, APP_ICON_FILES } from "../../src/node/app-icon.js";
 import { icoFromPngs } from "../../src/node/ico.js";
+import { icnsFromPngs } from "../../src/node/icns.js";
 import { run } from "../../src/node/cli.js";
 import {
   ANIMATION_FORMATS,
@@ -26,14 +28,17 @@ describe("@dagnam/vis/node barrel", () => {
   it("exports exactly the documented runtime names", () => {
     expect(Object.keys(node).sort()).toEqual([
       "ANIMATION_FORMATS",
+      "APP_ICON_FILES",
       "FAVICON_FILES",
       "FONT_FILES",
       "STATIC_FORMATS",
+      "appIcon",
       "encodePng",
       "exportAnimation",
       "exportStatic",
       "favicons",
       "ffmpegPath",
+      "icnsFromPngs",
       "icoFromPngs",
       "renderPng",
       "renderRgba",
@@ -46,6 +51,9 @@ describe("@dagnam/vis/node barrel", () => {
     expect(node.renderPng).toBe(renderPng);
     expect(node.FONT_FILES).toBe(FONT_FILES);
     expect(node.icoFromPngs).toBe(icoFromPngs);
+    expect(node.icnsFromPngs).toBe(icnsFromPngs);
+    expect(node.appIcon).toBe(appIcon);
+    expect(node.APP_ICON_FILES).toBe(APP_ICON_FILES);
     expect(node.favicons).toBe(favicons);
     expect(node.FAVICON_FILES).toBe(FAVICON_FILES);
     expect(node.run).toBe(run);

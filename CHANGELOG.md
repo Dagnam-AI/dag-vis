@@ -7,6 +7,20 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+### Added
+
+- Brand: `BRAND.mark`, the one named colour of every icon surface (the dark theme's primary, `BRAND.accent.dark`), and `LOGO_ICON_WEIGHT` (48): `logoSvg({ weight })` adds a same-colour round-joined stroke (the fitted box grows by it, so `padding` still bounds the ink). The plain `LOGO` and the default `logoSvg()` are unchanged.
+- Brand: `appIconSvg()`, the desktop app icon master: an 824 px superellipse plate (`#0a0a0a`) on a transparent 1024 canvas (Apple's icon grid) carrying the heavy deep-red mark.
+- Node: `appIcon({ outDir, background?, color? })` and `APP_ICON_FILES` write `app-icon.svg`, `app-icon-{16,32,64,128,256,512,1024}.png` and `app-icon.icns`; `icnsFromPngs(pngs)` builds the ICNS container with no dependency (PNG chunks `icp4 icp5 ic07 ic08 ic09 ic10 ic11 ic12 ic13 ic14`, the codes macOS's `iconutil` writes for ic07 to ic14 and reads for icp4 and icp5; it writes ARGB for 16 and 32 px). CLI: `dag-vis app-icon --out DIR [--background C --color C]`.
+- Scenes: `brandBackground` option `edge` (0..1, default 1): the motif's own outline as a crisp stroke with a faint two-step glow.
+
+### Changed
+
+- Favicons: every icon (favicon.ico/svg, apple-touch, PWA 192/512/maskable) now draws the mark in `BRAND.mark` (deep red `#ca0303`) instead of the bright `BRAND.red`, at `LOGO_ICON_WEIGHT`, so the strands stay legible from 16 px. `favicons` default `color` is `BRAND.mark`.
+- Favicons: `site.webmanifest` now carries `id`, `start_url` and `scope` `"/"`, and its icon `src` values are root-absolute (`/icon-192.png`, not `icon-192.png`); serve the set from the site root.
+- Scenes: the brand card and `brandBackground` return to deep reds and clean edges. Defaults: accent `[BRAND.accent.dark]` (was the bright `#ef4444`, which washed pink), `band` 0.12 (was 0.35), `hairlines` 3 (was 4), `hairlineWidth` 1.8 (was 1.5), `glow` 0.85 (was 0.55) pooled at `glowAt` [0.98, 0.52] (was the focus) and eased to zero at its radius, hairline fade mid-stop 0.45 (was 0.3). The SVG of `brandBackground` and `ogCard` differs from 0.1.1.
+- Scenes: `ogCard` (without `cover`) is set entirely in the site's fonts: title, subtitle, eyebrow and footer in Unbounded 400, the wordmark in Moonhouse (`DAGNAM` + red `.AI`), lines wrapped by those fonts' advances and balanced so a short last line borrows words from the one above; a `•` in the footer is drawn in the brand red. Layout numbers changed (title 0.09 of the card, subtitle 0.04). Previously Inter bold/regular.
+
 ## [0.1.1] - 2026-10-24
 
 ### Changed

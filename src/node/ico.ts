@@ -15,8 +15,17 @@ const IEND_CHUNK = Buffer.from("0000000049454e44ae426082", "hex");
 const HEADER_BYTES = 6;
 const ENTRY_BYTES = 16;
 
-/** Pixel size of a PNG that passes every structural check, or a VisError naming `name`. */
-function pngSize(name: string, png: unknown): number {
+/**
+ * Pixel side of a square PNG that passes every structural check (signature,
+ * IHDR first, IEND last, at most `maxBytes`, side 1..`maxSide`), or a VisError
+ * naming `name`. Shared with the ICNS writer.
+ */
+export function pngSize(
+  name: string,
+  png: unknown,
+  maxSide = 256,
+  maxBytes = MAX_ICO_IMAGE_BYTES,
+): number {
   if (
     !Buffer.isBuffer(png) ||
     png.length < 8 + 25 + IEND_CHUNK.length ||
@@ -27,15 +36,15 @@ function pngSize(name: string, png: unknown): number {
     throw new VisError(
       `${name} must be a PNG file in a Buffer (signature, IHDR first, IEND last), got ${Buffer.isBuffer(png) ? `${png.length} bytes` : describeValue(png)}`,
     );
-  if (png.length > MAX_ICO_IMAGE_BYTES)
+  if (png.length > maxBytes)
     throw new VisError(
-      `${name} must be at most ${MAX_ICO_IMAGE_BYTES} bytes, got ${png.length}`,
+      `${name} must be at most ${maxBytes} bytes, got ${png.length}`,
     );
   const width = png.readUInt32BE(16);
   const height = png.readUInt32BE(20);
-  if (width !== height || width < 1 || width > 256)
+  if (width !== height || width < 1 || width > maxSide)
     throw new VisError(
-      `${name} must be a square PNG of 1..256 px, got ${width}x${height}`,
+      `${name} must be a square PNG of 1..${maxSide} px, got ${width}x${height}`,
     );
   return width;
 }
