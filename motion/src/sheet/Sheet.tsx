@@ -22,14 +22,17 @@ export const SHEET_GEOMETRY = {
 /** Space above the grid for the title line. */
 const HEADER = 72;
 
-const layoutOf = (p: SheetProps) =>
-  sheetLayout({
-    count: p.tiles.length,
-    cols: p.cols,
+/** An empty sheet (the Studio's defaults) is laid out as one cell, not an error. */
+const layoutOf = (p: SheetProps) => {
+  const count = Math.max(1, p.tiles.length);
+  return sheetLayout({
+    count,
+    cols: Math.min(p.cols, count),
     tileWidth: p.tileWidth,
     tileHeight: p.tileHeight,
     ...SHEET_GEOMETRY,
   });
+};
 
 /** The canvas is sized from the grid, so any number of frames fits. */
 export const sheetMetadata = (p: SheetProps) => {
@@ -63,6 +66,19 @@ export const Sheet: React.FC<SheetProps> = (p) => {
       >
         {p.title}
       </div>
+      {p.tiles.length === 0 && (
+        <div
+          style={{
+            position: "absolute",
+            left: SHEET_GEOMETRY.margin,
+            top: HEADER + SHEET_GEOMETRY.margin,
+            fontSize: 20,
+            opacity: 0.6,
+          }}
+        >
+          No frames yet.
+        </div>
+      )}
       {p.tiles.map((tile, i) => (
         <div
           key={tile.src}

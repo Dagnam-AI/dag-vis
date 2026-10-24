@@ -13,7 +13,7 @@ export interface SheetLayout {
   cells: { x: number; y: number }[];
 }
 
-/** Grid geometry for the storyboard contact sheet (6-8 frames, one caption each). */
+/** Grid geometry for the storyboard contact sheet (6-8 frames, one caption each). `cols` is not clamped to `count`: more columns than cells leave empty columns (see `sheetColumns` for a count-derived value). */
 export function sheetLayout(s: SheetSpec): SheetLayout {
   for (const [name, v, min] of [
     ["count", s.count, 1],

@@ -2,8 +2,8 @@ import { Composition } from "remotion";
 
 import { loadBrandFonts } from "./bridge/fonts.ts";
 import { sheetColumns } from "./lib/sheet.ts";
-import { Sheet, sheetMetadata, type SheetProps } from "./sheet/Sheet.tsx";
 import { framesFor } from "./lib/timing.ts";
+import { Sheet, sheetMetadata, type SheetProps } from "./sheet/Sheet.tsx";
 import { Smoke } from "./videos/smoke/Smoke.tsx";
 import { TIMING as SMOKE } from "./videos/smoke/timing.ts";
 
