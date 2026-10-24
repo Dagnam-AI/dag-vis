@@ -19,7 +19,18 @@ interface Stream {
 
 /** Parses `ffprobe -v error -show_streams -show_format -of json`. */
 export function parseProbe(json: string): Probe {
-  const { streams } = JSON.parse(json) as { streams: Stream[] };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new Error(`probe: ffprobe output is not JSON: ${json.slice(0, 200)}`);
+  }
+  const listed = (parsed as { streams?: unknown } | null)?.streams;
+  if (!Array.isArray(listed))
+    throw new Error(
+      `probe: ffprobe output has no streams list: ${json.slice(0, 200)}`,
+    );
+  const streams = listed as Stream[];
   const video = streams.find((s) => s.codec_type === "video");
   const audio = streams.find((s) => s.codec_type === "audio");
   if (!video) throw new Error("probe: no video stream");

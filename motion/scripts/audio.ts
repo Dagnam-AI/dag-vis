@@ -23,9 +23,10 @@ const { SAMPLE_RATE, renderBed } = (await import(
 
 mkdirSync(resolve(MOTION, "public/generated"), { recursive: true });
 const out = resolve(MOTION, `public/generated/${video}.wav`);
-// Work on a temporary name and publish by rename only when the bed passes, so a
-// failed run never leaves a clipped or un-normalised file at the deliverable path
-// (and never replaces an earlier good one).
+// An earlier bed is removed first, so a failed run leaves no WAV at the
+// deliverable path for a later render to mux. The new one is built under a
+// temporary name and published by rename only when the bed passes.
+rmSync(out, { force: true });
 const work = resolve(MOTION, `public/generated/${video}.work.wav`);
 try {
   let bed = renderBed();

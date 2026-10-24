@@ -50,6 +50,15 @@ describe("parseProbe", () => {
       /r_frame_rate/,
     );
   });
+  it("names ffprobe output that is not JSON or has no streams list", () => {
+    expect(() => parseProbe("moov atom not found")).toThrow(
+      /ffprobe output is not JSON: moov atom not found/,
+    );
+    expect(() => parseProbe("")).toThrow(/not JSON/);
+    expect(() => parseProbe("{}")).toThrow(/no streams list/);
+    expect(() => parseProbe("null")).toThrow(/no streams list/);
+    expect(() => parseProbe('{"streams":"x"}')).toThrow(/no streams list/);
+  });
   it("refuses what ffprobe could not determine instead of passing NaN on", () => {
     expect(() => parseProbe(probe({ r_frame_rate: "0/0" }))).toThrow(
       /r_frame_rate is not a usable fraction: 0\/0/,
