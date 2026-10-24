@@ -1,9 +1,8 @@
-import { VisError } from "../../core/index.js";
-import { describeValue } from "../../core/validate.js";
 import { paletteLut, sampleLut } from "../lut.js";
 import { fbm } from "../noise.js";
 import type { FlowShape, ResolvedFlow } from "../spec.js";
 import { grainOffset } from "./grain.js";
+import { assertPositiveSize, uvError } from "./guards.js";
 import type { Sampler } from "./types.js";
 
 /** Shape to `uShape` in `GLSL_FLOW`: the order of `FLOW_SHAPES`. */
@@ -22,19 +21,6 @@ const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
 function smoothstep(e0: number, e1: number, x: number): number {
   const t = clamp01((x - e0) / (e1 - e0));
   return t * t * (3 - 2 * t);
-}
-
-function size(name: string, v: number): void {
-  if (typeof v !== "number" || !Number.isFinite(v) || v <= 0)
-    throw new VisError(
-      `${name} must be a positive finite number, got ${describeValue(v)}`,
-    );
-}
-
-function uvError(name: string, v: number, limit: number): never {
-  throw new VisError(
-    `${name} must be a finite number within ±${limit}, got ${describeValue(v)}`,
-  );
 }
 
 /**
@@ -66,8 +52,8 @@ export function flowSampler(
   width: number,
   height: number,
 ): Sampler {
-  size("width", width);
-  size("height", height);
+  assertPositiveSize("width", width);
+  assertPositiveSize("height", height);
   const lut = paletteLut(spec.palette);
   const aspect = width / height;
   const shape = SHAPE_INDEX[spec.shape];

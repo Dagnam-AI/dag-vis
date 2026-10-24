@@ -20,6 +20,8 @@ export const FLOW_SHAPES: readonly FlowShape[] = [
   "band",
   "noise",
 ];
+/** Most points a fluid field holds: the GPU twin sizes its uniform arrays to it. */
+export const MAX_FLUID_POINTS = 8;
 export type FlutedDirection = "vertical" | "horizontal";
 const DIRECTIONS: readonly FlutedDirection[] = ["vertical", "horizontal"];
 
@@ -224,7 +226,7 @@ function resolveFlow(o: Obj): ResolvedFlow {
 }
 
 function resolveFluid(o: Obj): ResolvedFluid {
-  const points = list(o.points, "points", 1, 8).map((p, i) => {
+  const points = list(o.points, "points", 1, MAX_FLUID_POINTS).map((p, i) => {
     const name = `points[${i}]`;
     const q = obj(p, name);
     return {
