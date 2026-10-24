@@ -4,7 +4,9 @@ import { framesFor, loopFrames } from "../../src/lib/timing.ts";
 import { peak } from "../../src/lib/audio/synth.ts";
 import {
   SAMPLE_RATE,
+  SWELL_LENGTH,
   renderBed,
+  renderDrone,
 } from "../../src/videos/pipeline-proof/audio.ts";
 import { TIMING } from "../../src/videos/pipeline-proof/timing.ts";
 
@@ -29,6 +31,10 @@ describe("pipeline-proof timing", () => {
 
 describe("pipeline-proof bed", () => {
   const bed = renderBed();
+  const drone = renderDrone();
+  const lastSwellEnd = Math.max(...Object.values(TIMING.beats)) + SWELL_LENGTH;
+  const stepsOf = (b: Float32Array): number[] =>
+    Array.from(b.subarray(1), (v, i) => Math.abs(v - b[i]!));
 
   it("is exactly one loop long and not silent", () => {
     expect(bed).toHaveLength(TIMING.duration * SAMPLE_RATE);
@@ -40,19 +46,24 @@ describe("pipeline-proof bed", () => {
     expect(renderBed()).toEqual(bed);
   });
 
-  it("wraps without a step: the jump from the last sample to the first is no bigger than the steps inside the loop", () => {
-    let largest = 0;
-    for (let i = 1; i < bed.length; i++)
-      largest = Math.max(largest, Math.abs(bed[i]! - bed[i - 1]!));
-    const seam = Math.abs(bed[0]! - bed.at(-1)!);
-    expect(seam).toBeLessThanOrEqual(largest);
+  it("has swells at all (so the next tests compare against something)", () => {
+    expect(bed).not.toEqual(drone);
   });
 
-  it("ends every swell before the seam, so the noise is quiet around it", () => {
-    const tail = bed.subarray(Math.round(5.8 * SAMPLE_RATE));
-    const head = bed.subarray(0, Math.round(0.05 * SAMPLE_RATE));
-    // the only things sounding at the seam are the two sines
-    expect(peak(tail)).toBeLessThan(0.3);
-    expect(peak(head)).toBeLessThan(0.3);
+  it("is the bare drone from the last swell's end to the seam, sample for sample", () => {
+    const from = Math.round(lastSwellEnd * SAMPLE_RATE);
+    expect(from).toBeLessThan(bed.length);
+    expect(bed.subarray(from)).toEqual(drone.subarray(from));
+  });
+
+  it("is the bare drone at the first sample, so the join sees no swell either side", () => {
+    expect(bed[0]).toBe(drone[0]);
+  });
+
+  it("wraps with an ordinary step: the jump from the last sample to the first is no bigger than the drone's own steps", () => {
+    const steps = stepsOf(drone);
+    const seam = Math.abs(bed[0]! - bed.at(-1)!);
+    expect(seam).toBeLessThanOrEqual(steps.reduce((m, v) => Math.max(m, v), 0));
+    expect(seam).toBeGreaterThan(0);
   });
 });

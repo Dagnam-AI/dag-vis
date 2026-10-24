@@ -17,7 +17,7 @@ import { TIMING } from "./timing.ts";
 export const PipelineProof: React.FC<{ seed: number }> = ({ seed }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
-  // Memoised: a new identity would build a new GL context on every frame.
+  // Memoised: a new identity would destroy and rebuild the effect (canvas and handle) on every frame.
   const create = useCallback(
     (canvas: HTMLCanvasElement) =>
       createRibbon(canvas, {

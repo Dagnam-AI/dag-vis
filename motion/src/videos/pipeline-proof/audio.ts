@@ -10,10 +10,10 @@ import { TIMING } from "./timing.ts";
 
 export const SAMPLE_RATE = 48000;
 const SWELL: Envelope = { attack: 0.4, decay: 0.3, sustain: 0.4, release: 0.5 };
-const SWELL_LENGTH = 1.2; // the last swell, at 4.5 s, ends at 5.7 s: inside the 6 s loop
+export const SWELL_LENGTH = 1.2; // the last swell, at 4.5 s, ends at 5.7 s: inside the 6 s loop
 
-/** Periodic in TIMING.duration: 55 × 6 and 110 × 6 are whole cycles, the AM runs exactly once per loop, every swell ends before the seam. */
-export function renderBed(): Float32Array {
+/** The two sines alone. Periodic in TIMING.duration: 55 × 6 and 110 × 6 are whole cycles and the AM runs exactly once per loop. */
+export function renderDrone(): Float32Array {
   const bed = silence(TIMING.duration, SAMPLE_RATE);
   tone(bed, SAMPLE_RATE, {
     freq: 55,
@@ -30,6 +30,12 @@ export function renderBed(): Float32Array {
     env: FLAT,
     lfo: { freq: 1 / TIMING.duration, depth: 0.5 },
   });
+  return bed;
+}
+
+/** The drone plus the swells; every swell ends before the seam, so the join is the drone's own. */
+export function renderBed(): Float32Array {
+  const bed = renderDrone();
   Object.values(TIMING.beats).forEach((at, i) => {
     noise(bed, SAMPLE_RATE, {
       start: at,

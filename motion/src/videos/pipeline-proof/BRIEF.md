@@ -22,5 +22,5 @@ Not a product video: a 6-second seamless loop that proves the motion pipeline (r
 ## Before it's done
 
 - 180 frames, 1920×1080, audio as long as the picture (`scripts/check-render.ts`).
-- Loop seam: frame 180 rendered separately equals frame 0; the bed looped shows no step at the join.
+- Loop seam: frame 180 rendered separately equals frame 0; the bed looped shows no step at the join. The bed itself is click-free, but the MP4 file is not a sample-exact audio loop: AAC priming makes its track 6.016 s (768 samples, 16 ms longer than the picture), so looping the MP4 file itself leaves a 16 ms audio gap at the join. Loop the bed, not the file.
 - Nobody has listened to the sound unless the hand-over says someone did.
