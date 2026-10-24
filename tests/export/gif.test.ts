@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { VisError } from "../../src/core/index.js";
 import { encodeGif, PALETTE_SAMPLES } from "../../src/export/gif.js";
@@ -91,5 +91,100 @@ describe("encodeGif", () => {
         frameAt: () => new Uint8Array(10),
       }),
     ).rejects.toThrow(VisError);
+  });
+
+  describe("boundary validation", () => {
+    const base = {
+      width: 4,
+      height: 4,
+      fps: 10,
+      count: 1,
+      frameAt: () => frame(0),
+    };
+    const rejects = async (patch: object, pattern: RegExp) => {
+      const frameAt = vi.fn(() => frame(0));
+      const promise = encodeGif({ ...base, frameAt, ...patch });
+      await expect(promise).rejects.toThrow(VisError);
+      await expect(promise).rejects.toThrow(pattern);
+      expect(frameAt).not.toHaveBeenCalled();
+    };
+
+    it.each([0, -1, 1.5, 65536, NaN, Infinity])("rejects width %s", (width) =>
+      rejects({ width }, /width/),
+    );
+    it.each([0, -1, 1.5, 65536, NaN, Infinity])("rejects height %s", (height) =>
+      rejects({ height }, /height/),
+    );
+    it.each([0, -1, 2.5, NaN, Infinity])("rejects count %s", (count) =>
+      rejects({ count }, /count/),
+    );
+    it.each([0, -1, NaN, Infinity])("rejects fps %s", (fps) =>
+      rejects({ fps }, /fps/),
+    );
+    it.each([0, 1, 2.5, 257, NaN])("rejects maxColors %s", (maxColors) =>
+      rejects({ maxColors }, /maxColors/),
+    );
+
+    it("accepts the extremes of each range", async () => {
+      for (const maxColors of [2, 256]) {
+        const bytes = await encodeGif({ ...base, maxColors });
+        expect(bytes.at(-1)).toBe(0x3b);
+      }
+      const wide = await encodeGif({
+        ...base,
+        width: 65535,
+        height: 1,
+        frameAt: () => new Uint8Array(65535 * 4),
+      });
+      expect(new DataView(wide.buffer).getUint16(6, true)).toBe(65535);
+    });
+  });
+
+  describe("frame timing", () => {
+    // Delay of every frame in centiseconds, read from the Graphic Control Extensions.
+    const delays = (gif: Uint8Array): number[] => {
+      const out: number[] = [];
+      for (let i = 0; i + 7 < gif.length; i++)
+        if (gif[i] === 0x21 && gif[i + 1] === 0xf9 && gif[i + 2] === 4)
+          out.push((gif[i + 4] ?? 0) | ((gif[i + 5] ?? 0) << 8));
+      return out;
+    };
+    const timing = async (fps: number, count: number) => {
+      const gif = await encodeGif({
+        width: 4,
+        height: 4,
+        fps,
+        count,
+        frameAt: (i) => frame(i),
+      });
+      return delays(gif);
+    };
+    const sum = (a: number[]) => a.reduce((n, d) => n + d, 0);
+
+    it.each([
+      [30, 180],
+      [24, 48],
+      [7, 20],
+      [50, 100],
+      [25, 13],
+    ])(
+      "at %s fps, %s frames last exactly the rounded count / fps",
+      async (fps, count) => {
+        const d = await timing(fps, count);
+        expect(d).toHaveLength(count);
+        expect(sum(d)).toBe(Math.round((count * 100) / fps));
+        expect(Math.min(...d)).toBeGreaterThanOrEqual(2);
+      },
+    );
+
+    it("spreads 30 fps as 3 and 4 centiseconds instead of 3 each", async () => {
+      expect(await timing(30, 6)).toEqual([3, 4, 3, 3, 4, 3]);
+    });
+
+    it("holds every frame for at least 2 centiseconds above 50 fps", async () => {
+      // Browsers play a 0 or 1 centisecond delay as 10, so 50 fps is the ceiling.
+      const d = await timing(60, 60);
+      expect(d.every((cs) => cs === 2)).toBe(true);
+    });
   });
 });

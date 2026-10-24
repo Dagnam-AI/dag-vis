@@ -18,7 +18,7 @@ npm i @dagnam/vis            # browser-safe root entry: no native code, no third
 npm i @resvg/resvg-js        # only to render PNGs: `@dagnam/vis/node`, the CLI, favicons (use -D if you only render at build time)
 ```
 
-The package has three small regular dependencies for animation export: `gifenc` (GIF), `mp4-muxer` and `webm-muxer` (video container). The root entry never loads them; only `@dagnam/vis/animate` and `@dagnam/vis/node` do. `@resvg/resvg-js` is an optional peer dependency (tested with `2.6.2`); install it as a regular dependency if you render at runtime, because production installs omit devDependencies. `renderPng` loads it lazily and throws a `VisError` naming the install command when it is absent, so `@dagnam/vis/node` itself still imports without it. The root entry never touches it and imports no `node:*` module, so it is safe in a browser bundle. Consumers need Node 22 or newer (Node 20 is end-of-life and receives no security fixes).
+The package has three small regular dependencies reserved for animation export: `gifenc` (GIF), `mp4-muxer` and `webm-muxer` (video container). The root entry never loads them. `@resvg/resvg-js` is an optional peer dependency (tested with `2.6.2`); install it as a regular dependency if you render at runtime, because production installs omit devDependencies. `renderPng` loads it lazily and throws a `VisError` naming the install command when it is absent, so `@dagnam/vis/node` itself still imports without it. The root entry never touches it and imports no `node:*` module, so it is safe in a browser bundle. Consumers need Node 22 or newer (Node 20 is end-of-life and receives no security fixes).
 
 ## Use
 

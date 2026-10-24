@@ -180,6 +180,14 @@ jobs:
           EOF
           node gif.mjs
 
+          # The export declarations must not name a bare module: gifenc ships
+          # without types, so a consumer type-checking one would hit TS7016.
+          if grep -En "(from|import)[ (]*[\"'][^.\"']" node_modules/@dagnam/vis/dist/export/*.d.ts; then
+            echo "dist/export declarations import a bare module" >&2
+            exit 1
+          fi
+          echo "export declarations ok: no bare import"
+
           cat > node-missing.mjs <<'EOF'
           import { renderPng } from "@dagnam/vis/node";
           try { await renderPng("<svg xmlns='http://www.w3.org/2000/svg'/>"); throw new Error("expected a VisError"); }
