@@ -50,7 +50,14 @@ export function videosDirProblem(
   const inside = git(anchor, ["rev-parse", "--is-inside-work-tree"]);
   if (inside.status === null)
     return "git could not be started, so it cannot be checked that the videos folder is ignored";
-  if (inside.status !== 0 || inside.stdout.trim() !== "true") return null;
+  if (inside.status !== 0) {
+    // Only "not a git repository" means "nothing to ignore it". Any other failure
+    // (a repository git refuses to open, a broken one) is not an answer.
+    if (inside.status === 128 && /not a git repository/i.test(inside.stderr))
+      return null;
+    return `git could not tell whether the videos folder is in a work tree (exit ${String(inside.status)}: ${inside.stderr.trim() || "no message"})`;
+  }
+  if (inside.stdout.trim() !== "true") return null;
   const ignored = git(anchor, ["check-ignore", "-q", "--", probe]);
   if (ignored.status === 0) return null;
   if (ignored.status === 1)

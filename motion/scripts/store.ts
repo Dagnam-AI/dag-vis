@@ -15,9 +15,11 @@
 // The upload starts with a HEAD of each key, so the token needs READ as well as
 // write: grant it Object Read & Write on the videos bucket. A 403 on HEAD stops
 // the upload (it is never read as "absent"). An object that is already there
-// is left alone and counts as uploaded only if it is this file (our own
-// x-amz-meta-sha256, or a matching size and plain MD5 ETag); otherwise the
-// upload fails and nothing is recorded. Make the first --upload a throwaway
+// is left alone and counts as uploaded only if it is this file: with our
+// x-amz-meta-sha256 on it, that value must equal this file's sha256 (any other
+// value fails, whatever its size and ETag); only an object WITHOUT that
+// metadata is judged by size and a plain MD5 ETag. Otherwise the upload fails
+// and nothing is recorded. Make the first --upload a throwaway
 // render, not a real video.
 import {
   constants,

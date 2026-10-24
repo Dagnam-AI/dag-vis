@@ -63,14 +63,38 @@ describe("videosDirProblem with a scripted git", () => {
     );
   });
 
-  it("allows a folder outside any repository", () => {
+  it("allows a folder outside any repository (git's own message)", () => {
     expect(
       videosDirProblem(
         "/a",
         "/a/v/x",
-        answer({ status: 128, stderr: "fatal" }),
+        answer({
+          status: 128,
+          stderr:
+            "fatal: not a git repository (or any of the parent directories): .git\n",
+        }),
       ),
     ).toBeNull();
+  });
+
+  it.each([
+    [128, "fatal: detected dubious ownership in repository at '/a'\n"],
+    [128, ""],
+    [1, "fatal: not a git repository"],
+    [129, "usage: git rev-parse"],
+  ])(
+    "fails closed on any other rev-parse failure (exit %j: %j)",
+    (status, stderr) => {
+      expect(
+        videosDirProblem("/a", "/a/v/x", answer({ status, stderr })),
+      ).toMatch(/could not tell whether/);
+    },
+  );
+
+  it("says so when git gives no message", () => {
+    expect(videosDirProblem("/a", "/a/v/x", answer({ status: 3 }))).toMatch(
+      /exit 3: no message/,
+    );
   });
 
   it("allows a folder that is not in a work tree (inside .git, or a bare repository)", () => {
@@ -120,9 +144,12 @@ describe("videosDirProblem with a scripted git", () => {
 describe("videosDirProblem with real git in a temporary repository", () => {
   // Built under os.tmpdir(); never in the worktree. GIT_* is dropped so a hook's
   // environment cannot point these commands at another repository.
-  const env = Object.fromEntries(
-    Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")),
-  );
+  const env = {
+    ...Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")),
+    ),
+    LC_ALL: "C",
+  };
   const git: Git = (cwd, args) => {
     const r = spawnSync("git", args, { cwd, env, encoding: "utf8" });
     return { status: r.status, stdout: r.stdout, stderr: r.stderr };

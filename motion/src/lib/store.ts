@@ -132,27 +132,28 @@ export interface LocalObject {
 }
 
 /**
- * Whether an object already in the bucket is this file. It is when our own
- * sha256 metadata says so, or, for objects without it, when the size and a
- * plain MD5 ETag match (a single-part PUT's ETag is the MD5 of the body; a
- * multipart ETag has a dash and says nothing about the bytes). Returns the
- * problem otherwise: nothing is overwritten and nothing is recorded as uploaded.
+ * Whether an object already in the bucket is this file. An object that carries
+ * our `x-amz-meta-sha256` is this file only if that equals the local sha256; any
+ * other value is a different file, however its size and ETag look. Only an
+ * object with no such metadata is judged by size and a plain MD5 ETag (a
+ * single-part PUT's ETag is the MD5 of the body; a multipart ETag has a dash and
+ * says nothing about the bytes). Returns the problem otherwise: nothing is
+ * overwritten and nothing is recorded as uploaded.
  */
 export function existingObjectProblem(
   remote: RemoteObject,
   local: LocalObject,
 ): string | null {
-  if (remote.sha256 === local.sha256) return null;
+  if (remote.sha256 !== null)
+    return remote.sha256 === local.sha256
+      ? null
+      : "the object there has a different sha256 (a different file under the same name)";
   const etag = remote.etag?.replaceAll('"', "") ?? "";
-  if (
-    /^[0-9a-f]{32}$/i.test(etag) &&
+  return /^[0-9a-f]{32}$/i.test(etag) &&
     etag.toLowerCase() === local.md5 &&
     remote.bytes === local.bytes
-  )
-    return null;
-  return remote.sha256 === null
-    ? "the object there carries no sha256 metadata and its size and MD5 ETag do not match this file"
-    : "the object there has a different sha256 (a different file under the same name)";
+    ? null
+    : "the object there carries no sha256 metadata and its size and MD5 ETag do not match this file";
 }
 
 /** Names of the files the ledger records for `video`, so a name already used is never used again. */

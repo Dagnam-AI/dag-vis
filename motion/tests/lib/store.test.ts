@@ -182,13 +182,14 @@ describe("existingObjectProblem", () => {
         local,
       ),
     ).toBeNull();
-    // a mismatching metadata value does not veto a byte-identical size + MD5
+  });
+  it("treats any other sha256 metadata as a different file, even when size and plain MD5 ETag match", () => {
     expect(
       existingObjectProblem(
         { sha256: "zz", etag: "b".repeat(32), bytes: 5 },
         local,
       ),
-    ).toBeNull();
+    ).toMatch(/different sha256/);
   });
   it("says whether the metadata differs or is missing", () => {
     expect(

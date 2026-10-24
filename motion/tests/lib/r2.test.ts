@@ -85,6 +85,18 @@ describe("putIfAbsent", () => {
     expect(net.calls).toHaveLength(1);
   });
 
+  it("refuses an existing object whose sha256 metadata differs even when its size and plain MD5 ETag match this file", async () => {
+    const { net, result } = run(
+      head(200, {
+        "x-amz-meta-sha256": "00".repeat(32),
+        etag: `"${MD5}"`,
+        "content-length": String(BYTES.byteLength),
+      }),
+    );
+    await expect(result).rejects.toThrow(/different sha256/);
+    expect(net.calls).toHaveLength(1);
+  });
+
   it("refuses an existing object with no metadata and no usable ETag", async () => {
     const { result } = run(head(200));
     await expect(result).rejects.toThrow(/no sha256 metadata/);
