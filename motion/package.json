@@ -18,6 +18,9 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
+  "overrides": {
+    "zod": "4.6.6"
+  },
   "devDependencies": {
     "@remotion/bundler": "4.0.534",
     "@remotion/cli": "4.0.534",

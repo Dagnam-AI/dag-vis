@@ -11,14 +11,8 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 // Advisories accepted for motion/'s tree, each with a reason and a review date.
 // Past its date an entry fails the gate, so an accepted risk cannot go stale.
-export const ACCEPTED = [
-  {
-    id: "GHSA-mrhx-c7xc-m3w5",
-    reason:
-      "zod < 4.6.6 (memory exhaustion validating oversized collections) is pinned exactly by Remotion's studio (4.0.534 to 4.0.538), which the CLI and the bundler pull in. Reachable only through the props path: our own files, no untrusted input, no network service. Expires after 2026-10-26 (UTC): an `overrides` entry for zod 4.6.6 (14 days old on 2026-10-25) replaces this entry.",
-    review: "2026-10-26",
-  },
-];
+// Empty now: zod is overridden to 4.6.6 in motion/package.json instead.
+export const ACCEPTED = [];
 
 export const NO_REPORT = "no audit report (offline or a registry error?)";
 
