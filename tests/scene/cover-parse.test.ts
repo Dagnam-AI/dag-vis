@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { VisError } from "../../src/core/errors.js";
+import { parseFieldPreset } from "../../src/field/preset-parse.js";
+import { gradient } from "../../src/gradient/index.js";
 import { coverSpec } from "../../src/scene/cover.js";
 import type { CoverChoices, CoverInput } from "../../src/scene/cover.js";
 import {
@@ -227,47 +229,47 @@ describe("parseCoverInput: rejects, naming the field", () => {
     [
       "index -1",
       { ...base, index: -1 },
-      "cover.index: expected an integer >= 0, got -1",
+      "cover.index: expected an integer in 0..9999, got -1",
     ],
     [
       "index 1.5",
       { ...base, index: 1.5 },
-      "cover.index: expected an integer >= 0, got 1.5",
+      "cover.index: expected an integer in 0..9999, got 1.5",
     ],
     [
       "a string index",
       { ...base, index: "1" },
-      'cover.index: expected an integer >= 0, got "1"',
+      'cover.index: expected an integer in 0..9999, got "1"',
     ],
     [
       "a null index",
       { ...base, index: null },
-      "cover.index: expected an integer >= 0, got null",
+      "cover.index: expected an integer in 0..9999, got null",
     ],
     [
       "an infinite index",
       { ...base, index: Infinity },
-      "cover.index: expected an integer >= 0, got Infinity",
+      "cover.index: expected an integer in 0..9999, got Infinity",
     ],
     [
       "count 0",
       { ...base, count: 0 },
-      "cover.count: expected an integer >= 1, got 0",
+      "cover.count: expected an integer in 1..10000, got 0",
     ],
     [
       "count 2.5",
       { ...base, count: 2.5 },
-      "cover.count: expected an integer >= 1, got 2.5",
+      "cover.count: expected an integer in 1..10000, got 2.5",
     ],
     [
       "a null count",
       { ...base, count: null },
-      "cover.count: expected an integer >= 1, got null",
+      "cover.count: expected an integer in 1..10000, got null",
     ],
     [
       "NaN count",
       { ...base, count: NaN },
-      "cover.count: expected an integer >= 1, got NaN",
+      "cover.count: expected an integer in 1..10000, got NaN",
     ],
     [
       "hue 15.0001",
@@ -386,6 +388,137 @@ describe("parseCoverInput: rejects, naming the field", () => {
   });
 });
 
+describe("parseCoverInput: index and count", () => {
+  it.each<[string, Record<string, unknown>]>([
+    ["index == count - 1", { index: 5, count: 6 }],
+    ["the cap: count 10000, index 9999", { index: 9999, count: 10000 }],
+    ["index 0 without a count", { index: 0 }],
+    ["a count alone", { count: 10000 }],
+  ])("accepts %s", (_label, fields) => {
+    expect(parseCoverInput({ ...base, ...fields })).toEqual({
+      ...base,
+      ...fields,
+    });
+  });
+
+  it.each<[string, Record<string, unknown>, string]>([
+    [
+      "index == count",
+      { index: 6, count: 6 },
+      "cover.index: expected an integer in 0..5 (below count), got 6",
+    ],
+    [
+      "index above count",
+      { index: 10, count: 3 },
+      "cover.index: expected an integer in 0..2 (below count), got 10",
+    ],
+    [
+      "index 1 with count 1",
+      { index: 1, count: 1 },
+      "cover.index: expected an integer in 0..0 (below count), got 1",
+    ],
+    [
+      "index 1 without a count (count defaults to 1)",
+      { index: 1 },
+      "cover.index: expected an integer in 0..0 (below count, which defaults to 1), got 1",
+    ],
+    [
+      "index 1e308",
+      { index: 1e308 },
+      "cover.index: expected an integer in 0..9999, got 1e+308",
+    ],
+    [
+      "index and count 1e308",
+      { index: 1e308, count: 1e308 },
+      "cover.index: expected an integer in 0..9999, got 1e+308",
+    ],
+    [
+      "count 1e308",
+      { count: 1e308 },
+      "cover.count: expected an integer in 1..10000, got 1e+308",
+    ],
+    [
+      "count 10001",
+      { count: 10001 },
+      "cover.count: expected an integer in 1..10000, got 10001",
+    ],
+    [
+      "index 10000",
+      { index: 10000, count: 10000 },
+      "cover.index: expected an integer in 0..9999, got 10000",
+    ],
+    [
+      "count MAX_SAFE_INTEGER + 1",
+      { count: Number.MAX_SAFE_INTEGER + 1 },
+      "cover.count: expected an integer in 1..10000",
+    ],
+    [
+      "index MAX_SAFE_INTEGER + 1",
+      { index: Number.MAX_SAFE_INTEGER + 1 },
+      "cover.index: expected an integer in 0..9999",
+    ],
+  ])("rejects %s", (_label, fields, expected) => {
+    expect(message(() => parseCoverInput({ ...base, ...fields }))).toContain(
+      expected,
+    );
+  });
+
+  it("an accepted input never makes coverSpec or gradient throw (sweep)", () => {
+    const counts = [undefined, 1, 2, 3, 6, 100, 9999, 10000];
+    const indexes = [undefined, 0, 1, 2, 5, 99, 9998, 9999];
+    let accepted = 0;
+    for (const count of counts)
+      for (const index of indexes)
+        for (const variant of ["card", "banner"] as const) {
+          const input: CoverInput = {
+            ...base,
+            variant,
+            ...(index === undefined ? {} : { index }),
+            ...(count === undefined ? {} : { count }),
+          };
+          let parsed: CoverInput;
+          try {
+            parsed = parseCoverInput(input);
+          } catch {
+            continue; // index >= count: rejected, nothing to prove
+          }
+          accepted++;
+          expect(() => gradient(coverSpec(parsed))).not.toThrow();
+          expect(coverSpec(parsed)).toEqual(coverSpec(input));
+        }
+    expect(accepted).toBeGreaterThan(40);
+  });
+});
+
+describe("parseCoverInput: edges, own data and exotic input", () => {
+  it.each<[string, Record<string, unknown>, string]>([
+    ["hue -15.0001", { hue: -15.0001 }, "cover.hue"],
+    ["hue 15.0001", { hue: 15.0001 }, "cover.hue"],
+    ["intensity 0.5999", { intensity: 0.5999 }, "cover.intensity"],
+    ["intensity 1.4001", { intensity: 1.4001 }, "cover.intensity"],
+  ])("rejects %s (just outside the bound)", (_label, fields, path) => {
+    expect(message(() => parseCoverInput({ ...base, ...fields }))).toContain(
+      path,
+    );
+  });
+
+  it("reads only own properties: a polluted Object.prototype is not input", () => {
+    const proto = Object.prototype as Record<string, unknown>;
+    proto.item = "polluted";
+    proto.hue = 3;
+    try {
+      expect(
+        message(() => parseCoverInput({ theme: "dark", variant: "card" })),
+      ).toContain("cover.item: expected");
+      expect(parseCoverInput({ ...base })).toEqual(base);
+      expect(parseCoverChoices({})).toEqual({});
+    } finally {
+      delete proto.item;
+      delete proto.hue;
+    }
+  });
+});
+
 describe("parseCoverChoices", () => {
   it.each<[string, CoverChoices]>([
     ["nothing", {}],
@@ -479,6 +612,23 @@ describe("parseCoverChoices", () => {
     ],
   ])("rejects %s", (_label, value, expected) => {
     expect(message(() => parseCoverChoices(value))).toContain(expected);
+  });
+
+  it.each([
+    [
+      '{"kind":"generated","hue":10,"region":2,"field_preset":"lunar"}',
+      "lunar",
+    ],
+    ['{"kind":"generated","family":"tag:ml"}', undefined],
+  ])("follows the README importer example for %s", (json, expectedPreset) => {
+    const stored = JSON.parse(json) as Record<string, unknown>;
+    const { kind, field_preset, ...rest } = stored;
+    expect(kind).toBe("generated");
+    const spec = coverSpec({ ...parseCoverChoices(rest), ...base });
+    expect(spec.kind).toBe("glows");
+    const preset =
+      field_preset === undefined ? undefined : parseFieldPreset(field_preset);
+    expect(preset).toBe(expectedPreset);
   });
 
   it("composes with coverSpec as the importer does", () => {

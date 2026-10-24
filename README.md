@@ -64,20 +64,17 @@ ribbon({ width: 1600, height: 900, lines: 120, mesh: true }); // the wave-mesh r
   - A stop is a colour string or `{ color, at?, opacity? }`.
 - **Patterns**: `pattern(spec)` returns `{ svg, defs, fill, cssBackground, tile }`. Kinds: `dots`, `grid`, `lines`, `stripes`, `dagMesh`, `contours`, `noise`.
 - **Covers**: `coverSpec(input)` returns a `glows` gradient spec and `coverLayers(input)` the same cover as `{ base, glows }`: one deterministic look per `family` (a topic; omit it and the `item` is its own family), nudged per `item`, with optional `index`/`count` for an ordered family and the editor choices `seed`, `hue`, `region` and `intensity` (`null` or omitted means derive as usual). `family: ""` and a `null` `index` or `count` throw a `VisError`, as does any non-finite number; an empty `seed` means no seed. `coverSpec` lists the echo first so the main glow paints on top. `gradient(coverSpec({ family, item, theme, variant })).css` is the background.
-- **Strict parsers**: `coverSpec` clamps; to reject typos in stored or authored data, parse first. `parseCoverInput(value)` checks the whole cover input (`item`, `theme`, `variant` required; `family`, `index`, `count`, `seed`, `hue` -15..15, `region` integer 0..4, `intensity` 0.6..1.4 optional, `null` allowed for `family`, `seed`, `hue`, `region` and `intensity`); `parseCoverChoices(value)` checks just the editor's choices (`family`, `seed`, `hue`, `region`, `intensity`); `parseFieldPreset(value)` returns a `FieldPresetName` (`fieldPresetNames` lists them in `fieldPresets` order). Each throws a `VisError` naming the field (`cover.hue: expected a number in -15..15, got 20`) on an unknown key, a wrong type, a non-plain object, `NaN`/`Infinity`, an out-of-range number (never clamped) or a string over 200 characters, and returns a new object with only the keys given. The `CoverChoices` type is the choices subset of `CoverInput`.
+- **Strict parsers**: `coverSpec` clamps; to reject typos in stored or authored data, parse first. `parseCoverInput(value)` checks the whole cover input (`item`, `theme`, `variant` required; `family`, `index`, `count`, `seed`, `hue` -15..15, `region` integer 0..4, `intensity` 0.6..1.4 optional, `null` allowed for `family`, `seed`, `hue`, `region` and `intensity`; `count` is at most 10000 and `index` is below `count`, which defaults to 1); `parseCoverChoices(value)` checks just the editor's choices (`family`, `seed`, `hue`, `region`, `intensity`); `parseFieldPreset(value)` returns a `FieldPresetName` (`fieldPresetNames` lists them in `fieldPresets` order). The two cover parsers throw a `VisError` naming the field (`cover.hue: expected a number in -15..15, got 20`) on an unknown key, a wrong type, a non-plain object, `NaN`/`Infinity`, an out-of-range number (never clamped) or a string over 200 characters, and return a new object with only the keys given; `parseFieldPreset` throws, listing the known names, for anything but an exact preset name. So `coverSpec(parseCoverInput(x))` never throws. Omit `family` or use `null` for no family; `family: ""` is rejected (`coverSpec` throws on it). The `CoverChoices` type is the choices subset of `CoverInput`.
 
   ```ts
   import { coverSpec, parseCoverChoices, parseFieldPreset } from "@dagnam/vis";
 
-  const { field_preset, ...rest } = JSON.parse(json) as Record<string, unknown>;
+  const stored = JSON.parse(json) as Record<string, unknown>;
+  const { kind, field_preset, ...rest } = stored; // neither is a cover choice
   const choices = parseCoverChoices(rest); // throws on a typo or an out-of-range value
-  const spec = coverSpec({
-    ...choices,
-    item: "kv-cache",
-    theme: "dark",
-    variant: "card",
-  });
-  const preset = parseFieldPreset(field_preset); // throws, listing the known names
+  const spec = coverSpec({ ...choices, item, theme: "dark", variant: "card" });
+  const preset =
+    field_preset === undefined ? undefined : parseFieldPreset(field_preset);
   ```
 
 - **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`; or `title`, `excerpt` and `cover` for the social card), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry).
