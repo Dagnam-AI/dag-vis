@@ -1,7 +1,7 @@
 // The local videos folder, shared by render.ts and store.ts: $DAG_VIDEOS_DIR, by
 // default ../info/videos beside this checkout.
 import { spawnSync } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,7 +38,12 @@ export function requireUsableVideosDir(probe: string): void {
     process.exit(1);
   }
   const target = join(videosDir, probe);
-  const anchor = nearestExisting(target, existsSync, dirname);
+  // A folder: the probe itself may already be a stored file, which git cannot be run in.
+  const anchor = nearestExisting(
+    target,
+    (p) => existsSync(p) && statSync(p).isDirectory(),
+    dirname,
+  );
   // git sees real paths (on macOS /var is /private/var).
   const realAnchor = realpathSync(anchor);
   const problem = videosDirProblem(
