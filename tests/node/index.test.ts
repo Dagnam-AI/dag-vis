@@ -12,6 +12,7 @@ import {
 } from "../../src/node/export.js";
 import { ffmpegPath } from "../../src/node/ffmpeg.js";
 import { frameSource, rasterSvg } from "../../src/node/frames.js";
+import { renderSheet } from "../../src/node/sheet.js";
 import { encodePng } from "../../src/node/png.js";
 import {
   FONT_FILES,
@@ -39,6 +40,7 @@ describe("@dagnam/vis/node barrel", () => {
       "rasterSvg",
       "renderPng",
       "renderRgba",
+      "renderSheet",
       "run",
     ]);
   });
@@ -59,5 +61,6 @@ describe("@dagnam/vis/node barrel", () => {
     expect(node.ANIMATION_FORMATS).toBe(ANIMATION_FORMATS);
     expect(node.frameSource).toBe(frameSource);
     expect(node.rasterSvg).toBe(rasterSvg);
+    expect(node.renderSheet).toBe(renderSheet);
   });
 });

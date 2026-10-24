@@ -16,6 +16,8 @@ export type {
 } from "./export.js";
 export { frameSource, rasterSvg } from "./frames.js";
 export type { FrameSource } from "./frames.js";
+export { renderSheet } from "./sheet.js";
+export type { SheetOptions } from "./sheet.js";
 export { icoFromPngs } from "./ico.js";
 export { favicons, FAVICON_FILES } from "./favicons.js";
 export type { FaviconsOptions } from "./favicons.js";
