@@ -7,18 +7,24 @@ import {
 } from "../core/validate.js";
 import { FLOW_SHAPES, type FlowFieldSpec } from "./spec.js";
 
-/** How `randomFlow` picks its colours: dark, light or vivid. */
+/**
+ * How `randomFlow` picks its colours: dark, light or vivid. The mood fixes the lightness
+ * and chroma of the colour strings it writes; see `randomFlow` for what the screen shows.
+ */
 export type FlowMood = "dark" | "light" | "vivid";
 
 /** What `randomFlow` takes. */
 export interface RandomFlowOptions {
-  /** Integer 0 to 4294967295 (the range a field spec's `seed` takes). Default 1. */
+  /**
+   * Integer 0 to 4294967295, the range a field spec's `seed` takes (it is an unsigned 32-bit
+   * value, so distinct seeds never alias). Default 1.
+   */
   seed?: number | undefined;
   /** Default "dark". */
   mood?: FlowMood | undefined;
 }
 
-/** Lightness (percent) and chroma ranges of each mood; the first colour is the darkest. */
+/** Lightness (percent) and chroma ranges of the `oklch()` strings each mood writes; the first colour is the darkest. */
 const BANDS: Readonly<
   Record<FlowMood, { l: [number, number]; c: [number, number] }>
 > = Object.freeze({
@@ -32,10 +38,22 @@ const MAX_SEED = 4294967295;
 const round = (v: number): number => Number(v.toFixed(3));
 
 /**
- * A new flow field from a seed: 3 to 5 colours along a hue arc, from the darkest to the
- * lightest of the mood's lightness band, plus a random shape, warp, rotation and
- * vignette. The same options always give the same spec, and it always passes
+ * A new flow field from a seed: 3 to 5 colours along a hue arc, a random shape, warp,
+ * rotation and vignette. The same options always give the same spec, and it always passes
  * `resolveField`. Throws a VisError naming `seed` or `mood` when either is invalid.
+ *
+ * The mood's bands describe the `oklch()` strings written into `palette`: lightness
+ * rises from the first colour to the last (dark 18 to 60 %, light 65 to 95 %, vivid 40 to
+ * 80 %) and chroma is drawn from 0.08 to 0.22 (dark), 0.05 to 0.16 (light) or 0.2 to 0.3
+ * (vivid). The screen shows those colours clamped to sRGB, and many vivid and dark ones
+ * lie outside it, so measured over 1000 seeds per mood: dark colours reach a real
+ * lightness of 0.647 (written at most 0.60); vivid chroma falls to 0.077 (mean 0.183,
+ * and 38 % of vivid colours end up below 0.2); and about 1 palette in 1000 (light) and 6
+ * in 1000 (vivid) no longer rises strictly in lightness once clamped. A mood is a
+ * tendency, not a guarantee about displayed colours.
+ *
+ * `seed` is an integer 0 to 4294967295, the range a field spec's own `seed` takes, so
+ * the returned spec carries it unchanged and two seeds never give the same stream.
  */
 export function randomFlow(opts: RandomFlowOptions = {}): FlowFieldSpec {
   assertOptions(opts);

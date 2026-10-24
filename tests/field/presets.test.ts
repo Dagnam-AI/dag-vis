@@ -157,6 +157,15 @@ describe("presets", () => {
     expect(palette).toEqual(before);
   });
 
+  it("tests a name with `in` or Object.hasOwn, as documented", () => {
+    for (const record of [flowPresets, fieldPresets]) {
+      expect("lunar" in record).toBe(true);
+      expect(Object.hasOwn(record, "lunar")).toBe(true);
+      expect(Object.hasOwn(record, "nope")).toBe(false);
+      expect("hasOwnProperty" in record).toBe(false);
+    }
+  });
+
   it("has no inherited names to trip a lookup by user input", () => {
     for (const name of ["__proto__", "toString", "constructor"]) {
       expect(name in flowPresets, name).toBe(false);

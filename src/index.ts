@@ -110,6 +110,7 @@ export type {
   FieldHighlight,
   FieldSpec,
   FlowFieldSpec,
+  FlowMood,
   FlowPresetName,
   FlowShape,
   FluidFieldPoint,
@@ -117,6 +118,7 @@ export type {
   FlutedFieldDirection,
   FlutedFieldSpec,
   FieldFrame,
+  RandomFlowOptions,
   RenderFieldOptions,
   ResolvedField,
 } from "./field/index.js";

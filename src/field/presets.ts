@@ -35,8 +35,11 @@ const flow = (p: Omit<FlowFieldSpec, "kind">): FlowFieldSpec => ({
 
 /**
  * Colours sampled from the reference tiles and ordered dark to light, so the noise ramp
- * (`0.5 + 0.8 * n`) reproduces each tile. A few palettes keep the tile's own colour order
- * where it is not strictly dark to light. Shape, warp and light values are a first tuning.
+ * (`0.5 + 0.8 * n`) reproduces each tile. Eight palettes (lagoon, citrus-mist, orchid,
+ * lilac-wave, rose, glacier, rainbow-band, pine) are not strictly dark to light by OKLab
+ * lightness: each dips at one or more stops (rainbow-band also in the middle, and it
+ * ends on its first colour). Shape, warp and light values are a first tuning, subject to
+ * visual review.
  */
 const FLOWS: Record<FlowPresetName, FlowFieldSpec> = {
   "violet-dusk": flow({
@@ -272,14 +275,18 @@ function frozenRecord<K extends string, V>(
 /**
  * The flow presets by name, deeply frozen: a spec to pass to `renderField`, `createField`
  * or `resolveField` as it is, or to copy (`{ ...flowPresets.lunar, seed: 9 }`) and change.
- * Key order is the contract: `FLOW_PRESET_NAMES`.
+ * Key order is the contract: `FLOW_PRESET_NAMES`. The record has no prototype, so a
+ * lookup by user input never reaches `Object.prototype`; for the same reason it has no
+ * `hasOwnProperty` and does not convert to a string: test a name with `name in flowPresets`
+ * or `Object.hasOwn(flowPresets, name)`.
  */
 export const flowPresets: Readonly<Record<FlowPresetName, FlowFieldSpec>> =
   frozenRecord(FLOWS);
 
 /**
  * Every preset by name, deeply frozen: the flow presets in `FLOW_PRESET_NAMES` order, then
- * `fluid-dawn` and `fluted-ember`.
+ * `fluid-dawn` and `fluted-ember`. Prototype-free like `flowPresets`: test a name with
+ * `name in fieldPresets` or `Object.hasOwn(fieldPresets, name)`.
  */
 export const fieldPresets: Readonly<Record<string, FieldSpec>> = frozenRecord<
   string,

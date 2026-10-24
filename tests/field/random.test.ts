@@ -71,6 +71,10 @@ describe("randomFlow", () => {
         }
   });
 
+  // The bands are written into the oklch() strings (previous test). These bounds are on the
+  // colours as displayed, clamped to sRGB: dark reaches a real L of 0.647 (written 0.60),
+  // vivid chroma falls to 0.077 (mean 0.183) and a few palettes are not monotone once
+  // clamped, so the tolerances are wider than the bands on purpose.
   it("dark palettes are dark, light palettes are light and vivid ones are saturated, by real luminance", () => {
     const mean = (xs: number[]): number =>
       xs.reduce((s, x) => s + x, 0) / xs.length;
@@ -92,7 +96,7 @@ describe("randomFlow", () => {
           expect(C).toBeGreaterThan(0.05);
         }
       }
-      // Each palette runs from its darkest to its lightest colour, as the ramp expects.
+      // The last colour is lighter than the first (not every step: clamping can dent a few palettes).
       for (const seed of SEEDS) {
         const ls = palette(seed, mood).map((c) => lightAndChroma(c).L);
         expect(ls[0]).toBeLessThan(ls.at(-1)!);

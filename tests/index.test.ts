@@ -44,6 +44,14 @@ describe("@dagnam/vis root barrel", () => {
     ).toHaveLength(16);
   });
 
+  it("names the randomFlow options and mood types from the root", () => {
+    const mood: vis.FlowMood = "vivid";
+    const opts: vis.RandomFlowOptions = { seed: 4, mood };
+    const maybe: vis.RandomFlowOptions = { seed: undefined, mood: undefined };
+    expect(vis.randomFlow(opts).seed).toBe(4);
+    expect(vis.randomFlow(maybe)).toEqual(vis.randomFlow());
+  });
+
   it("keeps the internal field names out of the root: time coordinates and the per-kind resolved types", () => {
     const text = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), "../src/index.ts"),
