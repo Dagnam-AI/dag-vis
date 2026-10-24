@@ -11,7 +11,6 @@ import {
   exportStatic,
 } from "../../src/node/export.js";
 import { ffmpegPath } from "../../src/node/ffmpeg.js";
-import { frameSource, rasterSvg } from "../../src/node/frames.js";
 import { renderSheet } from "../../src/node/sheet.js";
 import { encodePng } from "../../src/node/png.js";
 import {
@@ -35,9 +34,7 @@ describe("@dagnam/vis/node barrel", () => {
       "exportStatic",
       "favicons",
       "ffmpegPath",
-      "frameSource",
       "icoFromPngs",
-      "rasterSvg",
       "renderPng",
       "renderRgba",
       "renderSheet",
@@ -59,8 +56,6 @@ describe("@dagnam/vis/node barrel", () => {
     expect(node.exportAnimation).toBe(exportAnimation);
     expect(node.STATIC_FORMATS).toBe(STATIC_FORMATS);
     expect(node.ANIMATION_FORMATS).toBe(ANIMATION_FORMATS);
-    expect(node.frameSource).toBe(frameSource);
-    expect(node.rasterSvg).toBe(rasterSvg);
     expect(node.renderSheet).toBe(renderSheet);
   });
 });

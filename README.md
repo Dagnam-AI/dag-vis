@@ -210,7 +210,7 @@ const mp4 = await exportCanvas(handle, { format: "mp4", fps: 30, duration: 6 });
 
 ## Exports
 
-Three entry points, one job each. `./animate` has `exportCanvas(handle, options)`: it drives `handle.renderAt` frame by frame (so no frame is dropped, whatever the machine's speed) and resolves to a `Blob`. `./node` has `exportStatic(spec, options)` and `exportAnimation(spec, options)`, which render a field, ribbon or gradient spec on the CPU and write a file, plus `renderSheet` (every preset in one contact sheet, as an RGBA frame), `frameSource`, `encodePng` and `ffmpegPath`. The `dag-vis` CLI wraps the Node functions. The root has none of them.
+Three entry points, one job each. `./animate` has `exportCanvas(handle, options)`: it drives `handle.renderAt` frame by frame (so no frame is dropped, whatever the machine's speed) and resolves to a `Blob`. `./node` has `exportStatic(spec, options)` and `exportAnimation(spec, options)`, which render a field, ribbon or gradient spec on the CPU and write a file, plus `renderSheet` (every preset in one contact sheet, as an RGBA frame), `renderRgba`, `encodePng` and `ffmpegPath`. The `dag-vis` CLI wraps the Node functions. The root has none of them.
 
 | format    | Node (`exportStatic` / `exportAnimation`, `dag-vis export`)                     | Browser (`exportCanvas`)                       |
 | --------- | ------------------------------------------------------------------------------- | ---------------------------------------------- |
