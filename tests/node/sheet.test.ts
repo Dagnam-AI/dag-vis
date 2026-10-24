@@ -4,8 +4,12 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { VisError } from "../../src/core/index.js";
-import { fieldPresets, renderField } from "../../src/field/index.js";
-import { renderSheet } from "../../src/node/sheet.js";
+import {
+  fieldPresets,
+  renderField,
+  type FieldSpec,
+} from "../../src/field/index.js";
+import { renderSheet, type SheetOptions } from "../../src/node/sheet.js";
 
 const GOLDEN = fileURLToPath(
   new URL("../goldens/field-sheet.sha256", import.meta.url),
@@ -13,6 +17,11 @@ const GOLDEN = fileURLToPath(
 const NAMES = Object.keys(fieldPresets);
 const sha256 = (data: Uint8ClampedArray): string =>
   createHash("sha256").update(data).digest("hex");
+/** A real preset by name (every name here comes from `fieldPresets`). */
+const preset = (name: string): FieldSpec => fieldPresets[name]!;
+/** `renderSheet` with options a JS caller could pass but the types refuse. */
+const call = (o: unknown): ReturnType<typeof renderSheet> =>
+  renderSheet(o as SheetOptions);
 const rowsOf = (n: number, columns: number): number => Math.ceil(n / columns);
 
 describe("renderSheet layout", () => {
@@ -34,7 +43,7 @@ describe("renderSheet layout", () => {
   it("puts each preset's own render at its own position, row by row", () => {
     const f = renderSheet({ tile, gap: 3, columns: 3, t: 2 });
     NAMES.forEach((name, k) => {
-      const tileFrame = renderField(fieldPresets[name] as never, {
+      const tileFrame = renderField(preset(name), {
         ...tile,
         t: 2,
       });
@@ -60,7 +69,7 @@ describe("renderSheet layout", () => {
       gap: 0,
       columns: 2,
       background: "#ff0000",
-      presets: { a: fieldPresets["fluid-dawn"] as never },
+      presets: { a: preset("fluid-dawn") },
     });
     expect(f.width).toBe(40);
     expect(f.height).toBe(10);
@@ -70,7 +79,7 @@ describe("renderSheet layout", () => {
     ]);
     const alone = renderSheet({
       tile,
-      presets: { a: fieldPresets["fluid-dawn"] as never },
+      presets: { a: preset("fluid-dawn") },
     });
     expect(alone.height).toBe(10 + 2 * 32);
   });
@@ -78,14 +87,14 @@ describe("renderSheet layout", () => {
   it("uses the 300 x 170 tile, gap 32 and 4 columns by default", () => {
     // Geometry only: one preset keeps it cheap (a single row, 4 columns wide).
     const f = renderSheet({
-      presets: { a: fieldPresets["fluid-dawn"] as never },
+      presets: { a: preset("fluid-dawn") },
     });
     expect(f.width).toBe(4 * 300 + 5 * 32);
     expect(f.height).toBe(170 + 2 * 32);
   });
 
   it("accepts a plain or a prototype-free presets record", () => {
-    const spec = fieldPresets["fluid-dawn"] as never;
+    const spec = preset("fluid-dawn");
     const bare = Object.assign(Object.create(null) as object, { a: spec });
     expect(renderSheet({ tile, presets: bare }).height).toBe(10 + 2 * 32);
     expect(renderSheet({ tile, presets: { a: spec } }).height).toBe(
@@ -95,7 +104,7 @@ describe("renderSheet layout", () => {
 });
 
 describe("renderSheet validation", () => {
-  const spec = fieldPresets["fluid-dawn"] as never;
+  const spec = preset("fluid-dawn");
   const ok = { tile: { width: 4, height: 4 }, gap: 1, presets: { a: spec } };
   const bad = (patch: object, pattern: RegExp): void => {
     expect(() => renderSheet({ ...ok, ...patch })).toThrow(VisError);
@@ -103,8 +112,8 @@ describe("renderSheet validation", () => {
   };
 
   it("rejects an options bag that is not an object", () => {
-    expect(() => renderSheet(null as never)).toThrow(/options/);
-    expect(() => renderSheet(3 as never)).toThrow(VisError);
+    expect(() => call(null)).toThrow(/options/);
+    expect(() => call(3)).toThrow(VisError);
   });
 
   it("checks the tile: an object of whole pixels within one frame", () => {
@@ -136,10 +145,10 @@ describe("renderSheet validation", () => {
   });
 
   it("checks t: a finite number within the render limit", () => {
-    bad({ t: Number.NaN }, /^.*t must/);
-    bad({ t: Infinity }, /^.*t must/);
-    bad({ t: "1" }, /^.*t must/);
-    bad({ t: 2e6 }, /^.*t must/);
+    bad({ t: Number.NaN }, /^t must/);
+    bad({ t: Infinity }, /^t must/);
+    bad({ t: "1" }, /^t must/);
+    bad({ t: 2e6 }, /^t must/);
   });
 
   it("checks presets: a plain, non-empty record of valid field specs", () => {
@@ -154,9 +163,7 @@ describe("renderSheet validation", () => {
 
   it("ignores inherited presets: only own properties count", () => {
     const inherited = Object.create({ a: spec }) as object;
-    expect(() => renderSheet({ ...ok, presets: inherited as never })).toThrow(
-      /plain object/,
-    );
+    expect(() => call({ ...ok, presets: inherited })).toThrow(/plain object/);
     const shadow = Object.assign(Object.create(null) as object, {
       ["__proto__"]: 1,
     });
@@ -189,21 +196,20 @@ describe("renderSheet presets (tolerance-based, independent of the golden hash)"
       tile,
       gap: 0,
       columns: 1,
-      presets: { [name]: fieldPresets[name] as never },
+      presets: { [name]: preset(name) },
     });
     const seen = new Set<number>();
     for (let i = 0; i < f.data.length; i += 4)
       seen.add(f.data[i]! * 65536 + f.data[i + 1]! * 256 + f.data[i + 2]!);
-    // Many distinct colours, and not the background colour everywhere.
+    // Many distinct colours: a blank tile (or a missing blit, leaving the background) has one.
     expect(seen.size).toBeGreaterThan(40);
-    expect(seen.has(0x06061a) && seen.size === 1).toBe(false);
   });
 
   it.each(NAMES)("%s renders byte-identically twice", (name) => {
     const opts = {
       tile,
       gap: 2,
-      presets: { [name]: fieldPresets[name] as never },
+      presets: { [name]: preset(name) },
     };
     const a = renderSheet(opts).data;
     const b = renderSheet(opts).data;
@@ -222,8 +228,12 @@ describe("renderSheet golden", () => {
   it("matches the golden hash (UPDATE_GOLDENS=1 to regenerate)", () => {
     const f = renderSheet({ tile: { width: 120, height: 68 }, gap: 8 });
     const hash = sha256(f.data);
-    if (process.env.UPDATE_GOLDENS === "1" || !existsSync(GOLDEN))
-      writeFileSync(GOLDEN, `${hash}\n`);
+    if (process.env.UPDATE_GOLDENS === "1") writeFileSync(GOLDEN, `${hash}\n`);
+    // A missing golden fails: a test must never create the expectation it checks.
+    expect(
+      existsSync(GOLDEN),
+      "tests/goldens/field-sheet.sha256 is missing: create it with UPDATE_GOLDENS=1",
+    ).toBe(true);
     expect(
       hash,
       `field sheet hash is ${hash} on Node ${process.version}, ${process.platform}/${process.arch}. ` +
