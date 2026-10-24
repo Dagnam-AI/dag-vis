@@ -45,11 +45,11 @@ jobs:
       # 100/100/100/100, the same gate as `npm run check` locally.
       - run: npm run check
 
-      # Goldens are generated artifacts. tests/helpers/golden.ts WRITES a golden
-      # that does not exist yet and passes, so a PR that adds a golden test but
-      # forgets the file would be green; `git diff` cannot see an untracked
-      # file. `git status` sees both a rewritten (modified) golden and a
-      # created (untracked) one. UPDATE_GOLDENS is never set in CI.
+      # Goldens are generated artifacts. tests/helpers/golden.ts writes one only
+      # under UPDATE_GOLDENS=1, which CI never sets, and a missing golden fails
+      # the test. This step is the backstop: it fails if a run ever rewrote or
+      # created a file under tests/goldens (`git diff` cannot see an untracked
+      # file; `git status` sees both a modified and an untracked one).
       - name: Assert the run neither rewrote nor created a golden
         run: |
           changed=$(git status --porcelain -- tests/goldens)
