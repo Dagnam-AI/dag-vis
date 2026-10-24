@@ -56,6 +56,7 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 - React: `<VisBackground effect="field" options={{ spec }}>` draws any field live (`createField`). `options.spec` is a required `FieldSpec`; the field's `seed` and `colors` live in it, so the shared `seed` and `colors` options do not exist for this effect. A spec that changes by value recreates the effect (new canvas, one frame of flash possible), an equal spec in a fresh object does nothing, and other option changes still use `update()`.
 - Demo: the Flow page (`/flow.html`) with every field preset live and export buttons.
 - Tooling: `npm run demo`, a gallery of the five effects (`?effect=`, `?t=`, `?seed=`, `?w=`, `?h=`; an invalid parameter shows an error); `npm run test:e2e`, Playwright tests in headless Chromium (the gallery, the Flow page and the CPU/GPU field parity) that also run in CI; and `npm run fidelity`, which captures each effect beside the landing-page card it was ported from and writes a pixel-difference report. None of the three is published.
+- `motion/`: Remotion motion-graphics project beside the package (own dependencies, not shipped); pipeline-proof loop; `check:motion` in the gate.
 
 ### Notes
 

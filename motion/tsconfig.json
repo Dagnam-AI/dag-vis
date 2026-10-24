@@ -1,0 +1,23 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "paths": {
+      "@dagnam/vis": ["../src/index.ts"],
+      "@dagnam/vis/animate": ["../src/animate/index.ts"]
+    }
+  },
+  "include": [
+    "../types/**/*.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "scripts/**/*.ts",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "remotion.config.ts",
+    "webpack-override.ts",
+    "vitest.config.ts"
+  ]
+}
