@@ -6,6 +6,7 @@ import { VisError } from "../../src/core/errors.js";
 import { ogCard } from "../../src/scene/og-card.js";
 import { fontWidth } from "../../src/scene/text-fonts.js";
 import { MAX_TEXT_LENGTH } from "../../src/scene/text.js";
+import { textContent } from "../helpers/svg-text.js";
 import { expectGolden } from "../helpers/golden.js";
 import { rasterize } from "../helpers/render.js";
 
@@ -38,7 +39,7 @@ function textLines(svg: string): Line[] {
       size: Number(m[4]),
       family: /font-family="([^"]*)"/.exec(attrs)?.[1] ?? "",
       letterSpacing: Number(/letter-spacing="([\d.]+)"/.exec(attrs)?.[1] ?? 0),
-      text: (m[5] ?? "").replace(/<[^>]+>/g, ""),
+      text: textContent(m[5] ?? ""),
     });
   }
   return out;

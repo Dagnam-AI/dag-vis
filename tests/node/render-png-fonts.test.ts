@@ -11,6 +11,7 @@ import { coverSpec } from "../../src/scene/cover.js";
 import { ogCard } from "../../src/scene/og-card.js";
 import { fontWidth } from "../../src/scene/text-fonts.js";
 import type { Raster } from "../helpers/render.js";
+import { textContent } from "../helpers/svg-text.js";
 import { ROOT } from "../helpers/ttf.js";
 import { decode, dims, inkWidth, pixel, sized } from "./png-helpers.js";
 
@@ -170,8 +171,12 @@ describe("renderPng with the bundled display fonts", () => {
       y: Number(m[2]),
       moon: m[3]?.startsWith("moonhouse") === true,
       size: Number(m[4]),
-      // the wordmark's red ".AI" is not light ink: measure "DAGNAM" alone
-      text: (m[5] ?? "").replace(/<[^>]+>/g, "").replace(".AI", ""),
+      // The wordmark's red ".AI" (a child tspan) is not light ink: measure the text
+      // before its first tag, "DAGNAM", alone. Other lines keep their children's text.
+      text:
+        m[3]?.startsWith("moonhouse") === true
+          ? ((m[5] ?? "").split("<")[0] ?? "")
+          : textContent(m[5] ?? ""),
     }));
     expect(lines).toHaveLength(6);
     for (const l of lines) {

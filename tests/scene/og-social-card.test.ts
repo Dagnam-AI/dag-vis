@@ -5,6 +5,7 @@ import { UNBOUNDED } from "../../src/brand/unbounded-metrics.js";
 import { VisError } from "../../src/core/errors.js";
 import { coverSpec } from "../../src/scene/cover.js";
 import { ogCard } from "../../src/scene/og-card.js";
+import { textContent } from "../helpers/svg-text.js";
 import {
   fontWidth,
   middleBaseline,
@@ -52,7 +53,7 @@ function texts(svg: string): Text[] {
     size: Number(m[4]),
     attrs: m[5] ?? "",
     inner: m[6] ?? "",
-    text: (m[6] ?? "").replace(/<[^>]+>/g, ""),
+    text: textContent(m[6] ?? ""),
   }));
 }
 const titleLines = (svg: string): Text[] =>
