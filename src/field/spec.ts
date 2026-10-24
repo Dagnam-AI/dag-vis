@@ -285,11 +285,22 @@ function resolveFluted(o: Obj): ResolvedFluted {
 }
 
 /**
- * Validate a field spec and fill every default. Throws a VisError naming the
- * offending parameter; never mutates `spec`.
+ * Each object `resolveField` returned, mapped to a private copy made at that moment:
+ * the only way `resolvedField` recognises one. The copy is what gets rendered, so
+ * editing the returned object afterwards cannot smuggle an unchecked value in.
  */
-export function resolveField(spec: unknown): ResolvedField {
-  const o = obj(spec, "field spec");
+const RESOLVED = new WeakMap<object, ResolvedField>();
+
+/**
+ * The validated snapshot behind an object `resolveField` returned, or `undefined`
+ * for anything else: a clone, a hand-built look-alike or a raw spec is not one,
+ * whatever fields it carries.
+ */
+export function resolvedField(v: unknown): ResolvedField | undefined {
+  return typeof v === "object" && v !== null ? RESOLVED.get(v) : undefined;
+}
+
+function resolve(o: Obj): ResolvedField {
   switch (o.kind) {
     case "flow":
       return resolveFlow(o);
@@ -302,4 +313,15 @@ export function resolveField(spec: unknown): ResolvedField {
         `kind must be one of flow|fluid|fluted, got ${describeValue(o.kind)}`,
       );
   }
+}
+
+/**
+ * Validate a field spec and fill every default. Throws a VisError naming the
+ * offending parameter; never mutates `spec`. The result is remembered
+ * (`resolvedField`), so a renderer can take it without validating again.
+ */
+export function resolveField(spec: unknown): ResolvedField {
+  const r = resolve(obj(spec, "field spec"));
+  RESOLVED.set(r, structuredClone(r));
+  return r;
 }

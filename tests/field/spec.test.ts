@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { VisError } from "../../src/core/index.js";
-import { FLOW_SHAPES, MAX_REEDS, resolveField } from "../../src/field/spec.js";
+import {
+  FLOW_SHAPES,
+  MAX_REEDS,
+  resolveField,
+  resolvedField,
+} from "../../src/field/spec.js";
 import type { FieldSpec } from "../../src/field/spec.js";
 
 /** An array with a hole at `hole` (a literal `[, x]` trips no-sparse-arrays), so validators must read by index. */
@@ -384,5 +389,19 @@ describe("resolveField", () => {
       "fluid",
       "fluted",
     ]);
+  });
+
+  it("remembers what it returned: resolvedField gives a private snapshot, and nothing else qualifies", () => {
+    const r = resolveField(fluted({ reeds: 6 }));
+    const snap = resolvedField(r);
+    expect(snap).toEqual(r);
+    expect(snap).not.toBe(r);
+    (r as { reeds: number }).reeds = 99;
+    expect(resolvedField(r)).toHaveProperty("reeds", 6);
+    expect(resolvedField(structuredClone(r))).toBeUndefined();
+    expect(resolvedField({ ...r })).toBeUndefined();
+    expect(resolvedField(fluted())).toBeUndefined();
+    for (const v of [null, undefined, 1, "flow"])
+      expect(resolvedField(v)).toBeUndefined();
   });
 });
