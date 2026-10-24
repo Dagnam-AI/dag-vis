@@ -25,8 +25,25 @@ export class FakeGl {
   readonly ONE = 1;
   readonly SRC_ALPHA = 0x0302;
   readonly ONE_MINUS_SRC_ALPHA = 0x0303;
+  readonly TEXTURE_2D = 0x0de1;
+  readonly TEXTURE0 = 0x84c0;
+  readonly RGB32F = 0x8815;
+  readonly RGB = 0x1907;
+  readonly FLOAT = 0x1406;
+  readonly NEAREST = 0x2600;
+  readonly CLAMP_TO_EDGE = 0x812f;
+  readonly TEXTURE_MIN_FILTER = 0x2801;
+  readonly TEXTURE_MAG_FILTER = 0x2800;
+  readonly TEXTURE_WRAP_S = 0x2802;
+  readonly TEXTURE_WRAP_T = 0x2803;
 
   calls: string[] = [];
+  /** The numbers of the latest vector or array upload per uniform name (a copy). */
+  uploads = new Map<string, number[]>();
+  /** Set to make the drawing buffer a different size from the canvas, as a browser does when it clamps. */
+  bufferSize: [number, number] | null = null;
+  /** Every texImage2D data argument, in call order. */
+  textures: ArrayBufferView[] = [];
   compileOk = true;
   linkOk = true;
   /** null simulates a driver that returns no info log. */
@@ -44,6 +61,12 @@ export class FakeGl {
     this.attrs = attrs;
   }
 
+  get drawingBufferWidth(): number {
+    return this.bufferSize ? this.bufferSize[0] : this.canvas.width;
+  }
+  get drawingBufferHeight(): number {
+    return this.bufferSize ? this.bufferSize[1] : this.canvas.height;
+  }
   isContextLost(): boolean {
     return this.lost;
   }
@@ -113,6 +136,58 @@ export class FakeGl {
   }
   uniform1i(l: Loc, x: number): void {
     this.calls.push(`uniform1i ${l.name} ${x}`);
+  }
+  uniform1ui(l: Loc, x: number): void {
+    this.calls.push(`uniform1ui ${l.name} ${x}`);
+  }
+  uniform4f(l: Loc, x: number, y: number, z: number, w: number): void {
+    this.calls.push(`uniform4f ${l.name} ${x} ${y} ${z} ${w}`);
+  }
+  uniform1fv(l: Loc, v: Float32Array): void {
+    this.vector("uniform1fv", l, v);
+  }
+  uniform2fv(l: Loc, v: Float32Array): void {
+    this.vector("uniform2fv", l, v);
+  }
+  uniform3fv(l: Loc, v: Float32Array): void {
+    this.vector("uniform3fv", l, v);
+  }
+  uniform4fv(l: Loc, v: Float32Array): void {
+    this.vector("uniform4fv", l, v);
+  }
+  private vector(call: string, l: Loc, v: Float32Array): void {
+    this.calls.push(`${call} ${l.name} ${v.length}`);
+    this.uploads.set(l.name, Array.from(v));
+  }
+  createTexture(): object {
+    this.calls.push("createTexture");
+    return {};
+  }
+  bindTexture(target: number, tex: object | null): void {
+    this.calls.push(`bindTexture ${target} ${tex === null ? "null" : "tex"}`);
+  }
+  texImage2D(
+    _target: number,
+    _level: number,
+    internal: number,
+    w: number,
+    h: number,
+    _border: number,
+    _format: number,
+    _type: number,
+    data: ArrayBufferView,
+  ): void {
+    this.calls.push(`texImage2D ${internal} ${w}x${h} ${data.byteLength}`);
+    this.textures.push(data);
+  }
+  texParameteri(_target: number, p: number, v: number): void {
+    this.calls.push(`texParameteri ${p} ${v}`);
+  }
+  activeTexture(unit: number): void {
+    this.calls.push(`activeTexture ${unit}`);
+  }
+  deleteTexture(): void {
+    this.calls.push("deleteTexture");
   }
   viewport(x: number, y: number, w: number, h: number): void {
     this.calls.push(`viewport ${x} ${y} ${w} ${h}`);

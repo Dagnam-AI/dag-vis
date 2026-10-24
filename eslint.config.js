@@ -4,10 +4,10 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 // One-directional layering: core <- brand <- gradient/pattern
-// <- scene <- node, with field (core only), animate (core, scene) and react (core,
-// animate, gradient) beside them as separate entry points. Only the root barrel
-// imports field today; the ALLOWED map and these lists widen together when another
-// layer does. Each layer
+// <- scene <- node, with field (core only), animate (core, scene, field) and react
+// (core, animate, gradient) beside them as separate entry points. The root barrel
+// and animate import field; the ALLOWED map and these lists widen together when
+// another layer does. Each layer
 // lists what it must NOT import; tests/structure.test.ts asserts the same map
 // from the import graph, so a rule edited here without the test fails loudly.
 // `browserSafe` layers additionally may not touch Node built-ins, Node globals
@@ -111,9 +111,9 @@ export default tseslint.config(
     "react",
     "node",
   ]),
-  // animate -> core, scene (ribbonCurves). field is not importable yet; the
+  // animate -> core, scene (ribbonCurves), field (the live field effect). The
   // structure test's ALLOWED map and these lists widen together.
-  forbid("animate", ["brand", "gradient", "pattern", "field", "react", "node"]),
+  forbid("animate", ["brand", "gradient", "pattern", "react", "node"]),
   // react -> core, animate, gradient.
   forbid("react", ["brand", "pattern", "scene", "field", "node"]),
   forbid("node", ["field", "animate", "react"], false),

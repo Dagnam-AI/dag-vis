@@ -97,6 +97,7 @@ describe("@dagnam/vis root barrel", () => {
       "RIBBON_DEFAULTS",
       "TERMINAL_DEFAULTS",
       "createDither",
+      "createField",
       "createGlitch",
       "createPixelBlast",
       "createRibbon",
