@@ -4,6 +4,7 @@ import {
   checkRecord,
   ledgerLine,
   parseCheckReport,
+  storedCheckProblems,
   type CheckReport,
   type LedgerInput,
 } from "../../src/lib/ledger.ts";
@@ -136,4 +137,23 @@ describe("ledgerLine", () => {
       ledgerLine({ ...INPUT, report: { ...REPORT, loudness: null } }),
     ).toThrow(/without a measured sound bed/);
   });
+});
+
+describe("storedCheckProblems", () => {
+  it("is empty for a record that passed", () => {
+    expect(storedCheckProblems(JSON.stringify({ ...REPORT }))).toEqual([]);
+  });
+
+  it("lists the problems a failed record carries", () => {
+    expect(
+      storedCheckProblems(JSON.stringify({ problems: ["no audio track", 3] })),
+    ).toEqual(["no audio track", "3"]);
+  });
+
+  it.each(["", "{nope", "null", "[]", "{}", '{"problems":"none"}'])(
+    "does not vouch for %j",
+    (text) => {
+      expect(storedCheckProblems(text)).toHaveLength(1);
+    },
+  );
 });

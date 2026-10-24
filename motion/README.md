@@ -2,6 +2,21 @@
 
 Videos for Dagnam, made in code with [Remotion](https://www.remotion.dev) on top of the deterministic effects in `@dagnam/vis`. This folder is not part of the published npm package.
 
+## Rendering and storing a video
+
+Run everything from `motion/` (the commands check it): the library alias and the relative paths are `motion/`'s.
+
+```sh
+npm run render -- <video> [--props '<json>'] [--crf 18]
+```
+
+One command makes one deliverable: it synthesises and normalises the video's sound bed (`src/videos/<video>/audio.ts`), renders `out/<video>/<video>-<yyyymmdd>-v<N>.mp4` with H.264 (the next free `N`; an earlier render is never overwritten), writes the props used beside it (`…-v<N>.props.json`), checks frame count, size, frame rate, audio length and loudness (`…-v<N>.check.json`), copies the three files into the local videos folder, and appends one line to `RENDERS.jsonl`: file, SHA-256, size, frames, size, frame rate, loudness and true peak, props, library commit, Remotion version, renderer, time, and `stored: { local, r2 }`. A render that fails its checks is kept in `out/` for inspection but is stored nowhere and gets no ledger line.
+
+- **Renderer.** A deliverable is rendered with `swangle` (software, the same output on every machine) and says so in its ledger line and check output. `MOTION_GL=angle` (the GPU) is refused for a deliverable. For a quick look on the GPU, `npm run render -- <video> --preview-not-a-deliverable` renders into `out/<video>/preview/`, runs the checks and stops: no version number, no stored copy, no ledger line.
+- **Local copy.** `$DAG_VIDEOS_DIR/<video>/`, by default `../info/videos/<video>/` beside this checkout (a folder that is gitignored where it lives). The render stops early, naming `DAG_VIDEOS_DIR`, if its parent folder is missing. A file that is already there with different content is an error; nothing is overwritten.
+- **R2 copy.** `npm run store -- out/<video>/<name>.mp4 --upload` puts the three files in the owner's bucket under `videos/<video>/` with a signed request (no SDK) and records the key in `stored.r2`. **This is a remote write and is run only by the owner, by hand: never by `render`, a test, CI or an agent that was not told to.** It reads `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` and `R2_VIDEOS_BUCKET` from the environment and nowhere else; with none of them set it prints one "skipped" line, with some missing it names them, and no message it prints contains a credential. It uploads only a render whose SHA-256 matches its ledger line and leaves an object that already exists untouched. `npm run store -- --check` verifies the local folder only.
+- **What leaves the machine.** Rendered pixels (the MP4, its props and its check output). The Moonhouse font file is never committed, uploaded or released.
+
 ## Verified toolchain facts
 
 Everything below was checked on 2026-10-24 (UTC) on macOS (Apple M4 Pro), Node v24.22.1, npm 11.19.1, in a scratch Remotion project that aliased `@dagnam/vis` to this repository's `src/`. Each fact names the command or page that produced it.

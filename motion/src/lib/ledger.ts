@@ -22,6 +22,20 @@ export function parseCheckReport(stdout: string, stderr: string): CheckReport {
   }
 }
 
+/** Why a `.check.json` does not vouch for its render: its problems, or that it cannot be read. Empty means it passed. */
+export function storedCheckProblems(text: string): string[] {
+  let record: unknown;
+  try {
+    record = JSON.parse(text);
+  } catch {
+    return ["the check output is not valid JSON"];
+  }
+  const problems = (record as { problems?: unknown } | null)?.problems;
+  if (!Array.isArray(problems))
+    return ["the check output has no list of problems"];
+  return problems.map(String);
+}
+
 /**
  * The `.check.json` kept beside a render: the report with the file named
  * relative to motion/ (no machine path leaves the machine) and the renderer
