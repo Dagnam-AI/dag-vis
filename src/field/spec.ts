@@ -24,14 +24,14 @@ export type FlutedDirection = "vertical" | "horizontal";
 const DIRECTIONS: readonly FlutedDirection[] = ["vertical", "horizontal"];
 
 export interface FieldHighlight {
-  at: [number, number];
+  at: readonly [number, number];
   strength?: number;
   radius?: number;
   color?: string;
 }
 export interface FlowFieldSpec {
   kind: "flow";
-  palette: string[];
+  palette: readonly string[];
   shape?: FlowShape;
   warp?: { octaves?: number; strength?: number; scale?: number };
   scale?: number;
@@ -42,13 +42,13 @@ export interface FlowFieldSpec {
   seed?: number;
 }
 export interface FluidFieldPoint {
-  at: [number, number];
+  at: readonly [number, number];
   color: string;
   spread?: number;
 }
 export interface FluidFieldSpec {
   kind: "fluid";
-  points: FluidFieldPoint[];
+  points: readonly FluidFieldPoint[];
   softness?: number;
   drift?: number;
   base?: string;
@@ -197,15 +197,13 @@ function resolveFlow(o: Obj): ResolvedFlow {
   const light = obj(orDefault<unknown>(o.light, {}), "light");
   let highlight: ResolvedFlow["highlight"] = null;
   if (light.highlight !== undefined) {
-    const h = obj(light.highlight, "light.highlight");
+    const path = "light.highlight";
+    const h = obj(light.highlight, path);
     highlight = {
-      at: pair(h.at, "highlight.at"),
-      strength: num(h, "highlight", "strength", 0.4, 0, 1),
-      radius: num(h, "highlight", "radius", 0.5, 0.01, 2),
-      color: parseRgba(
-        "highlight.color",
-        orDefault<unknown>(h.color, "#ffffff"),
-      ),
+      at: pair(h.at, `${path}.at`),
+      strength: num(h, path, "strength", 0.4, 0, 1),
+      radius: num(h, path, "radius", 0.5, 0.01, 2),
+      color: parseRgba(`${path}.color`, orDefault<unknown>(h.color, "#ffffff")),
     };
   }
   return {
@@ -257,16 +255,19 @@ function resolveFluid(o: Obj): ResolvedFluid {
 
 function resolveFluted(o: Obj): ResolvedFluted {
   const src = obj(o.source, "source");
-  if (src.kind !== "flow" && src.kind !== "fluid")
+  // Own property only: the spread below copies own properties, so an inherited kind would resolve against nothing.
+  const kind = Object.hasOwn(src, "kind") ? src.kind : undefined;
+  if (kind !== "flow" && kind !== "fluid")
     throw new VisError(
-      `source must be a flow or fluid spec, got ${describeValue(src.kind)}`,
+      `source must be a flow or fluid spec, got ${describeValue(kind)}`,
     );
-  // The fluted stage applies grain after shading; the source's own grain would double up.
-  const source = within("source", () =>
-    src.kind === "flow"
+  const source = within("source", () => {
+    // Checked, then zeroed: the fluted stage applies grain after shading, so the source's own grain would double up.
+    num(src, "", "grain", 0.3, 0, 1);
+    return kind === "flow"
       ? resolveFlow({ ...src, grain: 0 })
-      : resolveFluid({ ...src, grain: 0 }),
-  );
+      : resolveFluid({ ...src, grain: 0 });
+  });
   return {
     kind: "fluted",
     source,

@@ -27,19 +27,21 @@ const DRIFT_RATE = 0.4;
 export function timeCoords(t: number, loop?: number): TimeCoords {
   if (typeof t !== "number" || !Number.isFinite(t))
     throw new VisError(`t must be a finite number, got ${describeValue(t)}`);
+  // `+ 0` turns -0 into +0, so a negative zero never reaches the coordinates.
+  const time = t + 0;
   if (loop === undefined)
     return {
-      z: t * TIME_RATE,
+      z: time * TIME_RATE,
       w: 0,
-      theta: t * DRIFT_RATE,
-      grainFrame: Math.floor(t * GRAIN_FPS),
+      theta: time * DRIFT_RATE,
+      grainFrame: Math.floor(time * GRAIN_FPS),
     };
   if (typeof loop !== "number" || !Number.isFinite(loop) || loop <= 0)
     throw new VisError(
       `loop must be a positive finite number, got ${describeValue(loop)}`,
     );
-  // (t mod T) first, so t = k·T lands on phase 0 EXACTLY (sin(2π) is -2.4e-16, not 0).
-  const phase = (((t % loop) + loop) % loop) / loop;
+  // (time mod T) first, so t = k·T lands on phase 0 EXACTLY (sin(2π) is -2.4e-16, not 0).
+  const phase = (((time % loop) + loop) % loop) / loop;
   const theta = 2 * Math.PI * phase;
   const r = (TIME_RATE * loop) / (2 * Math.PI);
   const frames = Math.max(1, Math.round(loop * GRAIN_FPS));

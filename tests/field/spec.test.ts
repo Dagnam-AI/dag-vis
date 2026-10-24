@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { VisError } from "../../src/core/index.js";
 import { FLOW_SHAPES, resolveField } from "../../src/field/spec.js";
+import type { FieldSpec } from "../../src/field/spec.js";
 
 /** An array with a hole at `hole` (a literal `[, x]` trips no-sparse-arrays), so validators must read by index. */
 function holey(hole: number, ...rest: unknown[]): unknown[] {
@@ -229,44 +230,52 @@ describe("resolveField", () => {
     [
       "highlight at not a pair",
       flow({ light: { highlight: { at: [1], strength: 0.5 } } }),
-      /highlight\.at/,
+      /light\.highlight\.at/,
     ],
     [
       "highlight at missing",
       flow({ light: { highlight: { strength: 0.5 } } }),
-      /highlight\.at/,
+      /light\.highlight\.at/,
     ],
     [
       "highlight at out of range",
       flow({ light: { highlight: { at: [3, 0], strength: 0.5 } } }),
-      /highlight\.at\[0\]/,
+      /light\.highlight\.at\[0\]/,
     ],
     [
       "highlight at NaN",
       flow({ light: { highlight: { at: [0, Number.NaN] } } }),
-      /highlight\.at\[1\]/,
+      /light\.highlight\.at\[1\]/,
     ],
     [
       "highlight at sparse",
       flow({ light: { highlight: { at: holey(1, 0) } } }),
-      /highlight\.at\[1\]/,
+      /light\.highlight\.at\[1\]/,
     ],
-    ["highlight not an object", flow({ light: { highlight: 2 } }), /highlight/],
-    ["highlight null", flow({ light: { highlight: null } }), /highlight/],
+    [
+      "highlight not an object",
+      flow({ light: { highlight: 2 } }),
+      /light\.highlight/,
+    ],
+    [
+      "highlight null",
+      flow({ light: { highlight: null } }),
+      /light\.highlight/,
+    ],
     [
       "highlight strength > 1",
       flow({ light: { highlight: { at: [0, 0], strength: 2 } } }),
-      /highlight\.strength/,
+      /light\.highlight\.strength/,
     ],
     [
       "highlight radius zero",
       flow({ light: { highlight: { at: [0, 0], radius: 0 } } }),
-      /highlight\.radius/,
+      /light\.highlight\.radius/,
     ],
     [
       "highlight colour unparseable",
       flow({ light: { highlight: { at: [0, 0], color: "??" } } }),
-      /highlight\.color/,
+      /light\.highlight\.color/,
     ],
     ["fluid no points", { kind: "fluid", points: [] }, /points/],
     ["fluid points missing", { kind: "fluid" }, /points/],
@@ -314,6 +323,31 @@ describe("resolveField", () => {
       fluted({ source: flow({ palette: [] }) }),
       /source/,
     ],
+    [
+      "fluted source grain out of range",
+      fluted({ source: flow({ grain: 99 }) }),
+      /source: grain/,
+    ],
+    [
+      "fluted source grain NaN",
+      fluted({ source: fluid({ grain: Number.NaN }) }),
+      /source: grain/,
+    ],
+    [
+      "fluted source grain null",
+      fluted({ source: flow({ grain: null }) }),
+      /source: grain/,
+    ],
+    [
+      "fluted source with an inherited kind",
+      fluted({ source: Object.create({ kind: "flow", palette: PAL }) }),
+      /source must be a flow or fluid spec, got undefined/,
+    ],
+    [
+      "fluted source with no kind",
+      fluted({ source: { palette: PAL } }),
+      /source must be a flow or fluid spec, got undefined/,
+    ],
     ["fluted bad direction", fluted({ direction: "angle" }), /direction/],
     ["fluted reeds too few", fluted({ reeds: 1 }), /reeds/],
     ["fluted reeds fractional", fluted({ reeds: 2.5 }), /reeds/],
@@ -323,5 +357,25 @@ describe("resolveField", () => {
   ])("rejects %s with a VisError naming the parameter", (_name, spec, name) => {
     expect(() => resolveField(spec)).toThrow(VisError);
     expect(() => resolveField(spec)).toThrow(name);
+  });
+
+  it("accepts specs declared `as const` (readonly arrays and tuples)", () => {
+    const flowSpec = {
+      kind: "flow",
+      palette: ["#000", "#fff"],
+      shape: "swirl",
+      light: { highlight: { at: [0.5, 0.5], strength: 0.3 } },
+    } as const;
+    const fluidSpec = {
+      kind: "fluid",
+      points: [{ at: [0, 1], color: "#f00" }],
+    } as const;
+    const flutedSpec = { kind: "fluted", source: flowSpec } as const;
+    const specs: readonly FieldSpec[] = [flowSpec, fluidSpec, flutedSpec];
+    expect(specs.map((spec) => resolveField(spec).kind)).toEqual([
+      "flow",
+      "fluid",
+      "fluted",
+    ]);
   });
 });

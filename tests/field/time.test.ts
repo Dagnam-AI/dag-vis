@@ -43,10 +43,41 @@ describe("timeCoords", () => {
     expect(tc.grainFrame).toBe(0);
   });
 
-  it("is periodic for a fractional loop and a large multiple", () => {
-    const T = 2.5;
-    expect(timeCoords(T * 1000, T)).toEqual(timeCoords(0, T));
-    expect(timeCoords(-T, T)).toEqual(timeCoords(0, T));
+  it("is bit-identical at t = 0, T and 2T for loops that are not exact in binary", () => {
+    for (const T of [3.3, 0.1]) {
+      const start = timeCoords(0, T);
+      expect(timeCoords(T, T)).toEqual(start);
+      expect(timeCoords(2 * T, T)).toEqual(start);
+    }
+  });
+
+  it("matches a computed k*T up to float rounding, not bit for bit", () => {
+    // k*T computed in floating point can fall a hair short of a whole number
+    // of loops, which wraps to the end of the loop instead of its start: the
+    // noise coordinates still agree to rounding, and only the integer grain
+    // frame may land on the last frame. Frame times i/fps never do this.
+    for (const T of [3.3, 0.1]) {
+      const start = timeCoords(0, T);
+      for (let k = -50; k <= 50; k++) {
+        const tc = timeCoords(k * T, T);
+        expect(tc.z).toBeCloseTo(start.z, 12);
+        expect(tc.w).toBeCloseTo(start.w, 12);
+        const frames = Math.round(T * GRAIN_FPS);
+        expect([0, frames - 1]).toContain(tc.grainFrame);
+      }
+    }
+    expect(timeCoords(2.5 * 1000, 2.5)).toEqual(timeCoords(0, 2.5));
+    expect(timeCoords(-2.5, 2.5)).toEqual(timeCoords(0, 2.5));
+  });
+
+  it("never leaks a negative zero, with or without a loop", () => {
+    for (const looped of [timeCoords(-0), timeCoords(-0, 4)])
+      for (const v of Object.values(looped))
+        expect(Object.is(v, -0)).toBe(false);
+    expect(timeCoords(-0)).toEqual(timeCoords(0));
+    expect(timeCoords(-0, 4)).toEqual(timeCoords(0, 4));
+    for (const v of Object.values(timeCoords(-0)))
+      expect(Object.is(v, 0)).toBe(true);
   });
 
   it("is pure: the same input gives the same output", () => {

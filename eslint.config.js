@@ -4,8 +4,9 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 // One-directional layering: core <- brand <- gradient/pattern
-// <- scene <- node, with field (core), animate (core, scene) and react (core,
-// animate, gradient) beside them as separate entry points. Each layer
+// <- scene <- node, with field (core only), animate (core, scene) and react (core,
+// animate, gradient) beside them as separate entry points. Nothing imports
+// field yet; the ALLOWED map and these lists widen together when something does. Each layer
 // lists what it must NOT import; tests/structure.test.ts asserts the same map
 // from the import graph, so a rule edited here without the test fails loudly.
 // `browserSafe` layers additionally may not touch Node built-ins, Node globals
@@ -21,7 +22,7 @@ const forbid = (layer, groups, browserSafe = true) => ({
         patterns: [
           ...groups.map((g) => ({
             group: [`**/${g}/**`, `**/${g}`],
-            message: `src/${layer} must not import from src/${g} (layer order: core <- brand <- gradient,pattern <- scene <- node; animate and react are separate entries).`,
+            message: `src/${layer} must not import from src/${g} (layer order: core <- brand <- gradient,pattern <- scene <- node; field, animate and react are separate entries).`,
           })),
           ...(browserSafe
             ? [
@@ -109,11 +110,12 @@ export default tseslint.config(
     "react",
     "node",
   ]),
-  // animate -> core, scene (ribbonCurves).
-  forbid("animate", ["brand", "gradient", "pattern", "react", "node"]),
+  // animate -> core, scene (ribbonCurves). field is not importable yet; the
+  // structure test's ALLOWED map and these lists widen together.
+  forbid("animate", ["brand", "gradient", "pattern", "field", "react", "node"]),
   // react -> core, animate, gradient.
-  forbid("react", ["brand", "pattern", "scene", "node"]),
-  forbid("node", ["animate", "react"], false),
+  forbid("react", ["brand", "pattern", "scene", "field", "node"]),
+  forbid("node", ["field", "animate", "react"], false),
   {
     // The root barrel is browser-safe and DOM-free: nothing from node/, react/ or animate/, no Node APIs.
     files: ["src/index.ts"],
