@@ -19,6 +19,7 @@ describe("animate barrel", () => {
       "createPixelBlast",
       "createRibbon",
       "createTerminal",
+      "exportCanvas",
       "loopTime",
     ]);
   });

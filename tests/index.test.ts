@@ -102,6 +102,7 @@ describe("@dagnam/vis root barrel", () => {
       "createPixelBlast",
       "createRibbon",
       "createTerminal",
+      "exportCanvas",
       "loopTime",
     ]);
   });

@@ -3,6 +3,12 @@
 // lastChange, cellState, colour.ts) stay out on purpose.
 export { createDither, DITHER_DEFAULTS } from "./dither.js";
 export type { DitherOptions } from "./dither.js";
+export { exportCanvas } from "../export/index.js";
+export type {
+  BrowserFormat,
+  ExportCanvasOptions,
+  ExportHandle,
+} from "../export/index.js";
 export { createField } from "./field.js";
 export type { FieldOptions } from "./field.js";
 export { createGlitch, GLITCH_DEFAULTS } from "./glitch.js";
