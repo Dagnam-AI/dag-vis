@@ -77,8 +77,8 @@ describe("ogCard", () => {
     });
     expect(svg).toContain(">BLOG<");
     expect(svg).toContain('fill="#ffffff"'); // light base
-    // The brief's `fill="#0a0a0a">` cannot hold: fill is not the last attribute
-    // of a <text>. Assert it on the text elements instead.
+    // `fill="#0a0a0a">` cannot be matched: fill is not the last attribute of a
+    // <text>. Assert it on the text elements instead.
     expect(svg).toMatch(/<text [^>]*fill="#0a0a0a"/); // dark text
     expect(svg).not.toContain('fill="#fafafa"');
     expect(svg).toContain('A &lt;b&gt; &amp; "c"');

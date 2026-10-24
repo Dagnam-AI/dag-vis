@@ -2,7 +2,7 @@ name: CI
 
 # Public repo, so these runs are real evidence. The release workflow calls
 # this file, so a tag cannot publish a commit these jobs would have failed.
-# The Playwright gallery job is added by the animation plan, when demo/ exists.
+# The gallery job drives the demo in headless Chromium (software WebGL).
 on:
   push:
     branches: [main]
@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
 
       # The dev/CI toolchain needs Node >= 22.12 (vitest 5). The package's own
-      # `engines.node >=20` is for consumers, who run the built dist/.
+      # `engines.node >=22` is the floor for consumers, who run the built dist/.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
@@ -82,7 +82,8 @@ jobs:
 
       # A consumer gets the tarball plus (optionally) the native rasteriser.
       # Exercise every entry from an empty directory: the browser-safe root
-      # without resvg installed, then the node entry + CLI with it.
+      # without resvg or react installed, the animate and react entries, then
+      # the node entry + CLI with resvg.
       - name: Install in isolation and smoke both entries
         run: |
           cd "$(mktemp -d)"
@@ -91,12 +92,16 @@ jobs:
           npm install "$tarball" >/dev/null
 
           # Browser-safe means the root entry's import graph never reaches a
-          # Node builtin, the node entry or the native rasteriser. Walk it.
+          # Node builtin, the node, animate or react entries or the native
+          # rasteriser (the animate types name HTMLCanvasElement, so the root
+          # must not pull them in). The animate entry has no dependencies at
+          # all (no react, no bare import). Walk both.
           cat > root-graph.mjs <<'EOF'
           import { readFileSync } from "node:fs";
           import { dirname, resolve } from "node:path";
           import { fileURLToPath } from "node:url";
           const dist = resolve(fileURLToPath(import.meta.url), "../node_modules/@dagnam/vis/dist");
+          const graph = (entry, forbidden, min) => {
           const seen = new Set();
           const walk = (file) => {
             if (seen.has(file)) return;
@@ -108,14 +113,18 @@ jobs:
               const spec = m[1] ?? m[2] ?? m[3];
               if (!spec.startsWith(".")) throw new Error(`${file} imports ${spec}`);
               const target = resolve(dirname(file), spec);
-              if (target.startsWith(resolve(dist, "node"))) throw new Error(`${file} reaches the node layer: ${spec}`);
+              for (const layer of forbidden)
+                if (target.startsWith(resolve(dist, layer))) throw new Error(`${file} reaches the ${layer} layer: ${spec}`);
               walk(target);
             }
           };
-          walk(resolve(dist, "index.js"));
+          walk(resolve(dist, entry));
           // A regex that stopped matching would pass vacuously: insist on a real graph.
-          if (seen.size < 30) throw new Error(`only ${seen.size} modules found; the walker is broken`);
-          console.log(`root graph ok: ${seen.size} modules, no node: / resvg / node layer`);
+          if (seen.size < min) throw new Error(`only ${seen.size} modules found from ${entry}; the walker is broken`);
+          console.log(`${entry} graph ok: ${seen.size} modules, no node: / resvg / ${forbidden.join(", ")} layer`);
+          };
+          graph("index.js", ["node", "animate", "react"], 30);
+          graph("animate/index.js", ["node", "react"], 10);
           EOF
           node root-graph.mjs
 
@@ -131,6 +140,19 @@ jobs:
           EOF
           node root.mjs
 
+          # The animate entry imports in plain Node (no DOM, no react installed):
+          # importing creates nothing, and a wrapper-free call is pure.
+          cat > animate.mjs <<'EOF'
+          import * as animate from "@dagnam/vis/animate";
+          import * as root from "@dagnam/vis";
+          for (const name of ["createDither", "createPixelBlast", "createTerminal", "createGlitch", "createRibbon"])
+            if (typeof animate[name] !== "function") throw new Error(`${name} missing from @dagnam/vis/animate`);
+          if (animate.loopTime(5, { duration: 2 }) !== 1) throw new Error("loopTime");
+          if ("createDither" in root) throw new Error("the root must not export the animate effects");
+          console.log("animate ok, react not installed");
+          EOF
+          node animate.mjs
+
           cat > node-missing.mjs <<'EOF'
           import { renderPng } from "@dagnam/vis/node";
           try { await renderPng("<svg xmlns='http://www.w3.org/2000/svg'/>"); throw new Error("expected a VisError"); }
@@ -139,7 +161,10 @@ jobs:
           node node-missing.mjs
 
           # The shipped .d.ts must resolve for a strict TypeScript consumer
-          # (skipLibCheck stays off, so a broken declaration fails here).
+          # (skipLibCheck stays off, so a broken declaration fails here). This
+          # first consumer is Node-only: `lib` is ES2022 WITHOUT the DOM, and it
+          # imports only the root and the node entry, so a root declaration that
+          # names a DOM type (HTMLCanvasElement) fails it with TS2304.
           npm install --save-dev typescript@5.9.3 @types/node@22.20.5 >/dev/null
           cat > consumer.ts <<'EOF'
           import { gradient, ogCard, VisError } from "@dagnam/vis";
@@ -153,10 +178,31 @@ jobs:
           export { png, written, VisError };
           EOF
           cat > tsconfig.json <<'EOF'
-          { "compilerOptions": { "module": "NodeNext", "moduleResolution": "NodeNext", "target": "ES2022", "strict": true, "noEmit": true, "skipLibCheck": false, "types": ["node"] }, "files": ["consumer.ts"] }
+          { "compilerOptions": { "module": "NodeNext", "moduleResolution": "NodeNext", "target": "ES2022", "lib": ["ES2022"], "strict": true, "noEmit": true, "skipLibCheck": false, "types": ["node"] }, "files": ["consumer.ts"] }
           EOF
           npx tsc -p tsconfig.json
-          echo "types ok"
+          echo "types ok (Node-only consumer, no DOM lib)"
+
+          # A browser consumer (DOM lib) of the animate and react entries.
+          npm install --save-dev react@19.3.1 @types/react@19.3.0 >/dev/null
+          cat > consumer-dom.tsx <<'EOF'
+          import { createDither, type EffectHandle, type DitherOptions } from "@dagnam/vis/animate";
+          import { VisBackground, Gradient } from "@dagnam/vis/react";
+          const handle: EffectHandle<DitherOptions> = createDither(document.createElement("canvas"), { colors: ["#e64040"] });
+          handle.renderAt(1);
+          export const view = (
+            <>
+              <VisBackground effect="dither" options={{ waveSpeed: 0.15 }} />
+              <Gradient spec={{ kind: "linear", stops: ["#ef4444", "#10abba"] }} />
+            </>
+          );
+          EOF
+          cat > tsconfig.dom.json <<'EOF'
+          { "compilerOptions": { "module": "NodeNext", "moduleResolution": "NodeNext", "target": "ES2022", "lib": ["ES2022", "DOM"], "jsx": "react-jsx", "strict": true, "noEmit": true, "skipLibCheck": false, "types": [] }, "files": ["consumer-dom.tsx"] }
+          EOF
+          npx tsc -p tsconfig.dom.json
+          echo "types ok (DOM consumer of animate and react)"
+          node --input-type=module -e 'const r = await import("@dagnam/vis/react"); if (typeof r.VisBackground !== "function" || typeof r.Gradient !== "function") throw new Error("react entry"); console.log("react entry ok")'
 
           npm install @resvg/resvg-js@2.6.2 >/dev/null
           npx dag-vis --help | head -1
@@ -164,3 +210,46 @@ jobs:
           npx dag-vis favicons --out out/icons
           node -e "const b=require('fs').readFileSync('out/og.png'); if(b.readUInt32BE(16)!==1200) throw new Error('png width'); console.log('cli ok')"
           test -s out/icons/favicon.ico && test -s out/icons/site.webmanifest
+
+  gallery:
+    name: Gallery smoke in headless Chromium, screenshots for review
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm ci
+
+      # The Chromium revision is pinned by the exact @playwright/test version in
+      # package-lock.json; --with-deps adds the system libraries it needs.
+      - run: npx playwright install --with-deps chromium
+
+      # Starts the Vite demo itself (playwright.config.ts webServer) and checks
+      # every effect renders a non-blank, deterministic frame. Screenshots are
+      # artifacts for a human, never compared against a baseline.
+      - run: npm run test:e2e
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: gallery-screenshots
+          path: screenshots/
+          retention-days: 7
+          if-no-files-found: warn
+
+      # Traces of failing tests (playwright.config.ts: retain-on-failure).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: gallery-test-results
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: warn

@@ -3,12 +3,13 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-// One-directional layering (spec section 4): core <- brand <- gradient/pattern
-// <- scene <- node (animate/react are added by the animation plan). Each layer
+// One-directional layering: core <- brand <- gradient/pattern
+// <- scene <- node, with animate (core, scene) and react (core, animate,
+// gradient) beside them as separate entry points. Each layer
 // lists what it must NOT import; tests/structure.test.ts asserts the same map
 // from the import graph, so a rule edited here without the test fails loudly.
 // `browserSafe` layers additionally may not touch Node built-ins, Node globals
-// or the native rasteriser (spec section 8, dependency weight rule). Both
+// or the native rasteriser (dependency weight rule). Both
 // constraints live in ONE no-restricted-imports entry per layer because eslint
 // keeps only the last matching config for a rule.
 const forbid = (layer, groups, browserSafe = true) => ({
@@ -20,7 +21,7 @@ const forbid = (layer, groups, browserSafe = true) => ({
         patterns: [
           ...groups.map((g) => ({
             group: [`**/${g}/**`, `**/${g}`],
-            message: `src/${layer} must not import from src/${g} (layer order: core <- brand <- gradient,pattern <- scene <- node).`,
+            message: `src/${layer} must not import from src/${g} (layer order: core <- brand <- gradient,pattern <- scene <- node; animate and react are separate entries).`,
           })),
           ...(browserSafe
             ? [
@@ -89,9 +90,13 @@ export default tseslint.config(
   forbid("gradient", ["pattern", "scene", "animate", "react", "node"]),
   forbid("pattern", ["gradient", "scene", "animate", "react", "node"]),
   forbid("scene", ["animate", "react", "node"]),
+  // animate -> core, scene (ribbonCurves).
+  forbid("animate", ["brand", "gradient", "pattern", "react", "node"]),
+  // react -> core, animate, gradient.
+  forbid("react", ["brand", "pattern", "scene", "node"]),
   forbid("node", ["animate", "react"], false),
   {
-    // The root barrel is browser-safe: nothing from node/ or react/, no Node APIs.
+    // The root barrel is browser-safe and DOM-free: nothing from node/, react/ or animate/, no Node APIs.
     files: ["src/index.ts"],
     rules: {
       "no-restricted-imports": [
@@ -99,8 +104,16 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ["./node/*", "./node", "./react/*", "./react"],
-              message: "The root barrel stays browser-safe.",
+              group: [
+                "./node/*",
+                "./node",
+                "./react/*",
+                "./react",
+                "./animate/*",
+                "./animate",
+              ],
+              message:
+                "The root barrel stays browser-safe and DOM-free: animate, react and node are separate entry points.",
             },
             {
               group: ["node:*", "@resvg/resvg-js"],

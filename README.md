@@ -2,11 +2,12 @@
 
 Deterministic, parameterised [Dagnam.AI](https://dagnam.ai) visuals: brand tokens, gradients, patterns, social-preview (OG) cards, ribbons and favicon sets. Generators are pure functions that return SVG or CSS strings; a small Node layer turns them into PNGs.
 
-| import                             | what                                                                                | runtime deps                 |
-| ---------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------- |
-| `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), browser-safe         | none                         |
-| `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, the CLI (bundled Inter, Unbounded and Moonhouse fonts) | `@resvg/resvg-js` (optional) |
-| `@dagnam/vis/react`                | **planned, not in 0.1.0**: the export path is reserved and does not resolve yet     | `react` (peer)               |
+| import                             | what                                                                                        | runtime deps                 |
+| ---------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------- |
+| `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), browser-safe                 | none                         |
+| `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, the CLI (bundled Inter, Unbounded and Moonhouse fonts)         | `@resvg/resvg-js` (optional) |
+| `@dagnam/vis/animate`              | the animated effects (`createDither`, `createGlitch`, ...): WebGL2 / Canvas2D, browser only | none                         |
+| `@dagnam/vis/react`                | `<VisBackground>` (the animated effects) and `<Gradient>` for React 18 and 19               | `react` (optional peer)      |
 
 Seeded generators take `seed` (default `1`); all output is deterministic, so the same options and seed give byte-identical SVG and CSS (`logoSvg` and `animatedGradientCss` take no seed).
 
@@ -105,6 +106,123 @@ await favicons({ outDir: "public" }); // favicon.ico/svg, apple-touch-icon, PWA 
 
 `renderPng` is meant for SVG that this package's own generators produced from validated options; it is defence in depth, not a sandbox. It refuses file and network reads through `href` (`<image>` and `<feImage>` may only use raster `data:` URIs, that is `data:image/png`, `jpeg`, `jpg`, `gif` or `webp` with a comma, never `image/svg+xml`, `text/*`, an empty type or a bare `data:,`; every other element only `#id` references; so a `gradient` overlay image must be a raster `data:` URI to render to PNG), DTD entity declarations, a DOCTYPE with an internal subset, markup it cannot classify (an unterminated comment or tag, a stray `<`), SVG text over 5,000,000 characters, more than 5000 `<clipPath>`/`<mask>` elements (a `layers` spec of more than 19 fluted-256 layers reaches this), and any output over 16384 px a side or 64 megapixels. The href check is a single linear pass over the text (it skips comments, CDATA sections and processing instructions as units and still checks tag-like text inside them), not an XML parser: it is meant to err towards rejecting, but it can in principle disagree with resvg's parser. An independent differential fuzz of about 139,000 generated documents against bare resvg-js 2.6.2 found it accepting file reads (a quote opened in a comment hiding a real `<image>`, and an SVG nested in a `data:` URL whose `<feImage>` read a file), a `data:` URL that aborted the process, and a quadratic scan; all four are fixed, a small seeded version of that differential runs in the test suite, and the fuzz was re-run. That is evidence, not a proof. It cannot make `@resvg/resvg-js` safe against hostile input: deeply chained clipPaths or masks (a chain of 20,000 crashed resvg-js 2.6.2 on macOS arm64; 10,000 rendered), a huge `patternTransform` scale, raster bombs inside `data:` PNGs and expensive filters can crash the process, exhaust memory or run for a very long time, and rendering is synchronous native work that blocks the event loop. A gradient spec from an untrusted source is untrusted input to `renderPng` too, including `dag-vis gradient --spec <someone else's file> --out x.png`: `overlay.image` accepts any `data:` URI (a raster bomb), and a spec may have up to 64 nodes, which can stack heavy layers; render such specs in a separate process with limits. Never pass SVG you did not generate to `renderPng` in a server. If you must render untrusted SVG, do it in a separate process, container or worker with memory and CPU-time limits, and expect it to fail. The default fonts are the bundled Inter only; pass `fontFiles` for CJK or emoji.
 
+## Animated effects
+
+Framework-free WebGL2 and Canvas2D ports of the landing-page card backgrounds, plus an animated ribbon. They are
+exported from `@dagnam/vis/animate`, not from the root (their types name `HTMLCanvasElement`, and the root
+type-checks without the DOM lib) (`createDither`, `createPixelBlast`, `createTerminal`, `createGlitch`,
+`createRibbon`, their `*_DEFAULTS`, `COMMON_DEFAULTS`, `loopTime` and the option types). Importing the entry touches
+no DOM global and creates no context: nothing happens until you call a factory and `start()` or `renderAt()`.
+
+Fidelity vs. the current landing cards: `FIDELITY_FRONTEND_DIR=<path> npm run fidelity`. The variable is required: it must point at a checkout or an archive copy of the app whose landing page uses these effects, with a current `yarn install`; without it (or when the directory has no `node_modules`) the tool stops at once with one message. Starting that app's dev server writes into the directory (a tracked generated file and `node_modules/.vite`), so use an archive copy and never point it at a checkout other people are using; the tool never defaults to writing in another repository. The landing Dither starts its own clock a load-dependent few frames after mount, so the run fits that lag per pass (7 captures of that one card) and prints it on the page; `FIDELITY_DITHER_LAG_FRAMES=<frames>` skips the fit and uses that value (a non-negative integer, anything else is an error).
+
+Every factory takes a `<canvas>` whose **parent** sets the size and returns an `EffectHandle`:
+
+```ts
+import { createDither } from "@dagnam/vis/animate";
+
+const h = createDither(canvas, {
+  waveSpeed: 0.15,
+  waveAmplitude: 0.1,
+  pixelSize: 1,
+  color: "#e64040",
+});
+h.start(); // creates the GL context, sizes to the parent, runs renderAt(elapsed x speed)
+h.update({ speed: 0.5 });
+h.renderAt(2); // deterministic frame at t = 2 s (reads no clock); works without start()
+h.destroy(); // releases the effect's GPU objects and observers
+```
+
+- **Common options**: `speed` (1 = today's motion), `seed` (a safe integer; the random choices of every effect but
+  `createDither`, which has none; default 1), `fps` cap (60), `maxDpr` (2; read at the next resize, not by
+  `update`), `autoPause` (IntersectionObserver plus `document.hidden`, default true), `loop: { duration }`
+  (periodic `renderAt`: exact for `createRibbon` and `createGlitch`, which are seamless across the wrap; for
+  `createDither`, `createPixelBlast` and `createTerminal`, `t` simply wraps, so they jump at the seam) and `colors`
+  (a palette array: `createDither` and `createPixelBlast` read `colors[0]` as `color`, `createTerminal` as `tint`,
+  `createGlitch` and `createRibbon` use all of it). Invalid values throw a `VisError`, and so does a non-finite `t`
+  passed to `renderAt`. Array options (`colors`, `gridMul`) and `loop` are copied when given, so mutating them
+  afterwards changes nothing.
+- **The handle**: `start()`, `stop()`, `update(patch)`, `renderAt(t)` and `destroy()`, plus the read-only `canvas`,
+  `running` and `duration` (the loop duration, `undefined` without a loop). `loopTime(t, loop)` is the wrap the
+  runtime applies to `t` before drawing: `t` modulo `loop.duration` into `[0, duration)`, and `t` unchanged without
+  a loop.
+- **Reduced motion**: with `prefers-reduced-motion: reduce`, `start()` draws one static frame.
+- **`update(patch)`** merges the defined keys (an `undefined` keeps the current value) and validates before applying.
+  `update({ colors })` and `update({ seed })` take effect on a running effect (seed-derived values are resolved on
+  every frame). `update()` cannot clear `loop` or `colors`; recreate the handle to turn either off.
+- **`destroy()`** deletes the effect's GPU objects and removes its listeners but does not call `WEBGL_lose_context`:
+  the canvas keeps its context, so recreating an effect on the same canvas works as long as it needs the same alpha
+  mode (`createDither` and `createPixelBlast` are premultiplied, `createTerminal` is not; the other mode throws a
+  `VisError`, use a fresh canvas; a 2D effect cannot share a canvas with a WebGL one). To release the context itself,
+  remove the canvas and drop every reference to it, including `handle.canvas`; give each mount its own canvas
+  (`VisBackground` does).
+- **`fps`** is a cap on the display rate: `fps: 60` on a 120 Hz display draws every second frame (60 fps). Raise it to
+  follow such a display.
+
+| factory            | source today                      | notes                                                                                             |
+| ------------------ | --------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `createDither`     | `Dither` (three + postprocessing) | one pass; `pixelSize` in CSS px                                                                   |
+| `createPixelBlast` | `PixelBlast` non-liquid           | `shape`, `patternDensity`, `edgeFade`                                                             |
+| `createTerminal`   | `FaultyTerminal` (ogl)            | no mouse / page-load; only validated ranges are accepted (no negative `curvature`, `dither` 0..1) |
+| `createGlitch`     | `LetterGlitch` (Canvas2D)         | deterministic in `t`; vignette drawn on the canvas                                                |
+| `createRibbon`     | `scene.ribbon`                    | same `ribbonCurves`; phase 2pi per loop                                                           |
+
+Per-effect notes:
+
+- **`createGlitch`**: the cost grows with the canvas area (about 6 ms a frame at 1080p and 24 to 34 ms at 4K on
+  software Canvas2D), so set `fps: 30` for a full-screen canvas; that helps, but a 4K frame can still exceed the
+  33 ms that 30 fps allows. The tick is a fixed 50 ms by default (`glitchSpeed`); with `loop` it is stretched to
+  divide the loop evenly (in a loop well under a second it can differ a lot from `glitchSpeed`), and each cell
+  changes at least twice per loop so a short loop visibly moves (a one-tick loop changes once). With `smooth`, the
+  colour change between palette colours really is a tween over a third of a second (the landing page's own tween
+  moves one 5% step and then stalls, so its colour never reaches the new one).
+- **`createRibbon`**: draws one stroke, with the opacity applied to the whole ribbon like the static SVG, not per
+  line.
+
+## React
+
+```tsx
+import { Gradient, VisBackground } from "@dagnam/vis/react";
+
+<div className="relative h-64">
+  <VisBackground
+    effect="dither" // "dither" | "pixel" (createPixelBlast) | "terminal" | "glitch" | "ribbon"
+    options={{ waveSpeed: 0.15, colors: ["#e64040"] }} // that effect's options, typed per effect
+    className="absolute inset-0" // layout is yours: the wrapper only sets overflow: hidden
+    onError={(e) => report(e)} // optional: no WebGL2, invalid options
+  />
+  <Gradient
+    spec={{
+      kind: "linear",
+      angle: 135,
+      stops: ["#0f172a", "#1d4ed8", "#e64040"],
+    }}
+    width={1200} // intrinsic size (default spec.size, else 1200 x 630)
+    height={630}
+    fit="slice" // "slice" (default, covers) | "meet" | "none"
+    title="Brand gradient" // omit for a decorative gradient (aria-hidden)
+  />
+</div>;
+```
+
+- **One canvas per mount.** Each effect instance creates its own `<canvas>` (`aria-hidden`, `pointer-events: none`)
+  in an effect and removes it on cleanup, so StrictMode and switching `effect` are safe. The server renders an empty
+  wrapper and every DOM access happens in effects.
+- **Options.** A changed value is applied with `update()` on the running effect (`seed` re-phases, `colors`
+  recolours); equal re-renders do nothing. Adding or removing an option key (turning `loop` on or off, dropping
+  `colors`) recreates the effect, because `update()` cannot clear a value.
+- **Failures stay local.** Invalid options (or a missing WebGL2) when the effect is created leave no canvas, call
+  `onError` once (`console.error` without it) and keep the rest of the page rendering; changing the options retries.
+  An invalid update keeps the canvas and the last valid options and calls `onError` once. An `onError` that itself
+  throws is not contained. An unknown `effect` name (or `fit`) is a programmer error and throws a `VisError` while
+  rendering.
+- **Reduced motion.** The wrapper follows the runtime: under `prefers-reduced-motion: reduce` it draws one static
+  frame. To draw nothing at all (what the landing page does today), do not mount it:
+  `reduced ? null : <VisBackground ... />`.
+- **`<Gradient>`** gets its `<defs>` ids from `useId()` unless the spec sets an `idPrefix`, so several gradients on one
+  page do not collide.
+- `react` (>= 18) is an optional peer; neither the root nor `./animate` imports it.
+
 ## CLI
 
 ```sh
@@ -181,9 +299,13 @@ npm ci
 npm run check      # eslint → prettier --check → tsc --noEmit → vitest at 100% coverage
 npm run build      # dist/ (+ the bundled fonts)
 UPDATE_GOLDENS=1 npx vitest run   # regenerate tests/goldens after an intended change
+npm run demo       # animated-effects gallery on http://localhost:5173/ (dev only, never published)
+npm run test:e2e   # Playwright smoke of the gallery in headless Chromium; screenshots land in screenshots/ (needs: npx playwright install chromium)
 ```
 
 `npm run check` is the gate CI runs on every pull request, together with a packed-tarball smoke test (install the tarball in an empty directory, import both entries, check the types, run the CLI). Run `npm run format` before it.
+
+The demo gallery takes `?effect=<dither|pixel|terminal|glitch|ribbon>&t=<seconds>&seed=<int>&w=<16..4096>&h=<16..4096>`: `t` freezes one frame instead of animating, and an invalid parameter shows an error instead of the cards.
 
 ## Release
 

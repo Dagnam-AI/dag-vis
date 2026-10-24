@@ -23,6 +23,8 @@
     "src/**/*.tsx",
     "tests/**/*.ts",
     "tests/**/*.tsx",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "playwright.fidelity.config.ts"
   ]
 }
