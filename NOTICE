@@ -6,10 +6,10 @@ Inter 4.1
   Licence: SIL Open Font License 1.1, dist/node/fonts/OFL.txt
   Files: Inter-Regular.ttf, Inter-Bold.ttf
 
-Unbounded (static instance, wght 400, Latin subset)
+Unbounded (static instances, wght 400, 500 and 700, Latin subset)
   Copyright 2022 The Unbounded Project Authors (https://github.com/googlefonts/unbounded)
   Licence: SIL Open Font License 1.1, dist/node/fonts/OFL-Unbounded.txt
-  File: Unbounded-Regular.ttf
+  Files: Unbounded-Regular.ttf, Unbounded-Medium.ttf, Unbounded-Bold.ttf
 
 Moonhouse
   Copyright (c) 2013 by NimaVisual. All rights reserved.

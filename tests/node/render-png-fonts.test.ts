@@ -32,6 +32,45 @@ describe("the bundled display fonts", () => {
     expect(ofl).toContain("SIL OPEN FONT LICENSE Version 1.1");
   });
 
+  it.each([
+    ["Regular", 400],
+    ["Medium", 500],
+    ["Bold", 700],
+  ] as const)(
+    "ship Unbounded %s as a static instance: no variation tables, usWeightClass %i, family Unbounded",
+    (face, weight) => {
+      const buf = readFileSync(join(FONTS, `Unbounded-${face}.ttf`));
+      const tags = Array.from({ length: buf.readUInt16BE(4) }, (_, i) =>
+        buf.toString("latin1", 12 + 16 * i, 16 + 16 * i),
+      );
+      for (const variable of ["fvar", "gvar", "avar", "HVAR", "MVAR"])
+        expect(tags).not.toContain(variable);
+      const os2 = buf.readUInt32BE(12 + 16 * tags.indexOf("OS/2") + 8);
+      expect(buf.readUInt16BE(os2 + 4)).toBe(weight);
+      // resvg registers a face under its nameID 1: it must be the family, not "Unbounded Medium".
+      const name = buf.readUInt32BE(12 + 16 * tags.indexOf("name") + 8);
+      const strings = name + buf.readUInt16BE(name + 4);
+      const ones: string[] = [];
+      for (let i = 0; i < buf.readUInt16BE(name + 2); i++) {
+        const rec = name + 6 + 12 * i;
+        if (buf.readUInt16BE(rec + 6) === 1)
+          ones.push(
+            Buffer.from(
+              buf.subarray(
+                strings + buf.readUInt16BE(rec + 10),
+                strings +
+                  buf.readUInt16BE(rec + 10) +
+                  buf.readUInt16BE(rec + 8),
+              ),
+            )
+              .swap16()
+              .toString("utf16le"),
+          );
+      }
+      expect(ones).toContain("Unbounded");
+    },
+  );
+
   it("ship Moonhouse alone in its directory, byte for byte, with its own licence and the owner-instruction note", () => {
     expect(readdirSync(join(FONTS, "moonhouse")).sort()).toEqual([
       "LICENSE-NOTE.txt",
@@ -203,7 +242,54 @@ describe("renderPng with the bundled display fonts", () => {
     expect((await renderPng(svg)).equals(await renderPng(svg))).toBe(true);
   });
 
-  it("bundles the files the card names", () => {
+  it("bundles the files the card names, and registers every font file it ships", () => {
     for (const p of FONT_FILES) expect(existsSync(p)).toBe(true);
+    const shipped = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? shipped(join(dir, e.name))
+          : e.name.endsWith(".ttf")
+            ? [join(dir, e.name)]
+            : [],
+      );
+    expect([...FONT_FILES].sort()).toEqual(shipped(FONTS).sort());
+  });
+
+  it("lists every bundled font file in the tarball assertion", () => {
+    const script = readFileSync(
+      join(ROOT, ".github", "scripts", "assert-tarball.sh"),
+      "utf8",
+    );
+    for (const p of FONT_FILES)
+      expect(script).toContain(`dist/node/fonts/${p.slice(FONTS.length + 1)}`);
+  });
+
+  it("draws Unbounded at weights 400, 500 and 700 from the matching face", async () => {
+    const png = (weight: string): Promise<Buffer> =>
+      renderPng(
+        sized(
+          900,
+          200,
+          `<text x="20" y="150" font-family="Unbounded" font-size="100" font-weight="${weight}" fill="#fff">Hello</text>`,
+        ),
+      );
+    const ink = (b: Buffer): number => {
+      const r = decode(b);
+      let sum = 0;
+      for (let i = 3; i < r.pixels.length; i += 4) sum += r.pixels[i] ?? 0;
+      return sum;
+    };
+    const [w400, w500, w700] = [
+      await png("400"),
+      await png("500"),
+      await png("700"),
+    ];
+    expect(w400.equals(w500)).toBe(false);
+    expect(w500.equals(w700)).toBe(false);
+    expect(w400.equals(w700)).toBe(false);
+    // Heavier strokes cover more of the same string: 700 clearly more than 400.
+    expect(ink(w700)).toBeGreaterThan(1.15 * ink(w400));
+    expect(ink(w500)).toBeGreaterThan(ink(w400));
+    expect(ink(w700)).toBeGreaterThan(ink(w500));
   });
 });

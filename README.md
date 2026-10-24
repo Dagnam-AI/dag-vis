@@ -112,7 +112,7 @@ await favicons({ outDir: "public" }); // favicon.ico/svg, apple-touch-icon, PWA 
 await appIcon({ outDir: "build/icons" }); // macOS app icon: app-icon.svg, app-icon-<16..1024>.png, app-icon.icns
 ```
 
-- `renderPng(svg, { width?, background?, fontFiles? })` resolves to a PNG `Buffer`. Text is drawn with the bundled fonts only (Inter, Unbounded, Moonhouse; no system fonts), so output does not depend on the machine's fonts.
+- `renderPng(svg, { width?, background?, fontFiles? })` resolves to a PNG `Buffer`. Text is drawn with the bundled fonts only (Inter, Unbounded 400/500/700, Moonhouse; no system fonts), so output does not depend on the machine's fonts.
 - `favicons({ outDir, background?, color?, name?, shortName? })` writes the files listed in `FAVICON_FILES` and resolves to their paths. Every icon draws the mark in `BRAND.mark` (the dark theme's deep red, `oklch(52.768% 0.21534 29.097)`) at `LOGO_ICON_WEIGHT` (an extra 48-unit round stroke, so the strands survive at 16 px); the plain `LOGO` and `logoSvg()` are unchanged. `site.webmanifest` has `id`, `start_url` and `scope` `"/"` and root-absolute icon `src` values (`/icon-192.png`), so serve the set from the site root and link it with `<link rel="manifest" href="/site.webmanifest">`.
 - `appIcon({ outDir, background?, color? })` writes `APP_ICON_FILES`: the SVG master (`app-icon.svg`, `appIconSvg()` in the root entry: an 824 px superellipse plate on a transparent 1024 canvas, Apple's icon grid), its PNGs at 16, 32, 64, 128, 256, 512 and 1024 px and `app-icon.icns`. `icnsFromPngs(pngs)` packs square PNGs into an `.icns` with no dependency (chunk types `icp4 icp5 ic07 ic08 ic09 ic10 ic11 ic12 ic13 ic14`: `iconutil` writes ic07 to ic14 and reads icp4 and icp5).
 - `icoFromPngs(pngs)` packs PNG buffers into an `.ico`; `FONT_FILES` lists the bundled font paths; `run(argv, io)` is the CLI entry (it never calls `process.exit`).
@@ -399,10 +399,10 @@ Only plain `vis/vX.Y.Z` tags are supported: a prerelease suffix (`vis/v0.2.0-rc.
 `dist/node/fonts/` ships the fonts `renderPng` draws with ([`NOTICE`](NOTICE) lists them):
 
 - **Inter 4.1** (`Inter-Regular.ttf`, `Inter-Bold.ttf`): SIL Open Font License 1.1, [`OFL.txt`](src/node/fonts/OFL.txt).
-- **Unbounded** (`Unbounded-Regular.ttf`, a static wght 400 instance of the variable font): SIL Open Font License 1.1, [`OFL-Unbounded.txt`](src/node/fonts/OFL-Unbounded.txt).
+- **Unbounded** (`Unbounded-Regular.ttf`, `Unbounded-Medium.ttf`, `Unbounded-Bold.ttf`: static wght 400, 500 and 700 instances of the variable font, so SVG text can use `font-family="Unbounded"` with `font-weight` 400, 500 or 700): SIL Open Font License 1.1, [`OFL-Unbounded.txt`](src/node/fonts/OFL-Unbounded.txt).
 - **Moonhouse** (`moonhouse/moonhouse.ttf`, Copyright (c) 2013 by NimaVisual, licensor Andres Moreno W. / NimaVisual), byte for byte as received. **Its embedded licence forbids modification and redistribution without written permission. It is bundled at the package owner's instruction; confirm the permission with NimaVisual or replace the font before relying on it.** Removing it is one directory (`src/node/fonts/moonhouse/`) and one entry in `FONT_FILES` (`src/node/render-png.ts`); the licence text is in [`LICENSE-NOTE.txt`](src/node/fonts/moonhouse/LICENSE-NOTE.txt).
 
-The advance tables behind the social card's wrapping (`src/brand/moonhouse-metrics.ts`, `src/brand/unbounded-metrics.ts`) are generated from these files by `node scripts/gen-font-metrics.mjs` (`--check` fails when they are stale; a test runs it).
+The advance tables behind the social card's wrapping (`src/brand/moonhouse-metrics.ts`, `src/brand/unbounded-metrics.ts`, and the same for the 500 and 700 faces in `src/brand/unbounded-500-metrics.ts`, `src/brand/unbounded-700-metrics.ts`) are generated from these files by `node scripts/gen-font-metrics.mjs` (`--check` fails when they are stale; a test runs it).
 
 ## Licence
 
