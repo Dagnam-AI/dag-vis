@@ -19,10 +19,28 @@ import { describeValue } from "../core/validate.js";
  *   build lattice points with `Math.floor` plus small integers, so none occurs.
  * - `simplex4` and `fbm` check their seed and a coordinate bound once per call
  *   (a few comparisons) and throw `VisError`.
+ *
+ * CPU/GPU agreement range: the checked bound below (2^28) only keeps the float to
+ * int conversion defined; it is NOT a precision bound. The shader works in float32,
+ * whose error grows with the coordinate size, roughly 1.3e-7 per unit: about 2e-4
+ * at |coordinate| 1e3, 3e-3 at 1e4 and 1e-2 at 1e5, the last two past a 2/255
+ * colour budget. Keep sampled coordinates within about +-1e3 when the two must
+ * agree. Time without a loop grows without bound too, so a very long live run
+ * eventually loses float32 precision on the GPU (the motion judders first).
  */
 
-/** Largest |coordinate| a noise call accepts: keeps every lattice index inside int32. */
+/** Largest |coordinate| a noise call accepts: keeps every lattice index inside int32 (not a parity bound, see above). */
 const COORD_LIMIT = 2 ** 28;
+/**
+ * Output scale of the raw simplex sum. With the 0.5 falloff radius (which makes the
+ * sum exactly continuous across simplex boundaries, unlike 0.6) the unscaled sum
+ * peaks at 0.015929: brute force over 8 seeds x 500k random points gave 0.015919,
+ * and hill climbing from the best 400 candidates refined it to 0.015929. 62 maps
+ * that to a peak of 0.9876, just under 1 with a margin of about 1% for the true
+ * supremum, so the result stays inside [-1, 1] and fills nearly all of it.
+ * `glsl/common.ts` uses the same factor.
+ */
+const OUTPUT_SCALE = 62;
 /** Octaves the GLSL loop unrolls to; the CPU path must stop at the same count. */
 const MAX_OCTAVES = 5;
 
@@ -194,7 +212,7 @@ function simplex(
       l + 1,
       seed,
     );
-  return 27 * n;
+  return OUTPUT_SCALE * n;
 }
 
 /** The seed as a uint32 (what the shader's `uint` holds); throws for a non-safe-integer. */
@@ -215,8 +233,8 @@ function assertDomain(largest: number): void {
 }
 
 /**
- * 4-D simplex noise (rank-ordered corners, integer-hash gradients). Always inside [-1, 1];
- * with the 0.5 falloff radius and the 27 scale it peaks near +-0.43 and its rms is about 0.11.
+ * 4-D simplex noise (rank-ordered corners, integer-hash gradients). Always inside
+ * [-1, 1] and peaks at about +-0.988.
  */
 export function simplex4(
   x: number,

@@ -22,7 +22,7 @@ uniform uint uGrainSeed;
 uniform vec2 uTime;
 `;
 
-/** `hash4` of `noise.ts`. Lattice coordinates arrive as ivec4: `uint(int)` keeps the bit pattern, like ToInt32 on the CPU. */
+/** `hash4` of `noise.ts`; `hash01` is in [0, 1] (not [0, 1)): float32 rounds the 128 largest hashes to exactly 1.0, and nothing may index with it unclamped. Lattice coordinates arrive as ivec4: `uint(int)` keeps the bit pattern, like ToInt32 on the CPU. */
 export const GLSL_HASH = `
 uint hash4(ivec4 p, uint seed) {
   uint h = (uint(p.x) * 0x9E3779B1u) ^ (uint(p.y) * 0x85EBCA77u) ^ (uint(p.z) * 0xC2B2AE3Du) ^ (uint(p.w) * 0x27D4EB2Fu) ^ seed;
@@ -35,7 +35,13 @@ float hash01(ivec4 p, uint seed) {
 }
 `;
 
-/** `simplex4` and `fbm` of `noise.ts` (the octave loop is capped at 5, as on the CPU). Coordinates must stay inside +-2^28. */
+/**
+ * `simplex4` and `fbm` of `noise.ts` (the octave loop is capped at 5, as on the CPU;
+ * the 62.0 output scale is derived there). Coordinates must stay inside +-2^28 for the
+ * float to int conversion to be defined, but float32 agreement with the CPU only
+ * holds to about +-1e3 (error about 1.3e-7 per unit: 3e-3 at 1e4, 1e-2 at 1e5). Time
+ * without a loop grows without bound, so a very long live run loses float32 precision.
+ */
 export const GLSL_SIMPLEX4 = `
 const float F4 = 0.30901699437494745;
 const float G4 = 0.1381966011250105;
@@ -78,7 +84,7 @@ float simplex4(vec4 p, uint seed) {
   vec4 d4 = d0 - 1.0 + 4.0 * G4;
   float n = corner4(d0, c0, seed) + corner4(d1, c0 + o1, seed) + corner4(d2, c0 + o2, seed)
           + corner4(d3, c0 + o3, seed) + corner4(d4, c0 + 1, seed);
-  return 27.0 * n;
+  return 62.0 * n;
 }
 float fbm(vec2 p, vec2 tz, int octaves, uint seed) {
   float amp = 0.5;

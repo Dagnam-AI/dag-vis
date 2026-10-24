@@ -66,7 +66,7 @@ function refSimplex(p: number[], seed: number): number {
     const g = refGradient(refHash(i, j, k, l, seed) & 31);
     n += t0 ** 4 * g.reduce((a, b, a2) => a + b * d[a2]!, 0);
   });
-  return 27 * n;
+  return 62 * n;
 }
 
 describe("hash4", () => {
@@ -160,7 +160,7 @@ describe("simplex4", () => {
       simplex4(0.3, 0.7, 0.1, 0.9, 2),
     );
   });
-  it("is zero at the origin lattice corner offset only through gradients (finite everywhere)", () => {
+  it("is finite for large in-range coordinates and extreme seeds", () => {
     expect(Number.isFinite(simplex4(0, 0, 0, 0, 0))).toBe(true);
     expect(Number.isFinite(simplex4(-1e6, 1e6, -1e5, 1e5, 4294967295))).toBe(
       true,
@@ -185,35 +185,41 @@ describe("simplex4", () => {
     // Values from the independent implementation above, written down as literals
     // so a change to a constant or to the traversal shows up as a diff here.
     expect(simplex4(1.25, 2.5, 0.75, 0.5, 1)).toBeCloseTo(
-      -0.14054813507926303,
+      -0.32274016203386324,
       12,
     );
     expect(simplex4(0.5, 0.5, 0.5, 0.5, 0)).toBeCloseTo(
-      0.08139615600162563,
+      0.18690969155928847,
       12,
     );
     expect(simplex4(2.1, 0.4, -1.3, 0.2, 7)).toBeCloseTo(
-      -0.04916844468328324,
+      -0.11290531742087263,
       12,
     );
     expect(simplex4(0, 0, 0, 0, 1)).toBe(0);
   });
-  it("peaks near +-0.43 in practice (the 0.5 falloff radius), well inside [-1, 1]", () => {
+  it("fills [-1, 1]: the peak is within [0.95, 1] and never exceeds 1", () => {
     let state = 12345;
     const next = (): number => {
       state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
       return state / 4294967296;
     };
     let peak = 0;
-    for (let i = 0; i < 20000; i++)
+    for (let i = 0; i < 400000; i++)
       peak = Math.max(
         peak,
         Math.abs(
-          simplex4(next() * 50, next() * 50, next() * 50, next() * 50, 1),
+          simplex4(
+            next() * 60 - 30,
+            next() * 60 - 30,
+            next() * 60 - 30,
+            next() * 60 - 30,
+            i % 8,
+          ),
         ),
       );
-    expect(peak).toBeGreaterThan(0.38);
-    expect(peak).toBeLessThan(0.45);
+    expect(peak).toBeGreaterThanOrEqual(0.95);
+    expect(peak).toBeLessThanOrEqual(1);
   });
   it("rejects a seed that is not a safe integer, naming it", () => {
     for (const seed of [1.5, NaN, Infinity, 2 ** 53, "1" as unknown as number])

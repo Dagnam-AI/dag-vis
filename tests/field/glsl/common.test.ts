@@ -36,7 +36,7 @@ describe("glsl common", () => {
       "0x846CA68Bu",
     ])
       expect(GLSL_HASH).toContain(k);
-    expect(GLSL_SIMPLEX4).toContain("27.0 *");
+    expect(GLSL_SIMPLEX4).toContain("62.0 * n");
     expect(GLSL_OKLAB).toContain("4.0767416621");
     expect(GLSL_LUT).toContain("texelFetch");
     expect(GLSL_MAIN).toContain("fieldColor(uv)");
