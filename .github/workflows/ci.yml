@@ -94,14 +94,16 @@ jobs:
           # Browser-safe means the root entry's import graph never reaches a
           # Node builtin, the node, animate or react entries or the native
           # rasteriser (the animate types name HTMLCanvasElement, so the root
-          # must not pull them in). The animate entry has no dependencies at
-          # all (no react, no bare import). Walk both.
+          # must not pull them in), nor the export layer (it loads the
+          # third-party encoders), and has no bare import at all. The animate
+          # entry may import only the export dependencies named below (no
+          # react, no other bare import). Walk both.
           cat > root-graph.mjs <<'EOF'
           import { readFileSync } from "node:fs";
           import { dirname, resolve } from "node:path";
           import { fileURLToPath } from "node:url";
           const dist = resolve(fileURLToPath(import.meta.url), "../node_modules/@dagnam/vis/dist");
-          const graph = (entry, forbidden, min) => {
+          const graph = (entry, forbidden, min, bare = []) => {
           const seen = new Set();
           const walk = (file) => {
             if (seen.has(file)) return;
@@ -111,7 +113,10 @@ jobs:
             const edge = /^(?:import|export)\s*(?:type\s+)?(?:\*(?:\s+as\s+\w+)?|\{[^}]*\}|[\w$]+)\s*from\s*["']([^"']+)["']|^import\s*["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']\s*\)/gm;
             for (const m of src.matchAll(edge)) {
               const spec = m[1] ?? m[2] ?? m[3];
-              if (!spec.startsWith(".")) throw new Error(`${file} imports ${spec}`);
+              if (!spec.startsWith(".")) {
+                if (bare.includes(spec)) continue;
+                throw new Error(`${file} imports ${spec}`);
+              }
               const target = resolve(dirname(file), spec);
               for (const layer of forbidden)
                 if (target.startsWith(resolve(dist, layer))) throw new Error(`${file} reaches the ${layer} layer: ${spec}`);
@@ -123,8 +128,10 @@ jobs:
           if (seen.size < min) throw new Error(`only ${seen.size} modules found from ${entry}; the walker is broken`);
           console.log(`${entry} graph ok: ${seen.size} modules, no node: / resvg / ${forbidden.join(", ")} layer`);
           };
-          graph("index.js", ["node", "animate", "react"], 30);
-          graph("animate/index.js", ["node", "react"], 10);
+          graph("index.js", ["node", "animate", "react", "export"], 30);
+          // The only third-party code the package ships, listed by name: a new
+          // bare import anywhere else fails here until it is added on purpose.
+          graph("animate/index.js", ["node", "react"], 10, ["gifenc", "mp4-muxer", "webm-muxer"]);
           EOF
           node root-graph.mjs
 
@@ -152,6 +159,26 @@ jobs:
           console.log("animate ok, react not installed");
           EOF
           node animate.mjs
+
+          # gifenc has no exports map: plain Node loads its CommonJS file, where
+          # named imports do not exist. Encode one real GIF from the installed
+          # tarball to prove the interop shim works outside a bundler. The file
+          # is imported by path because the encoders have no public subpath.
+          cat > gif.mjs <<'EOF'
+          import { resolve } from "node:path";
+          import { pathToFileURL } from "node:url";
+          const { encodeGif } = await import(pathToFileURL(resolve("node_modules/@dagnam/vis/dist/export/gif.js")).href);
+          const frame = (i) => {
+            const d = new Uint8Array(4 * 4 * 4);
+            for (let p = 0; p < 16; p++) d.set([i * 60, p * 16, 200, 255], p * 4);
+            return d;
+          };
+          const bytes = await encodeGif({ width: 4, height: 4, fps: 10, count: 3, frameAt: frame });
+          if (new TextDecoder().decode(bytes.subarray(0, 6)) !== "GIF89a") throw new Error("not a GIF");
+          if (bytes.at(-1) !== 0x3b) throw new Error("GIF has no trailer");
+          console.log("gif ok:", bytes.length, "bytes through gifenc in plain Node");
+          EOF
+          node gif.mjs
 
           cat > node-missing.mjs <<'EOF'
           import { renderPng } from "@dagnam/vis/node";

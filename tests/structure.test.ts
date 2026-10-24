@@ -15,9 +15,10 @@ const ALLOWED: Record<string, readonly string[]> = {
   pattern: ["core", "brand"],
   scene: ["core", "brand", "gradient", "pattern"],
   field: ["core"],
-  animate: ["core", "scene", "field"],
+  export: ["core"],
+  animate: ["core", "scene", "field", "export"],
   react: ["core", "animate", "gradient"],
-  node: ["core", "brand", "gradient", "pattern", "scene"],
+  node: ["core", "brand", "gradient", "pattern", "scene", "export"],
 };
 
 /**
@@ -66,11 +67,13 @@ describe("repository structure", () => {
     }
   });
 
-  it("the root barrel imports nothing from animate, react or node", () => {
+  it("the root barrel imports nothing from export, animate, react or node", () => {
     // Their types name HTMLCanvasElement or React, so the root would stop
-    // type-checking in a DOM-free consumer. They are separate entry points.
+    // type-checking in a DOM-free consumer; export loads the third-party
+    // encoders, which the root entry must never pull in. They are separate
+    // entry points.
     const text = readFileSync(join(SRC, "index.ts"), "utf8");
-    for (const layer of ["animate", "react", "node"])
+    for (const layer of ["export", "animate", "react", "node"])
       expect(text, `src/index.ts imports ./${layer}`).not.toMatch(
         new RegExp(`(from|import)\\s*\\(?\\s*"\\./${layer}(/|")`),
       );

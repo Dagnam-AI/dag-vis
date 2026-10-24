@@ -20,3 +20,23 @@ Moonhouse
   relying on it. Removing it is one directory (src/node/fonts/moonhouse) and one
   entry in FONT_FILES (src/node/render-png.ts); the social card's display text
   then falls back to another face.
+
+Third-party packages installed as dependencies (not bundled into dist/; npm
+installs each with its own licence file):
+
+gifenc 1.0.3
+  Copyright (c) 2017 Matt DesLauriers
+  Licence: MIT. Contains a port of PnnQuant.js (Copyright (C) 2004-2019 Mark
+  Tyler and Dmitry Groshev; Copyright (c) 2018-2021 Miller Cy Chan) and an LZW
+  encoder derived from Kevin Weiner's, Thibault Imbert's and Johan Nordberg's.
+  Used by: GIF export.
+
+mp4-muxer 5.2.2
+  Copyright (c) 2023 Vanilagy
+  Licence: MIT
+  Used by: MP4 video export.
+
+webm-muxer 5.1.4
+  Copyright (c) 2022 Vanilagy
+  Licence: MIT
+  Used by: WebM video export.

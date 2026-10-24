@@ -92,5 +92,10 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "dependencies": {
+    "gifenc": "1.0.3",
+    "mp4-muxer": "5.2.2",
+    "webm-muxer": "5.1.4"
   }
 }
