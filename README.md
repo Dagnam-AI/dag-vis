@@ -2,12 +2,12 @@
 
 Deterministic, parameterised [Dagnam.AI](https://dagnam.ai) visuals: brand tokens, gradients, patterns, social-preview (OG) cards, ribbons and favicon sets. Generators are pure functions that return SVG or CSS strings; a small Node layer turns them into PNGs.
 
-| import                             | what                                                                                        | runtime deps                 |
-| ---------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------- |
-| `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), browser-safe                 | none                         |
-| `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, the CLI (bundled Inter, Unbounded and Moonhouse fonts)         | `@resvg/resvg-js` (optional) |
-| `@dagnam/vis/animate`              | the animated effects (`createDither`, `createGlitch`, ...): WebGL2 / Canvas2D, browser only | none                         |
-| `@dagnam/vis/react`                | `<VisBackground>` (the animated effects) and `<Gradient>` for React 18 and 19               | `react` (optional peer)      |
+| import                             | what                                                                                                                                   | runtime deps                           |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), the CPU field renderer and presets, browser-safe                        | none                                   |
+| `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, `exportStatic` / `exportAnimation`, `renderSheet`, the CLI (bundled Inter, Unbounded and Moonhouse fonts) | `@resvg/resvg-js` (optional), `gifenc` |
+| `@dagnam/vis/animate`              | the animated effects (`createDither`, `createGlitch`, ..., `createField`) and `exportCanvas`: WebGL2 / Canvas2D, browser only          | `gifenc`, `mp4-muxer`, `webm-muxer`    |
+| `@dagnam/vis/react`                | `<VisBackground>` (the animated effects) and `<Gradient>` for React 18 and 19                                                          | `react` (optional peer)                |
 
 Seeded generators take `seed` (default `1`); all output is deterministic, so the same options and seed give byte-identical SVG and CSS (`logoSvg` and `animatedGradientCss` take no seed).
 
@@ -18,7 +18,7 @@ npm i @dagnam/vis            # browser-safe root entry: no native code, no third
 npm i @resvg/resvg-js        # only to render PNGs: `@dagnam/vis/node`, the CLI, favicons (use -D if you only render at build time)
 ```
 
-The package has three small regular dependencies reserved for animation export: `gifenc` (GIF), `mp4-muxer` and `webm-muxer` (video container). The root entry never loads them. `@resvg/resvg-js` is an optional peer dependency (tested with `2.6.2`); install it as a regular dependency if you render at runtime, because production installs omit devDependencies. `renderPng` loads it lazily and throws a `VisError` naming the install command when it is absent, so `@dagnam/vis/node` itself still imports without it. The root entry never touches it and imports no `node:*` module, so it is safe in a browser bundle. Consumers need Node 22 or newer (Node 20 is end-of-life and receives no security fixes).
+The package has three small regular dependencies, all MIT licensed and used only by export code: `gifenc` (GIF) and the container writers `mp4-muxer` and `webm-muxer`. The root entry never loads them; `./animate` and `./node` load `gifenc` with the entry, and the two muxers only when a browser mp4 or webm export runs. The muxers are deprecated upstream in favour of Mediabunny but frozen; swapping them later is an internal change. ffmpeg is not a dependency and is not bundled: see [Exports](#exports). `@resvg/resvg-js` is an optional peer dependency (tested with `2.6.2`); install it as a regular dependency if you render at runtime, because production installs omit devDependencies. `renderPng` loads it lazily and throws a `VisError` naming the install command when it is absent, so `@dagnam/vis/node` itself still imports without it. The root entry never touches it and imports no `node:*` module, so it is safe in a browser bundle. Consumers need Node 22 or newer (Node 20 is end-of-life and receives no security fixes).
 
 ## Use
 
@@ -179,6 +179,57 @@ Per-effect notes:
 - **`createRibbon`**: draws one stroke, with the opacity applied to the whole ribbon like the static SVG, not per
   line.
 
+## Fields
+
+Grainy, flowing colour fields: `flow` (a warped noise through a 2 to 6 colour OKLab palette; shapes `swirl`, `wave`, `aurora`, `bloom`, `band` and `noise`, with a vignette and an optional highlight), `fluid` (1 to 8 soft blobs that drift on closed paths) and `fluted` (a flow or fluid field seen through 2 to 256 reeds). Every kind takes `grain` (0 to 1), `animatedGrain` (re-seeded 24 times a second) and an integer `seed` (0 to 4294967295). One definition of the maths runs twice: on the CPU (`renderField`, the reference, DOM-free, from the root entry) and on the GPU (`createField`, a live canvas, from `./animate`).
+
+```ts
+import { fieldPresets, renderField } from "@dagnam/vis"; // DOM-free
+import { createField, exportCanvas } from "@dagnam/vis/animate"; // browser only
+
+const frame = renderField(fieldPresets["violet-dusk"], {
+  width: 1200,
+  height: 630,
+  t: 0,
+  loop: 6,
+}); // { data: Uint8ClampedArray (RGBA, row 0 on top), width, height }
+
+const handle = createField(canvas, fieldPresets.lunar, {
+  loop: { duration: 6 },
+});
+handle.start(); // an EffectHandle like every effect above
+handle.stop(); // pause a running effect before exporting from it
+const mp4 = await exportCanvas(handle, { format: "mp4", fps: 30, duration: 6 }); // a Blob
+```
+
+- **Root** (`@dagnam/vis`, no DOM types): `renderField(spec, { width, height, t?, loop? })`, `resolveField(spec)` (validates and fills the defaults), `fieldPresets`, `flowPresets`, `FLOW_PRESET_NAMES`, `FLOW_SHAPES`, `randomFlow({ seed?, mood? })` and the `*FieldSpec` types. A frame is at most 16384 px a side and 2^25 pixels, and `|t|` is at most 1,000,000 s. A bad spec or option throws a `VisError` naming the parameter.
+- **`./animate`**: `createField(canvas, spec, options?)` returns an `EffectHandle` (`start`, `stop`, `update`, `renderAt`, `destroy`) on the shared WebGL2 runtime. The options are the common ones; there is no `seed` or `colors` option because both live in the spec. A field never changes its spec live: `update({ spec })` throws unless the spec is equal, so `destroy()` and create a new one.
+- **Presets**, in `fieldPresets` order: `violet-dusk`, `lunar`, `lagoon`, `bronze`, `sunset-ring`, `citrus-mist`, `orchid`, `lilac-wave`, `forest-glow`, `rose`, `emerald`, `glacier`, `rainbow-band`, `cobalt`, `crimson`, `pine`, `brand` (these 17 are `flowPresets`), then `fluid-dawn` and `fluted-ember`. They are frozen. `randomFlow({ seed, mood })` makes a new flow spec; `mood` is `dark` (the default), `light` or `vivid`, a tendency in the colours it picks rather than a guarantee about what the screen shows.
+- **Loops**: `loop: T` samples the noise on a circle, so on the CPU the frame at `t` and at `t + T` are byte-identical. On the GPU the frames agree to the tolerance below. A loop above about 40,000 s leaves the range where that tolerance holds.
+- **CPU and GPU agree to within a few 1/255, not exactly.** A shader works in float32 where the reference uses float64, so the pictures differ in the last bits. A Playwright test (`npm run test:e2e`) draws every preset in headless Chromium on SwiftShader (a software rasteriser) and compares 64 sample points per preset with `renderField`: every channel is within 2/255 (the broader replay behind it measured at most 1/255 over 1270 frames). By kind, `fluid` agreed to 0.0078/255 and `fluted` to 0.56/255 at the extremes tried. Extreme settings (nested warps at scale 10 and strength 3) can reach about 4/255. The shaders avoid the built-in `sin` and `cos`, but `pow`, `exp` and the other built-ins are the driver's. **Nothing has been verified on a real GPU, in Safari or in Firefox**; the 2/255 figure is a result for that one browser and rasteriser, not a guarantee.
+
+## Exports
+
+Three entry points, one job each. `./animate` has `exportCanvas(handle, options)`: it drives `handle.renderAt` frame by frame (so no frame is dropped, whatever the machine's speed) and resolves to a `Blob`. `./node` has `exportStatic(spec, options)` and `exportAnimation(spec, options)`, which render a field, ribbon or gradient spec on the CPU and write a file, plus `renderSheet` (every preset in one contact sheet, as an RGBA frame), `frameSource`, `encodePng` and `ffmpegPath`. The `dag-vis` CLI wraps the Node functions. The root has none of them.
+
+| format    | Node (`exportStatic` / `exportAnimation`, `dag-vis export`)                     | Browser (`exportCanvas`)                       |
+| --------- | ------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `png`     | built in (a small stdlib PNG encoder)                                           | built in (`convertToBlob`)                     |
+| `svg`     | built in; a field is a raster inside the SVG, a gradient or ribbon stays vector | no                                             |
+| `jpeg`    | ffmpeg                                                                          | `convertToBlob`, where the browser supports it |
+| `webp`    | ffmpeg                                                                          | `convertToBlob`, where the browser supports it |
+| `avif`    | ffmpeg 6 or later, built with libaom                                            | no                                             |
+| `gif`     | built in (`gifenc`)                                                             | built in (`gifenc`)                            |
+| `apng`    | ffmpeg                                                                          | no                                             |
+| `png-seq` | built in: a folder of `frame-00000.png`, ...                                    | a zip `Blob` of the same files                 |
+| `mp4`     | ffmpeg (H.264, `yuv420p`)                                                       | WebCodecs and `mp4-muxer`                      |
+| `webm`    | ffmpeg (VP9, alpha optional)                                                    | WebCodecs and `webm-muxer` (alpha optional)    |
+
+- **ffmpeg is not bundled.** The formats marked ffmpeg need it on `PATH`, or its path in the `DAG_VIS_FFMPEG` environment variable; without it they throw one `VisError` and every other format still works. The `avif` arguments are written for libaom and have not been run against a real libaom build here.
+- **Guards**, checked before any frame is rendered: `fps` is an integer from 1 to 60 (default 30) and `duration` is above 0 and at most 60 s (default 6, or the handle's loop). `mp4` and `webm` need an even width and height. A GIF wider than 800 px warns (it grows fast). GIF delays are whole centiseconds and browsers show anything under 2 centiseconds as 10, so above 50 fps a GIF plays at 50 fps; it warns. `alpha: true` is rejected for `mp4`, `gif` and, in the browser, `jpeg`; `png`, `webp` and `png-seq` keep whatever transparency a frame has. In Node, `jpeg` and `avif` stills and `gif` or `mp4` frames are flattened onto `background` (black by default). `png-seq` into a folder that already holds `frame-NNNNN.png` files is refused, so two sequences never mix.
+- **Cost**: Node exports render every frame on the CPU. A `flow` frame at 1920x1080 took about 2 s on a loaded laptop here (`fluid` and `fluted` about 0.25 s), so a long full-HD clip takes minutes; the browser path uses the GPU. A gradient or ribbon spec is rasterised with `@resvg/resvg-js`, a field is not.
+- A Node export writes through a temporary file and a rename, so the file appears whole or not at all; the folder of `out` must exist (`png-seq` creates its own).
+
 ## React
 
 ```tsx
@@ -231,11 +282,18 @@ npx dag-vis background --w 1500 --h 500 --focus 0.8,0.5 --out banner.svg
 npx dag-vis gradient --spec spec.json --w 1200 --h 630 --out g.png
 npx dag-vis pattern --spec pattern.json --out tile.svg
 npx dag-vis favicons --out public
+npx dag-vis presets                                   # every preset, one "name<TAB>kind" line each
+npx dag-vis export lunar --out lunar.png --size og
+npx dag-vis export fluted-ember --out ember.mp4 --w 1920 --h 1080 --fps 30 --duration 6 --loop
+npx dag-vis export ./my-field.json --out seq --format png-seq
+npx dag-vis sheet --out sheet.png                     # every preset in one contact sheet
 ```
 
 A spec is a JSON object in a file of at most 1 MiB, for example `{ "kind": "linear", "angle": 90, "stops": ["#ef4444", "#10abba"] }` for `gradient` and `{ "kind": "dots", "spacing": 24 }` for `pattern`. Numbers are plain decimals (`600`, `0.5`). Options take `--name value` or `--name=value`. `dag-vis --help` (or `-h`, anywhere among the arguments) prints every option.
 
-For `og`, `background`, `gradient` and `pattern`, `--out` must end in `.svg` or `.png` (any case). `.png` is rasterised with the bundled fonts (it needs `@resvg/resvg-js`) and `.svg` is written as is; anything else (`card.jpg`, `.webp`, no extension, a trailing dot, `-`) exits `1` with `dag-vis: --out must end in .svg or .png, got "card.jpg"` and writes nothing. `favicons --out` is a directory and has no extension rule. Files are written atomically (a temp file renamed over the target, so an existing file is replaced even if read-only and the new one gets the default mode) and missing parent directories are created. Exit status is `0` on success and `1` with a single `dag-vis: …` line on stderr for any invalid option or spec.
+For `og`, `background`, `gradient` and `pattern`, `--out` must end in `.svg` or `.png` (any case). `.png` is rasterised with the bundled fonts (it needs `@resvg/resvg-js`) and `.svg` is written as is; anything else (`card.jpg`, `.webp`, no extension, a trailing dot, `-`) exits `1` with `dag-vis: --out must end in .svg or .png, got "card.jpg"` and writes nothing. `favicons --out` is a directory and has no extension rule. Those commands and `sheet` write files atomically (a temp file renamed over the target, so an existing file is replaced even if read-only and the new one gets the default mode) and create missing parent directories. Exit status is `0` on success and `1` with a single `dag-vis: …` line on stderr for any invalid option or spec.
+
+`export <preset|spec.json>` takes a preset name (see `presets`) or a `.json` spec file (a field, gradient or ribbon spec). The format is the `--out` extension (`png`, `jpg`, `jpeg`, `webp`, `avif`, `svg`, `gif`, `apng`, `mp4`, `webm`) or `--format`, which also takes `png-seq` (then `--out` is the folder). The size is `--size og|square|story|wallpaper|4k|header` (1200x630, 1080x1080, 1080x1920, 2560x1440, 3840x2160, 1500x500) or `--w` and `--h` in whole pixels; the default is `og`. Animations take `--fps` (1 to 60, default 30), `--duration` (seconds, default 6), `--loop` (a seamless loop), `--alpha` (webm and apng) and `--poster FILE` (frame 0 as a PNG); stills take `--t`, the second to draw. `--quality` (0 to 1, default 0.8) applies to jpeg, webp, avif, mp4 and webm. An option that does not apply to the chosen format is an error, not ignored. Formats that need ffmpeg, its limits and the other guards are in [Exports](#exports); `export` does not create the folder of `--out`, `sheet --out` must end in `.png` and does. `sheet` takes `--tile 300x170`, `--gap` and `--columns`. A warning (a GIF over 800 px wide or over 50 fps) goes to stderr and the exit status stays `0`.
 
 ## Determinism
 
@@ -288,7 +346,7 @@ Options and gradient specs are validated at the boundary, including ones that co
 
 ## Layering
 
-`core ← brand ← gradient, pattern ← scene ← node`. Enforced by eslint `no-restricted-imports` per layer and `tests/structure.test.ts`; `node:*` and `@resvg/resvg-js` are imported only under `src/node/`. No file is over 500 lines and every source file has a mirrored test.
+`core ← brand ← gradient, pattern ← scene ← node`, with `field` and `export` beside that chain: each imports `core` only, and `animate` and `node` import them (the root imports `field` but never `export`). Enforced by eslint `no-restricted-imports` per layer and `tests/structure.test.ts`; `node:*` and `@resvg/resvg-js` are imported only under `src/node/`. No file is over 500 lines and every source file has a mirrored test.
 
 ## Develop
 
@@ -300,12 +358,14 @@ npm run check      # eslint → prettier --check → tsc --noEmit → vitest at 
 npm run build      # dist/ (+ the bundled fonts)
 UPDATE_GOLDENS=1 npx vitest run   # regenerate tests/goldens after an intended change
 npm run demo       # animated-effects gallery on http://localhost:5173/ (dev only, never published)
-npm run test:e2e   # Playwright smoke of the gallery in headless Chromium; screenshots land in screenshots/ (needs: npx playwright install chromium)
+npm run test:e2e   # Playwright in headless Chromium: the gallery, the Flow page and the CPU/GPU field parity; screenshots land in screenshots/ (needs: npx playwright install chromium)
 ```
 
 `npm run check` is the gate CI runs on every pull request, together with a packed-tarball smoke test (install the tarball in an empty directory, import both entries, check the types, run the CLI). Run `npm run format` before it.
 
 The demo gallery takes `?effect=<dither|pixel|terminal|glitch|ribbon>&t=<seconds>&seed=<int>&w=<16..4096>&h=<16..4096>`: `t` freezes one frame instead of animating, and an invalid parameter shows an error instead of the cards.
+
+The Flow page (`/flow.html` on the demo server) shows every field preset live, with buttons that export each one through `exportCanvas`; it takes `?t=<seconds>` (freeze every card), `&w=`, `&h=` (even export size), `&fps=` and `&duration=`, and at most 12 cards run at once. `tests/goldens/field-sheet.sha256` pins the contact sheet's pixels by hash. The CPU path uses `Math.sin`, `exp`, `pow` and friends, which V8 implements itself, so the hash is stable within one Node major version: it was generated on Node 24, and CI runs Node 22. If it fails there, the message prints the actual hash and the Node version; when the per-preset checks in `tests/node/sheet.test.ts` still pass, only a last bit of a maths function differs, and the fix is `UPDATE_GOLDENS=1` on the Node major CI uses, said so in the commit message.
 
 ## Release
 
