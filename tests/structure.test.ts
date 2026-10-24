@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -163,8 +164,11 @@ describe("motion/", () => {
       for (const m of readFileSync(file, "utf8").matchAll(IMPORT_SPECIFIER)) {
         const spec = m[1]!;
         const at = `${relative(ROOT, file)} imports ${spec}`;
+        // From motion/scripts/, one `../` reaches motion's own src/; only deeper ones leave motion/.
         expect(spec, `${at}: relative import into src/`).not.toMatch(
-          /^(\.\.\/)+src\//,
+          file.startsWith(join(MOTION, "scripts"))
+            ? /^(\.\.\/){2,}src\//
+            : /^(\.\.\/)+src\//,
         );
         expect(spec, `${at}: import of dist/`).not.toMatch(/\/dist\//);
         expect(
@@ -211,6 +215,39 @@ describe("motion/", () => {
     const root = devDeps(join(ROOT, "package.json"));
     const motion = devDeps(join(MOTION, "package.json"));
     for (const name of SHARED_PINS) expect(motion[name], name).toBe(root[name]);
+  });
+
+  it("never tracks a font, image, video or audio file under motion/", () => {
+    const tracked = execFileSync("git", ["ls-files", "motion"], {
+      cwd: ROOT,
+      encoding: "utf8",
+    }).split("\n");
+    // Moonhouse's licence forbids redistributing the font file; renders and
+    // generated media are artifacts. Only pixels leave the machine, never these.
+    expect(
+      tracked.filter((p) => /\.(ttf|otf|woff2?|png|mp4|wav)$/i.test(p)),
+    ).toEqual([]);
+  });
+
+  it("gitignores the copied fonts, generated assets and renders", () => {
+    for (const path of [
+      "motion/public/fonts/moonhouse.ttf",
+      "motion/public/generated/x.png",
+      "motion/out/x.mp4",
+    ]) {
+      // `git check-ignore -q` exits 1 (so execFileSync throws) when the path is NOT ignored.
+      expect(
+        () => execFileSync("git", ["check-ignore", "-q", path], { cwd: ROOT }),
+        path,
+      ).not.toThrow();
+    }
+    const lines = readFileSync(join(ROOT, ".gitignore"), "utf8").split("\n");
+    for (const entry of [
+      "motion/public/fonts/",
+      "motion/public/generated/",
+      "motion/out/",
+    ])
+      expect(lines, entry).toContain(entry);
   });
 
   it("keeps motion/ out of the package", () => {

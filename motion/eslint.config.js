@@ -44,6 +44,16 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // motion/scripts/x.ts: one `../` is motion's own src/ (what scripts import); deeper ones leave motion/.
+    files: ["motion/scripts/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [relativeSrc(2), SUBPATHS] },
+      ],
+    },
+  },
   ...[0, 1, 2, 3].map((depth) => ({
     // motion/tests/<depth dirs>/x.ts: `../`*(depth+1) + src is motion's own src (what the test mirrors).
     files: [

@@ -43,4 +43,6 @@ jobs:
       - run: MOTION_REQUIRED=1 npm run check:motion
 
       # GitHub runners have no GPU: swangle (SwiftShader) is the renderer everywhere.
-      - run: cd motion && MOTION_GL=swangle npx remotion still smoke out/ci-smoke.png
+      # assets copies the fonts from the checked-out library into this job's workspace only;
+      # this job never uploads motion/public or motion/out as an artifact.
+      - run: cd motion && npm run assets && MOTION_GL=swangle npx remotion still smoke out/ci-smoke.png

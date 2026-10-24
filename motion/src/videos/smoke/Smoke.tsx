@@ -1,13 +1,15 @@
-// Scaffold check only: proves the library alias end to end. Replaced by the pipeline proof.
-import { BRAND } from "@dagnam/vis";
+// Scaffold check only: proves the library alias and the brand fonts end to end. Replaced by the pipeline proof.
 import { AbsoluteFill } from "remotion";
+
+import { THEME } from "../../bridge/brand.ts";
 
 export const Smoke: React.FC = () => (
   <AbsoluteFill
     style={{
-      background: BRAND.background.dark,
-      color: BRAND.red,
-      fontSize: 48,
+      background: THEME.background,
+      color: THEME.accent,
+      fontFamily: `${THEME.display}, ${THEME.text}`,
+      fontSize: 38,
       justifyContent: "center",
       alignItems: "center",
     }}
