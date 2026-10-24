@@ -31,7 +31,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { storedCheckProblems } from "../src/lib/ledger.ts";
@@ -42,18 +41,18 @@ import {
   ledgerRow,
   markUploaded,
   readR2,
+  localCopyAction,
   redact,
+  uploadProblem,
   videoKey,
 } from "../src/lib/store.ts";
-import { fail } from "./cli.ts";
+import { MOTION, fail, requireMotionCwd } from "./cli.ts";
 import { requireUsableVideosDir, videosDir } from "./videos-dir.ts";
 
 const USAGE =
   "node scripts/store.ts <out/<video>/<name>.mp4> [--upload] | --check";
-const MOTION = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // RENDERS.jsonl and the relative render paths are motion/'s.
-if (resolve(process.cwd()) !== MOTION)
-  fail(USAGE, `run from ${MOTION}, not ${process.cwd()}`);
+requireMotionCwd(USAGE);
 
 let parsed: ReturnType<typeof parseArgs>;
 try {
@@ -97,6 +96,9 @@ async function store(mp4: string): Promise<void> {
   const video = basename(dirname(mp4));
   const stem = mp4.replace(/\.mp4$/, "");
   const files = [mp4, `${stem}.props.json`, `${stem}.check.json`];
+  // --upload with no usable credentials is a failure (exit 1), named before anything is copied.
+  const unusable = upload ? uploadProblem(r2) : null;
+  if (unusable !== null) throw new Error(unusable);
   for (const f of files) {
     if (!existsSync(f)) throw new Error(`missing ${f}`);
     videoKey(video, basename(f)); // validates the names before anything is copied or sent
@@ -117,28 +119,26 @@ async function store(mp4: string): Promise<void> {
   mkdirSync(resolve(videosDir, video), { recursive: true });
   for (const f of files) {
     const to = resolve(videosDir, video, basename(f));
-    if (!existsSync(to)) {
-      copyFileSync(f, to, constants.COPYFILE_EXCL);
-      console.log(`local: ${video}/${basename(f)} -> ${to}`);
-    } else if (sha256Hex(readFileSync(to)) === sha256Hex(readFileSync(f))) {
-      console.log(`local: ${video}/${basename(f)} already stored`);
-    } else {
+    const action = localCopyAction(
+      existsSync(to) ? sha256Hex(readFileSync(to)) : null,
+      sha256Hex(readFileSync(f)),
+    );
+    if (action === "conflict")
       throw new Error(
         `${to} exists with different content; renders are never overwritten`,
       );
+    if (action === "copy") {
+      copyFileSync(f, to, constants.COPYFILE_EXCL);
+      console.log(`local: ${video}/${basename(f)} -> ${to}`);
+    } else {
+      console.log(`local: ${video}/${basename(f)} already stored`);
     }
   }
   if (!upload) return;
 
   // (b) R2, only on --upload.
-  if (r2.kind === "absent") {
-    console.log(
-      "R2 upload skipped: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_VIDEOS_BUCKET are not set",
-    );
-    return;
-  }
-  if (r2.kind === "partial")
-    throw new Error(`R2 upload: also set ${r2.missing.join(", ")}`);
+  // r2.kind is "ready" here: checked before anything was copied.
+  if (r2.kind !== "ready") throw new Error(uploadProblem(r2) ?? "");
 
   // Only a render the ledger knows, byte for byte, goes online: checked before the first request.
   const ledgerPath = resolve(MOTION, "RENDERS.jsonl");

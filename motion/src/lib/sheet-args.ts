@@ -1,3 +1,5 @@
+import { requireVideoName } from "./video-name.ts";
+
 export interface SheetArgs {
   video: string;
   /** Input props handed to the video's own composition, `{}` when not given. */
@@ -22,8 +24,7 @@ export function parseSheetArgs(argv: readonly string[]): SheetArgs {
       throw new Error(`unexpected extra argument ${arg}`);
     }
   }
-  if (video === undefined || !/^\w[\w-]*$/.test(video))
-    throw new Error("a video name (letters, digits, _ and -) is required");
+  const name = requireVideoName(video);
   let props: unknown;
   try {
     props = JSON.parse(propsJson);
@@ -32,5 +33,5 @@ export function parseSheetArgs(argv: readonly string[]): SheetArgs {
   }
   if (typeof props !== "object" || props === null || Array.isArray(props))
     throw new Error("--props must be a JSON object");
-  return { video, props: props as Record<string, unknown> };
+  return { video: name, props: props as Record<string, unknown> };
 }

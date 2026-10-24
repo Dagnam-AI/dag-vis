@@ -10,13 +10,13 @@ import {
 } from "../src/lib/loudness.ts";
 import { checkSync, parseProbe, type Probe } from "../src/lib/probe.ts";
 import { loopFrames, type Timing } from "../src/lib/timing.ts";
-import { cli, fail } from "./cli.ts";
+import { cli, nameOrFail } from "./cli.ts";
 import { ffprobe, measureLoudness } from "./ffmpeg.ts";
 
 const USAGE = "node scripts/check-render.ts <file.mp4> <video> [--json]";
 const { flags, positionals } = cli(USAGE, ["json"], 2);
-const [arg, video] = positionals as [string, string];
-if (!/^[\w-]+$/.test(video)) fail(USAGE, `invalid video name: ${video}`);
+const [arg, name] = positionals as [string, string];
+const video = nameOrFail(USAGE, name);
 // The ffmpeg wrapper runs from motion/, so hand it an absolute path.
 const file = resolve(arg);
 

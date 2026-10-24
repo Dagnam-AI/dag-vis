@@ -3,12 +3,13 @@ import {
   contentTypeFor,
   existingObjectProblem,
   ledgerNames,
-  isVideoSlug,
   ledgerRow,
+  localCopyAction,
   markUploaded,
   newStored,
   readR2,
   redact,
+  uploadProblem,
   videoKey,
 } from "../../src/lib/store.ts";
 
@@ -84,6 +85,34 @@ describe("readR2", () => {
   });
 });
 
+describe("uploadProblem", () => {
+  it("is null when all four variables are set", () => {
+    expect(uploadProblem(readR2(ENV))).toBeNull();
+  });
+  it("names every variable when none is set", () => {
+    expect(uploadProblem(readR2({}))).toBe(
+      "R2 upload: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_VIDEOS_BUCKET (none is set)",
+    );
+  });
+  it("names only the missing ones, and never a value that is set", () => {
+    const problem = uploadProblem(
+      readR2({ R2_ACCOUNT_ID: "acct-value", R2_VIDEOS_BUCKET: "bucket-value" }),
+    );
+    expect(problem).toBe(
+      "R2 upload: also set R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY",
+    );
+    expect(problem).not.toMatch(/acct-value|bucket-value/);
+  });
+});
+
+describe("localCopyAction", () => {
+  it("copies a file that is not stored, leaves an identical one, refuses a different one", () => {
+    expect(localCopyAction(null, "ab")).toBe("copy");
+    expect(localCopyAction("ab", "ab")).toBe("skip");
+    expect(localCopyAction("cd", "ab")).toBe("conflict");
+  });
+});
+
 describe("markUploaded", () => {
   const row = (n: number, r2: string | null) => ({
     video: "a",
@@ -119,15 +148,6 @@ describe("markUploaded", () => {
     expect(() =>
       markUploaded(ledger([row(1, null)]), "out/a/a-20261023-v9.mp4", "k"),
     ).toThrow(/no ledger line/);
-  });
-});
-
-describe("isVideoSlug", () => {
-  it("accepts kebab-case words only", () => {
-    expect(isVideoSlug("pipeline-proof")).toBe(true);
-    expect(isVideoSlug("a1")).toBe(true);
-    for (const bad of ["", "A", "a_b", "a--b", "-a", "a-", "../a", "a b"])
-      expect(isVideoSlug(bad)).toBe(false);
   });
 });
 

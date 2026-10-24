@@ -11,12 +11,12 @@ import {
   dbToLinear,
   gainToTarget,
 } from "../src/lib/loudness.ts";
-import { cli, fail } from "./cli.ts";
-import { MOTION, measureLoudness } from "./ffmpeg.ts";
+import { MOTION, cli, nameOrFail } from "./cli.ts";
+import { measureLoudness } from "./ffmpeg.ts";
 
 const USAGE = "node scripts/audio.ts <video>";
-const [video] = cli(USAGE, [], 1).positionals as [string];
-if (!/^[\w-]+$/.test(video)) fail(USAGE, `invalid video name: ${video}`);
+const [name] = cli(USAGE, [], 1).positionals as [string];
+const video = nameOrFail(USAGE, name);
 const { SAMPLE_RATE, renderBed } = (await import(
   `../src/videos/${video}/audio.ts`
 )) as { SAMPLE_RATE: number; renderBed: () => Float32Array };

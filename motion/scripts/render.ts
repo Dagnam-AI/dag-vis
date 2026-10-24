@@ -43,14 +43,12 @@ import { sha256Hex } from "../src/lib/sigv4.ts";
 import { ledgerNames } from "../src/lib/store.ts";
 import { nextVersionedName, utcDateStamp } from "../src/lib/versions.ts";
 import { gl } from "../webpack-override.ts";
-import { fail } from "./cli.ts";
-import { MOTION } from "./ffmpeg.ts";
+import { MOTION, REMOTION_BIN, fail, requireMotionCwd } from "./cli.ts";
 import { videosDir } from "./videos-dir.ts";
 
 const USAGE = `node scripts/render.ts <video> [--props '<json>'] [--crf 18] [${ALLOW_DIRTY_FLAG}] [${PREVIEW_FLAG}]`;
 // The webpack alias and every relative path (out/, public/, RENDERS.jsonl) are motion/'s.
-if (resolve(process.cwd()) !== MOTION)
-  fail(USAGE, `run from ${MOTION}, not ${process.cwd()}`);
+requireMotionCwd(USAGE);
 let args: RenderArgs;
 try {
   args = parseRenderArgs(process.argv.slice(2));
@@ -64,7 +62,6 @@ const renderer = gl();
 const refused = rendererProblem(renderer, preview);
 if (refused !== null) fail(USAGE, refused);
 
-const REMOTION_BIN = resolve(MOTION, "node_modules/.bin/remotion");
 const run = (cmd: string, argv: string[], show = false): string => {
   const r = spawnSync(cmd, argv, {
     cwd: MOTION,

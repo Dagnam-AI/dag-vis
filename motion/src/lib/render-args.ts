@@ -1,4 +1,6 @@
-/** The only renderer a deliverable may be made with: software, so it is the same on every machine. */
+import { requireVideoName } from "./video-name.ts";
+
+/** The only renderer a deliverable may be made with: software, so it does not depend on the GPU (the same machine renders the same bytes; equality across machines is not measured). */
 export const DELIVERABLE_RENDERER = "swangle";
 /** Named so a file made with it, and the command line, cannot be mistaken for a deliverable. */
 export const ALLOW_DIRTY_FLAG = "--allow-dirty";
@@ -43,8 +45,7 @@ export function parseRenderArgs(argv: readonly string[]): RenderArgs {
       throw new Error(`unexpected extra argument ${arg}`);
     }
   }
-  if (video === undefined || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(video))
-    throw new Error("a video name (lower-case words joined by -) is required");
+  const name = requireVideoName(video);
   let props: unknown;
   try {
     props = JSON.parse(propsJson);
@@ -57,7 +58,7 @@ export function parseRenderArgs(argv: readonly string[]): RenderArgs {
   if (!/^\d+$/.test(crf) || Number(crf) < 1 || Number(crf) > 51)
     throw new Error(`--crf must be a whole number from 1 to 51, got ${crf}`);
   return {
-    video,
+    video: name,
     props: props as Record<string, unknown>,
     crf: Number(crf),
     preview,
@@ -71,5 +72,5 @@ export function rendererProblem(
   preview: boolean,
 ): string | null {
   if (preview || renderer === DELIVERABLE_RENDERER) return null;
-  return `renderer is ${renderer}, but a deliverable is rendered with ${DELIVERABLE_RENDERER} only (the same output on every machine). Unset MOTION_GL, or pass ${PREVIEW_FLAG} for a look that is not a deliverable.`;
+  return `renderer is ${renderer}, but a deliverable is rendered with ${DELIVERABLE_RENDERER} only (software, independent of the GPU). Unset MOTION_GL, or pass ${PREVIEW_FLAG} for a look that is not a deliverable.`;
 }

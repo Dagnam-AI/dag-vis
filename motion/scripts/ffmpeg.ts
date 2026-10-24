@@ -4,15 +4,9 @@
 // The local remotion bin is spawned by path, never through npx, so a missing
 // install fails with an error instead of reaching for the registry.
 import { spawnSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { parseLoudnorm, type Loudness } from "../src/lib/loudness.ts";
-
-// Run from motion/ whatever the caller's cwd is: the remotion bin and the output folders are relative to it.
-export const MOTION = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-
-const REMOTION_BIN = resolve(MOTION, "node_modules/.bin/remotion");
+import { MOTION, REMOTION_BIN } from "./cli.ts";
 
 export interface Run {
   stdout: string;

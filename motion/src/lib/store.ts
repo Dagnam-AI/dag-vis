@@ -1,5 +1,7 @@
 // Where a finished render is stored: a local folder always, the owner's R2 bucket on request.
 // Pure: no fs, no network, no clock.
+import { isVideoSlug } from "./video-name.ts";
+
 export interface Stored {
   /** Relative to the local videos folder ($DAG_VIDEOS_DIR): `<video>/<file>`. */
   local: string;
@@ -7,8 +9,6 @@ export interface Stored {
   r2: string | null;
 }
 
-const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-export const isVideoSlug = (video: string): boolean => SLUG.test(video);
 const escapeRegExp = (s: string): string =>
   s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -65,6 +65,23 @@ export function readR2(
     secretAccessKey: value("R2_SECRET_ACCESS_KEY"),
     bucket: value("R2_VIDEOS_BUCKET"),
   };
+}
+
+/** Why `--upload` cannot start, naming the missing variables (never a value), or null when all four are set. */
+export function uploadProblem(r2: R2Status): string | null {
+  if (r2.kind === "ready") return null;
+  if (r2.kind === "partial")
+    return `R2 upload: also set ${r2.missing.join(", ")}`;
+  return `R2 upload: set ${R2_VARS.join(", ")} (none is set)`;
+}
+
+/** What the local copy does with a file: write it, leave an identical one, or refuse a different one (renders are never overwritten). */
+export function localCopyAction(
+  storedSha256: string | null,
+  sha256: string,
+): "copy" | "skip" | "conflict" {
+  if (storedSha256 === null) return "copy";
+  return storedSha256 === sha256 ? "skip" : "conflict";
 }
 
 /** The one ledger line for `file`, or an error: a file the ledger does not know is not a render. */

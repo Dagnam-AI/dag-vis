@@ -8,8 +8,7 @@ import {
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { basename, join, resolve } from "node:path";
 
 import { bundle } from "@remotion/bundler";
 import {
@@ -24,23 +23,19 @@ import { parseSheetArgs } from "../src/lib/sheet-args.ts";
 import { framesFor, type Timing } from "../src/lib/timing.ts";
 import { nextVersionedName, utcDateStamp } from "../src/lib/versions.ts";
 import { gl, webpackOverride } from "../webpack-override.ts";
+import { MOTION, fail, requireMotionCwd } from "./cli.ts";
 
 const USAGE = "node scripts/sheet.ts <video> [--props <json>]";
-const fail = (message: string): never => {
-  console.error(`${message}\nusage: ${USAGE}`);
-  process.exit(1);
-};
 // bundle() copies public/ on Windows, so the stills written after it would not be served.
-if (process.platform === "win32") fail("sheet.ts needs symlinks (macOS/Linux)");
-const MOTION = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+if (process.platform === "win32")
+  fail(USAGE, "sheet.ts needs symlinks (macOS/Linux)");
 // The webpack alias resolves ../src against the working directory.
-if (resolve(process.cwd()) !== MOTION)
-  fail(`run from ${MOTION}, not ${process.cwd()}`);
+requireMotionCwd(USAGE);
 let args: ReturnType<typeof parseSheetArgs>;
 try {
   args = parseSheetArgs(process.argv.slice(2));
 } catch (e) {
-  args = fail((e as Error).message);
+  args = fail(USAGE, (e as Error).message);
 }
 const { video, props: inputProps } = args;
 const { TIMING } = (await import(`../src/videos/${video}/timing.ts`)) as {

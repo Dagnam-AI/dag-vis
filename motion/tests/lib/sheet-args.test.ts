@@ -20,6 +20,7 @@ describe("parseSheetArgs", () => {
   it.each([
     [[], /video name/],
     [["../x"], /video name/],
+    [["My_Video"], /video name/],
     [["-x"], /unknown option -x/],
     [["a", "b"], /extra argument b/],
     [["a", "--props"], /needs a JSON object/],
