@@ -36,6 +36,11 @@ jobs:
 
       - run: npm ci
 
+      # The Node export helpers pipe frames into the ffmpeg binary; the unit
+      # suite runs it for real, so the runner needs one on PATH.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+
       # eslint (layer rules) -> prettier --check -> tsc --noEmit -> vitest at
       # 100/100/100/100, the same gate as `npm run check` locally.
       - run: npm run check
