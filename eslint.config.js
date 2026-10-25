@@ -146,7 +146,7 @@ export default tseslint.config(
   // animate -> core, scene (ribbonCurves), field (the live field effect), export
   // (the encoders). The structure test's ALLOWED map and these lists widen together.
   forbid("animate", ["brand", "gradient", "pattern", "react", "node"]),
-  // react -> core, animate, field (the FieldSpec type of <VisBackground effect="field">), gradient.
+  // react -> core, animate, field (the FieldSpec type of <VisBackground effect="field">, the renderField frames of <FieldPresetPicker>), gradient.
   forbid("react", ["brand", "pattern", "scene", "export", "node"]),
   // node -> core, brand, gradient, pattern, scene, field (the CPU frames it exports), export.
   forbid("node", ["animate", "react"], false),

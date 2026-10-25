@@ -7,7 +7,7 @@ Deterministic, parameterised [Dagnam.AI](https://dagnam.ai) visuals: brand token
 | `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), the CPU field renderer and presets, browser-safe                        | none                                   |
 | `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, `exportStatic` / `exportAnimation`, `renderSheet`, the CLI (bundled Inter, Unbounded and Moonhouse fonts) | `@resvg/resvg-js` (optional), `gifenc` |
 | `@dagnam/vis/animate`              | the animated effects (`createDither`, `createGlitch`, ..., `createField`) and `exportCanvas`: WebGL2 / Canvas2D, browser only          | `gifenc`                               |
-| `@dagnam/vis/react`                | `<VisBackground>` (the animated effects) and `<Gradient>` for React 18 and 19                                                          | `react` (optional peer)                |
+| `@dagnam/vis/react`                | `<VisBackground>` (the animated effects), `<Gradient>` and `<FieldPresetPicker>` for React 18 and 19                                   | `react` (optional peer)                |
 
 Seeded generators take `seed` (default `1`); all output is deterministic, so the same options and seed give byte-identical SVG and CSS (`logoSvg` and `animatedGradientCss` take no seed).
 
@@ -225,6 +225,32 @@ const mp4 = await exportCanvas(handle, { format: "mp4", fps: 30, duration: 6 });
 - **Loops**: `loop: T` samples the noise on a circle, so on the CPU the frame at `t` and at `t + T` are byte-identical. On the GPU the frames agree to the tolerance below. A loop above about 40,000 s leaves the range where that tolerance holds.
 - **CPU and GPU agree to within a few 1/255, not exactly.** A shader works in float32 where the reference uses float64, so the pictures differ in the last bits. A Playwright test (`npm run test:e2e`) draws every preset in headless Chromium on SwiftShader (a software rasteriser) and compares 64 sample points per preset with `renderField`: every channel is within 2/255 (the broader replay behind it measured at most 1/255 over 1270 frames). By kind, `fluid` agreed to 0.0078/255 and `fluted` to 0.56/255 at the extremes tried. Extreme settings (nested warps at scale 10 and strength 3) can reach about 4/255. The shaders avoid the built-in `sin` and `cos`, but `pow`, `exp` and the other built-ins are the driver's. **Nothing has been verified on a real GPU, in Safari or in Firefox**; the 2/255 figure is a result for that one browser and rasteriser, not a guarantee.
 
+### Field-preset browser
+
+An editor that stores a `field_preset` needs a list to choose from. `fieldPresetCatalog` (root, DOM-free) is every preset as `{ name, label, kind }` in `fieldPresets` order (`"violet-dusk"` is `"Violet dusk"`, `kind` is `"flow"`, `"fluid"` or `"fluted"`), and `<FieldPresetPicker>` (`@dagnam/vis/react`) is that list as a controlled `radiogroup`, each name under a thumbnail:
+
+```tsx
+import { FieldPresetPicker } from "@dagnam/vis/react";
+import { parseFieldPreset, type FieldPresetName } from "@dagnam/vis";
+
+const [preset, setPreset] = useState<FieldPresetName | null>(
+  stored === undefined ? null : parseFieldPreset(stored),
+);
+
+<FieldPresetPicker
+  value={preset}
+  onChange={setPreset} // the name to store
+  thumbSize={{ width: 160, height: 90 }} // the default; whole pixels, each side 1..512
+  t={0} // the second of the animation the thumbnails show
+  className="presets" // style `.presets [aria-checked="true"]`; the layout is a minimal grid
+  aria-label="Cover look"
+/>;
+```
+
+- Keyboard: the checked radio (the first when none is) is the one tab stop; the arrow keys move focus and selection together and wrap, Home and End jump to the ends, Space and Enter select. The focus ring is the browser's.
+- **Cost.** The thumbnails are the CPU `renderField` frames, so the 19 of them use no WebGL context. They are drawn after mount, each in a task of its own so the page stays responsive, cancelled on unmount and when `thumbSize` or `t` change, and the newest 128 are cached by name, size and `t`: a picker that opens again is instant. Expect a few milliseconds per thumbnail at the default size; large sizes (up to 512 a side) cost proportionally more. Server rendering emits the list with empty canvases.
+- A bad `thumbSize`, `t` or `value` throws a `VisError` while rendering.
+
 ## Exports
 
 Three entry points, one job each. `./animate` has `exportCanvas(handle, options)`: it drives `handle.renderAt` frame by frame (so no frame is dropped, whatever the machine's speed) and resolves to a `Blob`. `./node` has `exportStatic(spec, options)` and `exportAnimation(spec, options)`, which render a field, ribbon or gradient spec on the CPU and write a file, plus `renderSheet` (every preset in one contact sheet, as an RGBA frame), `renderRgba`, `encodePng` and `ffmpegPath`. The `dag-vis` CLI wraps the Node functions. The root has none of them.
@@ -295,6 +321,7 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
   `reduced ? null : <VisBackground ... />`.
 - **`<Gradient>`** gets its `<defs>` ids from `useId()` unless the spec sets an `idPrefix`, so several gradients on one
   page do not collide.
+- **`<FieldPresetPicker>`** is the browsable list of field presets (see Field-preset browser above).
 - `react` (>= 18) is an optional peer; neither the root nor `./animate` imports it.
 
 ## CLI
@@ -370,7 +397,7 @@ Options and gradient specs are validated at the boundary, including ones that co
 
 ## Layering
 
-`core ← brand ← gradient, pattern ← scene ← node`, with `field` and `export` beside that chain: each imports `core` only, and `animate` and `node` import them (the root imports `field` but never `export`; `react` imports `field` for the `FieldSpec` type only). Enforced by eslint `no-restricted-imports` per layer and `tests/structure.test.ts`; `node:*` and `@resvg/resvg-js` are imported only under `src/node/`. No file is over 500 lines and every source file has a mirrored test.
+`core ← brand ← gradient, pattern ← scene ← node`, with `field` and `export` beside that chain: each imports `core` only, and `animate` and `node` import them (the root imports `field` but never `export`; `react` imports `field` for the `FieldSpec` type and for the CPU frames of `<FieldPresetPicker>`). Enforced by eslint `no-restricted-imports` per layer and `tests/structure.test.ts`; `node:*` and `@resvg/resvg-js` are imported only under `src/node/`. No file is over 500 lines and every source file has a mirrored test.
 
 ## Develop
 
