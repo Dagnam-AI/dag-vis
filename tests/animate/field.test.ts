@@ -447,4 +447,56 @@ describe("createField", () => {
     expect(names(gl().calls)).toContain("uTime");
     h.destroy();
   });
+
+  // The documented way to draw a still card background today (a consumer, the
+  // lesson cards, relies on it): speed 0 pins virtual time at 0 and a tiny fps
+  // cap spaces the redraws 100 s apart.
+  describe("a still frame with { speed: 0, fps: 0.01 }", () => {
+    const draws = (calls: string[]) =>
+      calls.filter((c) => c.startsWith("drawArrays")).length;
+    // The time uniform, the only one a frame after the first re-sends.
+    const times = (calls: string[]) =>
+      calls.filter((c) => c.startsWith("uniform2f uTime "));
+
+    it("is accepted by creation and by update", () => {
+      const h = createField(canvas, preset("lunar"), { speed: 0, fps: 0.01 });
+      expect(() => {
+        h.update({ speed: 0, fps: 0.01 });
+      }).not.toThrow();
+      h.destroy();
+    });
+
+    it("draws the first frame at once, at time 0, and nothing again", () => {
+      const h = createField(canvas, preset("lunar"), { speed: 0, fps: 0.01 });
+      h.start();
+      dom.frame(16);
+      expect(draws(gl().calls)).toBe(1);
+      expect(times(gl().calls)).toEqual(["uniform2f uTime 0 0"]);
+
+      // Ninety seconds of frames: well inside the 100 s the fps cap allows.
+      gl().calls.length = 0;
+      for (let i = 0; i < 90; i++) dom.frame(1000);
+      expect(gl().calls).toEqual([]);
+
+      // The same picture as an explicit renderAt(0) of a default handle.
+      const reference = createField(canvas, preset("lunar"));
+      gl().calls.length = 0;
+      reference.renderAt(0);
+      expect(times(gl().calls)).toEqual(["uniform2f uTime 0 0"]);
+      reference.destroy();
+      h.destroy();
+    });
+
+    it("redraws at most once per 100 s and still at time 0", () => {
+      const h = createField(canvas, preset("lunar"), { speed: 0, fps: 0.01 });
+      h.start();
+      dom.frame(16);
+      gl().calls.length = 0;
+      dom.frame(100_000); // past 100 s: the cap allows one more draw
+      expect(draws(gl().calls)).toBe(1);
+      // The time did not change, so no time uniform is re-sent: still time 0.
+      expect(times(gl().calls)).toEqual([]);
+      h.destroy();
+    });
+  });
 });
