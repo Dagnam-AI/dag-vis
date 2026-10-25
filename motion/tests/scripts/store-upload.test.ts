@@ -72,7 +72,10 @@ let origin: string;
 const seen: Seen[] = [];
 const objects = new Map<string, Stored>();
 /** Per method, a status to answer with instead of the normal behaviour. */
-const forced = new Map<string, { status: number; body?: string }>();
+const forced = new Map<
+  string,
+  { status: number; body?: string; headers?: Record<string, string> }
+>();
 
 const md5 = (b: Buffer): string => createHash("md5").update(b).digest("hex");
 const sha256 = (b: Buffer | string): string =>
@@ -118,7 +121,7 @@ beforeAll(async () => {
       });
       const force = forced.get(method);
       if (force) {
-        res.writeHead(force.status);
+        res.writeHead(force.status, force.headers);
         res.end(force.body ?? "");
         return;
       }
@@ -331,6 +334,46 @@ describe("store --upload against a local stand-in for R2", () => {
     const r = await upload();
     expect(r.code).toBe(1);
     expect(r.err).toContain(`r2 HEAD videos/demo/${render.name}: HTTP 500`);
+  });
+
+  it.each(["HEAD", "PUT"])(
+    "fails on a 302 to %s without following it, and records nothing",
+    async (method) => {
+      forced.set(method, {
+        status: 302,
+        headers: { location: `${origin}/elsewhere/${method}` },
+      });
+      const r = await upload();
+      expect(r.code).toBe(1);
+      expect(r.err).toContain(`r2 ${method} failed: `);
+      expect(r.err).toContain("redirect");
+      expect(r.err).toContain(
+        "a redirect is never followed; nothing was recorded",
+      );
+      // The redirect target is never asked, and no later file is tried.
+      expect(seen.map((s) => s.method)).toEqual(
+        method === "HEAD" ? ["HEAD"] : ["HEAD", "PUT"],
+      );
+      expect(seen.every((s) => !s.key.startsWith("elsewhere"))).toBe(true);
+      expect(ledgerRow().stored.r2).toBeNull();
+      expect(leaks(r)).toEqual([]);
+    },
+  );
+
+  it("names a connection failure by its reason, without the redirect note", async () => {
+    // A port nothing listens on: the stand-in's own, after it has closed.
+    const dead = createServer();
+    await new Promise<void>((resolve) => {
+      dead.listen(0, "127.0.0.1", resolve);
+    });
+    const port = (dead.address() as AddressInfo).port;
+    await new Promise((resolve) => dead.close(resolve));
+    vi.stubEnv("MOTION_R2_ENDPOINT", `http://127.0.0.1:${String(port)}`);
+    const r = await upload();
+    expect(r.code).toBe(1);
+    expect(r.err).toContain("r2 HEAD failed: ");
+    expect(r.err).not.toContain("redirect");
+    expect(ledgerRow().stored.r2).toBeNull();
   });
 
   it("fails on a PUT the server refuses and records nothing; a credential the server echoes is redacted", async () => {

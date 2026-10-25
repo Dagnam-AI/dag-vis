@@ -141,8 +141,23 @@ async function store(mp4: string): Promise<void> {
     );
 
   // HEAD then PUT, never an overwrite (putIfAbsent). Two owners uploading one name at once could race; there is one owner.
-  const send = (url: string, init: HttpRequest): Promise<Response> =>
-    fetch(url, { ...init, signal: AbortSignal.timeout(10 * 60_000) });
+  // A redirect is never followed: the bytes and the metadata would go to a host
+  // nobody chose, and its 2xx would be recorded as an upload that R2 never stored.
+  const send = async (url: string, init: HttpRequest): Promise<Response> => {
+    try {
+      return await fetch(url, {
+        ...init,
+        redirect: "error",
+        signal: AbortSignal.timeout(10 * 60_000),
+      });
+    } catch (e) {
+      const reason = ((e as Error).cause as Error | undefined) ?? (e as Error);
+      throw new Error(
+        `r2 ${init.method} failed: ${reason.message}${/redirect/i.test(reason.message) ? " (a redirect is never followed; nothing was recorded)" : ""}`,
+        { cause: e },
+      );
+    }
+  };
   for (const f of files) {
     const key = videoKey(video, basename(f));
     const buf = readFileSync(f);
