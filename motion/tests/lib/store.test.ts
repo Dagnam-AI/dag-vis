@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   R2_ENDPOINT_VAR,
   contentTypeFor,
+  endpointNotice,
   endpointProblem,
   existingObjectProblem,
   ledgerNames,
@@ -163,6 +164,28 @@ describe("the test-double endpoint", () => {
     expect(readR2({ MOTION_R2_ENDPOINT: "http://example.com" })).toEqual({
       kind: "absent",
     });
+  });
+});
+
+describe("endpointNotice", () => {
+  it("names the override and the host of the test double, and nothing secret", () => {
+    const notice = endpointNotice(
+      readR2({ ...ENV, MOTION_R2_ENDPOINT: "http://127.0.0.1:8123" }),
+    );
+    expect(notice).toBe(
+      "MOTION_R2_ENDPOINT is set: this upload goes to the test double at 127.0.0.1:8123, not to R2",
+    );
+    expect(notice).not.toMatch(/acct|secret|bucket|\bid\b/);
+  });
+
+  it("is null for the real bucket and for anything that is not ready", () => {
+    expect(endpointNotice(readR2(ENV))).toBeNull();
+    expect(endpointNotice(readR2({}))).toBeNull();
+    expect(
+      endpointNotice(
+        readR2({ ...ENV, MOTION_R2_ENDPOINT: "http://example.com" }),
+      ),
+    ).toBeNull();
   });
 });
 

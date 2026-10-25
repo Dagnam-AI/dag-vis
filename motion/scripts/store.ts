@@ -40,6 +40,7 @@ import { putIfAbsent, type HttpRequest } from "../src/lib/r2.ts";
 import { sha256Hex } from "../src/lib/sigv4.ts";
 import {
   contentTypeFor,
+  endpointNotice,
   ledgerRow,
   markUploaded,
   readR2,
@@ -90,6 +91,8 @@ async function store(mp4: string): Promise<void> {
   // --upload with no usable credentials is a failure (exit 1), named before anything is copied.
   const unusable = upload ? uploadProblem(r2) : null;
   if (unusable !== null) throw new Error(unusable);
+  const notice = upload ? endpointNotice(r2) : null;
+  if (notice !== null) console.error(notice);
   for (const f of files) {
     if (!existsSync(f)) throw new Error(`missing ${f}`);
     videoKey(video, basename(f)); // validates the names before anything is copied or sent

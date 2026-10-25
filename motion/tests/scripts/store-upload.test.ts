@@ -220,6 +220,25 @@ describe("store --upload against a local stand-in for R2", () => {
     expect(readdirSync(join(videos, "demo")).sort()).toEqual(names().sort());
   });
 
+  it("says on stderr, once, before any request, that the upload goes to a test double, naming the override and its host", async () => {
+    const r = await upload();
+    const host = origin.replace("http://", "");
+    const line = `MOTION_R2_ENDPOINT is set: this upload goes to the test double at ${host}, not to R2`;
+    expect(
+      r.err.split("\n").filter((l) => l.includes("MOTION_R2_ENDPOINT")),
+    ).toEqual([line]);
+    expect(r.err.startsWith(line)).toBe(true);
+    expect(r.out).not.toContain("MOTION_R2_ENDPOINT");
+    expect(leaks(r)).toEqual([]);
+  });
+
+  it("does not say it for a run without --upload", async () => {
+    const r = await runScript(SCRIPT, [render.mp4]);
+    expect(r.code).toBe(0);
+    expect(r.err).toBe("");
+    expect(seen).toEqual([]);
+  });
+
   it("signs every request (SigV4, host and payload included) and sends each file's own sha256 as metadata", async () => {
     await upload();
     for (const s of seen) {

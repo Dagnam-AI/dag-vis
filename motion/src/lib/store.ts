@@ -99,6 +99,12 @@ export function readR2(
   };
 }
 
+/** The line `--upload` prints to stderr when the requests go to a local test double and not to R2, so a variable left exported cannot go unnoticed. No credential in it. Null for the real bucket. */
+export function endpointNotice(r2: R2Status): string | null {
+  if (r2.kind !== "ready" || r2.endpoint === undefined) return null;
+  return `${R2_ENDPOINT_VAR} is set: this upload goes to the test double at ${new URL(r2.endpoint).host}, not to R2`;
+}
+
 /** Why `--upload` cannot start, naming the missing variables (never a value), or null when all four are set. */
 export function uploadProblem(r2: R2Status): string | null {
   if (r2.kind === "ready") return null;
