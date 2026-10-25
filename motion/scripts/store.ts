@@ -11,6 +11,9 @@
 // Credentials come from the environment only (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
 // R2_SECRET_ACCESS_KEY, R2_VIDEOS_BUCKET): this script never reads, writes or
 // prints them, and every message it prints has them removed.
+// The upload test points the endpoint at a server on this machine through a
+// loopback-only override that readR2 validates (README); unset, the host is built
+// from R2_ACCOUNT_ID.
 //
 // The upload starts with a HEAD of each key, so the token needs READ as well as
 // write: grant it Object Read & Write on the videos bucket. A 403 on HEAD stops

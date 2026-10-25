@@ -469,8 +469,14 @@ describe("motion/", () => {
       ).not.toMatch(/--upload|R2_/);
     // Only these tests run scripts/store.ts or render.ts (which runs it), and
     // each does so with no endpoint of the real bucket: render.test.ts fakes every
-    // process, store.test.ts sets no R2 variable. No test calls fetch itself.
-    const runsStore = ["render.test.ts", "store.test.ts"];
+    // process, store.test.ts sets no R2 variable, store-upload.test.ts sends its
+    // made-up credentials to a server on 127.0.0.1 (MOTION_R2_ENDPOINT). No test
+    // calls fetch itself.
+    const runsStore = [
+      "render.test.ts",
+      "store.test.ts",
+      "store-upload.test.ts",
+    ];
     for (const file of walk(join(MOTION, "tests")).filter((p) =>
       /\.tsx?$/.test(p),
     )) {
@@ -481,6 +487,21 @@ describe("motion/", () => {
         expect(text, at).not.toMatch(/cloudflarestorage/);
       else expect(text, at).not.toMatch(/scripts\/store/);
     }
+  });
+
+  it("lets only the loopback test double replace the R2 endpoint, through one reader", () => {
+    const readers = [...motionSources, ...motionScripts].filter((p) =>
+      readFileSync(p, "utf8").includes("MOTION_R2_ENDPOINT"),
+    );
+    expect(readers.map((p) => relative(MOTION, p))).toEqual([
+      join("src", "lib", "store.ts"),
+    ]);
+    const upload = readFileSync(
+      join(MOTION, "tests/scripts/store-upload.test.ts"),
+      "utf8",
+    );
+    expect(upload).toMatch(/MOTION_R2_ENDPOINT/);
+    expect(upload).toMatch(/127\.0\.0\.1/);
   });
 
   it("keeps the render ledger to rendered facts: swangle, a local copy, an R2 key or null, no secret names", () => {

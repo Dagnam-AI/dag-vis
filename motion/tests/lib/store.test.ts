@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  R2_ENDPOINT_VAR,
   contentTypeFor,
+  endpointProblem,
   existingObjectProblem,
   ledgerNames,
   ledgerRow,
@@ -81,6 +83,85 @@ describe("readR2", () => {
       accessKeyId: "id",
       secretAccessKey: "secret",
       bucket: "bucket",
+    });
+  });
+});
+
+describe("the test-double endpoint", () => {
+  it("is named MOTION_R2_ENDPOINT", () => {
+    expect(R2_ENDPOINT_VAR).toBe("MOTION_R2_ENDPOINT");
+  });
+
+  it.each([
+    "http://127.0.0.1:8123",
+    "http://127.0.0.1:8123/",
+    "http://127.0.0.1",
+    "http://[::1]:8123",
+  ])("accepts %s", (value) => {
+    expect(endpointProblem(value)).toBeNull();
+  });
+
+  it.each([
+    "https://127.0.0.1:8123",
+    "http://localhost:8123",
+    "http://127.0.0.1.example.com:8123",
+    "http://example.com:8123",
+    "http://192.168.1.5:8123",
+    "http://0.0.0.0:8123",
+    "http://[::2]:8123",
+    "http://user:pw@127.0.0.1:8123",
+    "http://user@127.0.0.1:8123",
+    "http://127.0.0.1:8123/bucket",
+    "http://127.0.0.1:8123/?x=1",
+    "http://127.0.0.1:8123/#x",
+    "http://example.com\\@127.0.0.1:8123",
+    "127.0.0.1:8123",
+    "not a url",
+    "",
+  ])(
+    "refuses %j: it could send the signed upload to another machine",
+    (value) => {
+      expect(endpointProblem(value)).toBe(
+        "MOTION_R2_ENDPOINT must be http://127.0.0.1:<port> or http://[::1]:<port> (a test double on this machine) and nothing more",
+      );
+    },
+  );
+
+  it("is carried by readR2 as the bare origin, and left undefined when unset or empty", () => {
+    expect(
+      readR2({ ...ENV, MOTION_R2_ENDPOINT: "http://127.0.0.1:8123/" }),
+    ).toMatchObject({
+      kind: "ready",
+      endpoint: "http://127.0.0.1:8123",
+    });
+    expect(readR2(ENV)).toHaveProperty("endpoint", undefined);
+    expect(readR2({ ...ENV, MOTION_R2_ENDPOINT: "" })).toHaveProperty(
+      "endpoint",
+      undefined,
+    );
+  });
+
+  it("makes readR2 not ready, with the rule and no value, when it names another machine", () => {
+    const status = readR2({
+      ...ENV,
+      MOTION_R2_ENDPOINT: "http://example.com:1",
+    });
+    expect(status).toMatchObject({ kind: "endpoint" });
+    const problem = uploadProblem(status);
+    expect(problem).toMatch(
+      /^R2 upload: MOTION_R2_ENDPOINT must be http:\/\/127\.0\.0\.1:<port>/,
+    );
+    expect(problem).not.toContain("example.com");
+  });
+
+  it("is not looked at while the credentials are incomplete (they are named first)", () => {
+    expect(
+      readR2({ R2_ACCOUNT_ID: "a", MOTION_R2_ENDPOINT: "http://example.com" }),
+    ).toMatchObject({
+      kind: "partial",
+    });
+    expect(readR2({ MOTION_R2_ENDPOINT: "http://example.com" })).toEqual({
+      kind: "absent",
     });
   });
 });
