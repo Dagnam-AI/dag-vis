@@ -7,6 +7,8 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-25
+
 ### Added
 
 - Repository: `motion/` (a Remotion motion-graphics project with its own dependencies, gated by `check:motion`) is repository tooling and is not part of the published package.
