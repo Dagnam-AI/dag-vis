@@ -47,7 +47,21 @@ vi.mock("@remotion/renderer", () => ({
 type Options = Record<string, unknown>;
 let tmp: string;
 let bundleDirs: string[];
+// Every run of sheet.ts registers a SIGINT and a SIGTERM handler; they are collected
+// here, not left on the worker's process (a real Ctrl+C would run every stale one).
+const handlers = new Map<string, () => void>();
+let listeners: NodeJS.SignalsListener[][];
 beforeEach(() => {
+  handlers.clear();
+  listeners = [process.listeners("SIGINT"), process.listeners("SIGTERM")];
+  const on = process.on.bind(process);
+  vi.spyOn(process, "on").mockImplementation(((
+    event: string,
+    fn: () => void,
+  ) =>
+    event === "SIGINT" || event === "SIGTERM"
+      ? (handlers.set(event, fn), process)
+      : on(event, fn)) as never);
   tmp = realpathSync(mkdtempSync(join(tmpdir(), "sheet-")));
   h.motion = tmp;
   bundleDirs = [];
@@ -76,6 +90,10 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  // The run left no handler of its own on the process.
+  expect([process.listeners("SIGINT"), process.listeners("SIGTERM")]).toEqual(
+    listeners,
+  );
   rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -196,18 +214,6 @@ describe("scripts/sheet.ts", () => {
   });
 
   describe("on SIGINT and SIGTERM", () => {
-    const handlers = new Map<string, () => void>();
-    beforeEach(() => {
-      handlers.clear();
-      vi.spyOn(process, "on").mockImplementation(((
-        signal: string,
-        fn: () => void,
-      ) => {
-        handlers.set(signal, fn);
-        return process;
-      }) as never);
-    });
-
     it.each([
       ["SIGINT", 130],
       ["SIGTERM", 143],
