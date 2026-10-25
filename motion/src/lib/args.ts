@@ -3,8 +3,9 @@
 // naming it. Pure: it reads no process state and exits nothing; scripts/cli.ts
 // turns a thrown message into the usage line and exit 1.
 
-/** `--x` of `--x=v`. */
-const optionName = (arg: string): string => arg.replace(/=.*/s, "");
+/** `--x` of `--x=v`; `--=x` has no name, so it stays whole (as Node prints it). */
+const optionName = (arg: string): string =>
+  arg.replace(/^(--[^=]+)=.*$/s, "$1");
 
 /** What each kind of mistake is called. */
 export interface Wording {

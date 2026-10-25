@@ -209,7 +209,9 @@ describe("motion/", () => {
     // each does so with no endpoint of the real bucket: render.test.ts fakes every
     // process, store.test.ts sets no R2 variable, store-upload.test.ts sends its
     // made-up credentials to a server on 127.0.0.1 (MOTION_R2_ENDPOINT). No test
-    // calls fetch itself.
+    // calls fetch( or takes globalThis.fetch, except store-upload.test.ts, which
+    // wraps the real one behind a check that refuses any host but 127.0.0.1 (the
+    // next test requires that check to be there).
     const runsStore = [
       "render.test.ts",
       "store.test.ts",
@@ -220,7 +222,8 @@ describe("motion/", () => {
     )) {
       const text = readFileSync(file, "utf8");
       const at = relative(ROOT, file);
-      expect(text, at).not.toMatch(/\bfetch\(/);
+      if (basename(file) !== "store-upload.test.ts")
+        expect(text, at).not.toMatch(/\bfetch\(|globalThis\.fetch/);
       if (runsStore.includes(basename(file)))
         expect(text, at).not.toMatch(/cloudflarestorage/);
       else expect(text, at).not.toMatch(/scripts\/store/);
@@ -240,6 +243,8 @@ describe("motion/", () => {
     );
     expect(upload).toMatch(/MOTION_R2_ENDPOINT/);
     expect(upload).toMatch(/127\.0\.0\.1/);
+    // The wrapper around the real fetch that refuses every other host.
+    expect(upload).toMatch(/host !== "127\.0\.0\.1"\) throw/);
   });
 
   it("keeps the render ledger to rendered facts: swangle, a local copy, an R2 key or null, no secret names", () => {

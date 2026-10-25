@@ -81,6 +81,8 @@ describe("parseArgv", () => {
       ["--jsn=3", "--jsn"],
       ["-jx", "-j"],
       ["--props=1", "--props"],
+      ["--=x", "--=x"],
+      ["--a=b=c", "--a"],
     ])("names %s as the unknown option %s", (arg, name) => {
       expect(() => parseArgv([arg], SPEC)).toThrow(
         `Unknown option '${name}'. To specify a positional argument starting with a '-', place it at the end of the command after '--', as in '-- "${name}"`,
