@@ -31,7 +31,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { parseArgs } from "node:util";
 
 import { storedCheckProblems } from "../src/lib/ledger.ts";
 import { putIfAbsent, type HttpRequest } from "../src/lib/r2.ts";
@@ -46,7 +45,7 @@ import {
   uploadProblem,
   videoKey,
 } from "../src/lib/store.ts";
-import { MOTION, fail, requireMotionCwd } from "./cli.ts";
+import { MOTION, cli, fail, requireMotionCwd } from "./cli.ts";
 import { requireUsableVideosDir, videosDir } from "./videos-dir.ts";
 
 const USAGE =
@@ -54,21 +53,10 @@ const USAGE =
 // RENDERS.jsonl and the relative render paths are motion/'s.
 requireMotionCwd(USAGE);
 
-let parsed: ReturnType<typeof parseArgs>;
-try {
-  parsed = parseArgs({
-    options: {
-      upload: { type: "boolean" },
-      check: { type: "boolean" },
-    },
-    allowPositionals: true,
-    strict: true,
-  });
-} catch (e) {
-  fail(USAGE, (e as Error).message);
-}
-const { upload = false, check = false } = parsed.values;
-const [target, ...extra] = parsed.positionals;
+const { flags, positionals } = cli(USAGE, ["upload", "check"]);
+const upload = flags.has("upload");
+const check = flags.has("check");
+const [target, ...extra] = positionals;
 if (extra.length > 0 || (check && target !== undefined))
   fail(USAGE, "expected one render file, or --check alone");
 

@@ -2,8 +2,8 @@
 // run with a message naming it instead of being ignored.
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseArgs } from "node:util";
 
+import { parseArgv, type Parsed } from "../src/lib/args.ts";
 import { requireVideoName } from "../src/lib/video-name.ts";
 
 // motion/ whatever the caller's cwd is: the remotion bin and the output folders are relative to it.
@@ -38,31 +38,27 @@ export function requireMotionCwd(usage: string): void {
     fail(usage, `run from ${MOTION}, not ${process.cwd()}`);
 }
 
-/** `flagNames` are the boolean flags the script accepts; `count` is the exact number of positional arguments. */
-export function cli(usage: string, flagNames: string[], count: number): Cli {
-  let parsed: ReturnType<typeof parseArgs>;
+/**
+ * `flagNames` are the boolean flags the script accepts (without dashes); `count`,
+ * when given, is the exact number of positional arguments.
+ */
+export function cli(usage: string, flagNames: string[], count?: number): Cli {
+  let parsed: Parsed;
   try {
-    parsed = parseArgs({
-      args: process.argv.slice(2),
-      options: Object.fromEntries(
-        flagNames.map((name) => [name, { type: "boolean" }] as const),
-      ),
-      allowPositionals: true,
-      strict: true,
+    parsed = parseArgv(process.argv.slice(2), {
+      flags: flagNames.map((name) => `--${name}`),
     });
   } catch (e) {
     return fail(usage, (e as Error).message);
   }
-  const positionals = parsed.positionals;
-  if (positionals.length !== count)
+  const { positionals } = parsed;
+  if (count !== undefined && positionals.length !== count)
     return fail(
       usage,
       `expected ${String(count)} argument(s), got ${String(positionals.length)}`,
     );
   return {
-    flags: new Set(
-      Object.keys(parsed.values).filter((k) => parsed.values[k] === true),
-    ),
+    flags: new Set([...parsed.flags].map((flag) => flag.slice(2))),
     positionals,
   };
 }
