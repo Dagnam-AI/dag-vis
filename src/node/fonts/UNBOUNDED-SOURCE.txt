@@ -9,7 +9,7 @@ Upstream
   sha-256 323b511be380c8d474ef030686b71aedde501f8d9cd46da558b7c40454372c3f
   (778272 bytes; wght 200..900, default 400)
 
-Recipe (fontTools 4.67.0), once per weight W in 400, 500, 700
+Recipe (fontTools 4.67.0), used for Medium (W = 500) and Bold (W = 700)
   font = instancer.instantiateVariableFont(TTFont(upstream), {"wght": W},
                                            updateFontNames=True)
   options = subset.Options()
@@ -19,6 +19,12 @@ Recipe (fontTools 4.67.0), once per weight W in 400, 500, 700
   subsetter = subset.Subsetter(options)
   subsetter.populate(unicodes=<the 226 code points of Unbounded-Regular.ttf>)
   subsetter.subset(font)
+
+Run with W = 400 the recipe gives the same code points and the same advances as
+the shipped Unbounded-Regular.ttf, but not the same file: the shipped Regular
+was made earlier and also keeps 10 unused *.BRACKET.varAlt01 glyphs (297
+glyphs against 287), and it has no nameIDs 16 and 17. Only Medium and Bold are
+reproducible from this recipe.
 
 The name table follows the static-font convention: Medium is nameID 1
 "Unbounded Medium", 2 "Regular", 16 "Unbounded", 17 "Medium"; Bold is

@@ -443,7 +443,9 @@ Only plain `vis/vX.Y.Z` tags are supported: a prerelease suffix (`vis/v0.2.0-rc.
 - **Unbounded** (`Unbounded-Regular.ttf`, `Unbounded-Medium.ttf`, `Unbounded-Bold.ttf`: static wght 400, 500 and 700 instances of the variable font, upstream commit and recipe in [`UNBOUNDED-SOURCE.txt`](src/node/fonts/UNBOUNDED-SOURCE.txt), so SVG text can use `font-family="Unbounded"` with `font-weight` 400, 500 or 700): SIL Open Font License 1.1, [`OFL-Unbounded.txt`](src/node/fonts/OFL-Unbounded.txt).
 - **Moonhouse** (`moonhouse/moonhouse.ttf`, Copyright (c) 2013 by NimaVisual, licensor Andres Moreno W. / NimaVisual), byte for byte as received. **Its embedded licence forbids modification and redistribution without written permission. It is bundled at the package owner's instruction; confirm the permission with NimaVisual or replace the font before relying on it.** Removing it is one directory (`src/node/fonts/moonhouse/`) and one entry in `FONT_FILES` (`src/node/render-png.ts`); the licence text is in [`LICENSE-NOTE.txt`](src/node/fonts/moonhouse/LICENSE-NOTE.txt).
 
-The advance tables behind the social card's wrapping (`src/brand/moonhouse-metrics.ts`, `src/brand/unbounded-metrics.ts`, and the same for the 500 and 700 faces in `src/brand/unbounded-500-metrics.ts`, `src/brand/unbounded-700-metrics.ts`) are generated from these files by `node scripts/gen-font-metrics.mjs` (`--check` fails when they are stale; a test runs it).
+The advance tables behind the social card's wrapping (`src/brand/moonhouse-metrics.ts`, `src/brand/unbounded-metrics.ts`) are generated from these files by `node scripts/gen-font-metrics.mjs` (`--check` fails when they are stale; a test runs it).
+
+Tables for the 500 and 700 faces (`src/brand/unbounded-500-metrics.ts`, `src/brand/unbounded-700-metrics.ts`) are generated the same way, for wrapping text set in those weights. No built-in layout uses them yet (the social card is set in Unbounded 400), and they are not exported from the package.
 
 ## Licence
 
