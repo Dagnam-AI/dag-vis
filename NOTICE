@@ -15,9 +15,10 @@ Moonhouse
   Copyright (c) 2013 by NimaVisual. All rights reserved.
   Licence: the font's own embedded licence, dist/node/fonts/moonhouse/LICENSE-NOTE.txt
   File: moonhouse/moonhouse.ttf, byte for byte as received
-  Bundled at the package owner's instruction; its terms require written
-  permission from NimaVisual for redistribution; confirm or replace it before
-  relying on it. Removing it is one directory (src/node/fonts/moonhouse) and one
+  Its terms require written permission from NimaVisual for redistribution. It
+  is bundled on the package owner's confirmation (recorded 2026-10-25) that
+  Dagnam has that permission; the grant itself is not kept in this repository.
+  Removing it is one directory (src/node/fonts/moonhouse) and one
   entry in FONT_FILES (src/node/render-png.ts); the wordmark of the brand card and
   the display text of the social card then fall back to another face.
 

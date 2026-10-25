@@ -7,6 +7,11 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+### Changed
+
+- Scenes: the light `ogCard`'s footer bullets are drawn at full red instead of inside the footer's 60% opacity (3.3:1 on white, now 6.0:1: the footer text is dimmed with `fill-opacity` and each bullet restores its own), and its right-edge glow is a small, bright bloom (`glow` 0.5 at `glowRadius` 0.09, was 0.35 at 0.22) instead of a soft smudge; the pale-pink area drops from 7.9% to 6.2% of the card. The dark card is byte-identical; the SVG of the light `ogCard` differs from 0.1.2.
+- Fonts: the notices for Moonhouse no longer say its redistribution permission is unconfirmed; they record the package owner's confirmation of 2026-10-25 (the grant itself is not kept in the repository). The font file is unchanged.
+
 ## [0.1.2] - 2026-10-25
 
 ### Added
