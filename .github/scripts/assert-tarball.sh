@@ -26,7 +26,7 @@ for f in \
   echo "$listing" | grep -qx "package/$f" || { echo "::error::$f missing from the tarball"; exit 1; }
 done
 
-if echo "$listing" | grep -E '^package/(tests|src|coverage|\.github)/|\.map$'; then
+if echo "$listing" | grep -E '^package/(tests|src|coverage|motion|\.github)/|\.map$'; then
   echo "::error::the tarball contains files that must not ship (listed above)"
   exit 1
 fi

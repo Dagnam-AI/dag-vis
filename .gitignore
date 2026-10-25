@@ -10,3 +10,8 @@ screenshots/
 fidelity/
 playwright-report/
 test-results/
+# motion/ renders and generated assets never enter the public history
+motion/node_modules/
+motion/out/
+motion/public/fonts/
+motion/public/generated/

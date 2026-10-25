@@ -1,0 +1,40 @@
+{
+  "name": "@dagnam/vis-motion",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Motion graphics for Dagnam, made in code with Remotion. Not published; consumes @dagnam/vis and @dagnam/vis/animate from ../src through one alias pair.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "studio": "remotion studio",
+    "assets": "node scripts/assets.ts",
+    "audio": "node scripts/audio.ts",
+    "render": "node scripts/render.ts",
+    "store": "node scripts/store.ts",
+    "check:render": "node scripts/check-render.ts",
+    "sheet": "node scripts/sheet.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "overrides": {
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@remotion/bundler": "4.0.534",
+    "@remotion/cli": "4.0.534",
+    "@remotion/fonts": "4.0.534",
+    "@remotion/renderer": "4.0.534",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitest/coverage-v8": "5.0.5",
+    "jsdom": "30.1.3",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "remotion": "4.0.534",
+    "vitest": "5.0.5"
+  }
+}

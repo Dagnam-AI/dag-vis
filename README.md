@@ -425,6 +425,10 @@ The demo gallery takes `?effect=<dither|pixel|terminal|glitch|ribbon>&t=<seconds
 
 The Flow page (`/flow.html` on the demo server) shows every field preset live, with buttons that export each one through `exportCanvas`; it takes `?t=<seconds>` (freeze every card), `&w=`, `&h=` (even export size), `&fps=` and `&duration=`, and at most 12 cards run at once. `tests/goldens/field-sheet.sha256` pins the contact sheet's pixels by hash. The CPU path uses `Math.sin`, `exp`, `pow` and friends, which V8 implements itself, so the hash is stable within one Node major version: it was generated on Node 24, and CI runs Node 22. If it fails there, the message prints the actual hash and the Node version; when the per-preset checks in `tests/node/sheet.test.ts` still pass, only a last bit of a maths function differs, and the fix is `UPDATE_GOLDENS=1` on the Node major CI uses, said so in the commit message.
 
+## Motion graphics
+
+`motion/` is where Dagnam's videos are made with [Remotion](https://www.remotion.dev) from this library's effects. It has its own dependencies, is not part of the npm package, and is not published. See [motion/README.md](motion/README.md).
+
 ## Release
 
 Tag `vis/vX.Y.Z` on `main` (the version in `package.json` must match). `release.yml` rejects a tag that is not exactly `vis/v<digits>.<digits>.<digits>` or whose commit is not on `main` (a guard against accidental tags only; see below), re-runs CI (including the packed-tarball smoke test) on the tagged commit, holds the tarball it then publishes to the same file-list assertions, and publishes that exact tarball to npm with provenance through npm trusted publishing (OIDC), or an `NPM_TOKEN` secret as a documented fallback. A branch push never publishes. See [CHANGELOG.md](CHANGELOG.md).
