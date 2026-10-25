@@ -53,8 +53,8 @@ export interface OgCardOptions {
   background?: OgBackground;
   /**
    * Default "dark". "light" is a white page with near-black text and `BRAND.mark` (deep
-   * red) accents, and its own background defaults: `band` 0.04, `glow` 0.35 at
-   * `glowRadius` 0.22, `hairlineWidth` 2.4, no `vignette`. Any `background` option
+   * red) accents, and its own background defaults: `band` 0.04, `glow` 0.5 at
+   * `glowRadius` 0.09, `hairlineWidth` 2.4, no `vignette`. Any `background` option
    * overrides these.
    */
   theme?: "dark" | "light";
@@ -148,11 +148,12 @@ export function ogCard(opts: OgCardOptions): string {
         : {
             // Crisp, not a wash: on white a wide glow or a band reads as pink fog and a
             // vignette as grey, so the light card keeps the hairlines and the outline
-            // (a bit heavier than the dark card's) and only a tight glow at the right edge.
+            // (a bit heavier than the dark card's) and only a small, bright bloom where the strokes
+            // converge at the right edge (a wide soft one read as a muddy smudge).
             base: BRAND.background.light,
             band: 0.04,
-            glow: 0.35,
-            glowRadius: 0.22,
+            glow: 0.5,
+            glowRadius: 0.09,
             hairlineWidth: 2.4,
             vignette: 0,
           }),
@@ -324,12 +325,25 @@ export function ogCard(opts: OgCardOptions): string {
         {
           x: pad,
           y: footerBase,
-          ...sans(footerSize, { opacity: 0.6 }),
+          // Light: dim only the text's fill, so the bullets can restore their own (a
+          // 60% red on white is 3.3:1; dark keeps the one line opacity, unchanged).
+          ...sans(
+            footerSize,
+            dark ? { opacity: 0.6 } : { "fill-opacity": 0.6 },
+          ),
         },
         ...line
           .split("•")
           .flatMap((piece, i) => [
-            ...(i > 0 ? [el("tspan", { fill: red }, "•")] : []),
+            ...(i > 0
+              ? [
+                  el(
+                    "tspan",
+                    dark ? { fill: red } : { fill: red, "fill-opacity": 1 },
+                    "•",
+                  ),
+                ]
+              : []),
             text(piece),
           ]),
       ),

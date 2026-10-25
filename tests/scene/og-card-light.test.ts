@@ -57,17 +57,18 @@ describe("ogCard light theme", () => {
       const rg = (pixels[i] ?? 0) - (pixels[i + 1] ?? 0);
       if (rg >= 8 && rg <= 70 && (pixels[i + 1] ?? 0) > 180) haze++;
     }
-    // Measured 0.0793 (0.0791 without text, so fonts do not matter) against this
-    // 0.09 bound: about 1.1 points of headroom, 11 points under the old card. A tweak
-    // that moves it past the bound is a real change to the look, not noise.
-    expect(haze / (width * height)).toBeLessThan(0.09);
+    // Measured 0.0621 (the earlier wider glow measured 0.0793; fonts do not matter, it
+    // was 0.0791 without text) against this 0.07 bound: about 0.8 points of headroom,
+    // 13 points under the old card. A tweak that moves it past the bound is a real
+    // change to the look, not noise.
+    expect(haze / (width * height)).toBeLessThan(0.07);
     // A white page: the far-left corner is pure white (no vignette).
     expect([...pixels.slice(0, 4)]).toEqual([255, 255, 255, 255]);
   });
 
   it("draws the accents in the deep mark red", () => {
     expect(card).toContain('fill="#ca0303">.AI</tspan>');
-    expect(card).toContain('fill="#ca0303">•</tspan>');
+    expect(card).toContain('fill="#ca0303" fill-opacity="1">•</tspan>');
     expect(card).not.toContain("#ef4444");
   });
 
@@ -95,6 +96,7 @@ describe("ogCard light theme", () => {
       const size = num("font-size");
       const [x, y] = [num("x"), num("y")];
       const colour = hex(/fill="(#[0-9a-f]{6})"/.exec(attrs)?.[1] ?? "#000000");
+      // `opacity` or `fill-opacity`: the regex matches the tail of both.
       const alpha = Number(/opacity="([\d.]+)"/.exec(attrs)?.[1] ?? 1);
       const font = /font-family="moonhouse/i.test(attrs)
         ? MOONHOUSE
@@ -121,7 +123,12 @@ describe("ogCard light theme", () => {
         tspans.push({
           colour: t[1] ?? "",
           glyph: t[2] ?? "",
-          ratio: over(hex(t[1] ?? "#000000"), alpha, box),
+          // A tspan's own fill-opacity replaces the line's, as in SVG.
+          ratio: over(
+            hex(t[1] ?? "#000000"),
+            Number(/fill-opacity="([\d.]+)"/.exec(t[0])?.[1] ?? alpha),
+            box,
+          ),
         });
     }
     // The title is the largest text on the card; every other line is held to 4.5:1.
@@ -131,14 +138,12 @@ describe("ogCard light theme", () => {
       expect(ratio, `font-size ${size}`).toBeGreaterThanOrEqual(
         Number(size) === title ? 7 : 4.5,
       );
-    // `.AI` (wordmark, full opacity) is text: 4.5:1. The footer's bullets are decorative separators
-    // inside a 60% opacity line, so they only owe the 3:1 of WCAG 1.4.11 (measured 3.3:1).
+    // `.AI` (wordmark) and the footer's bullets are red on the page: 4.5:1. The bullets sit
+    // in a 60% line (3.3:1 as it was), so they carry their own full fill-opacity.
     expect(tspans.map((t) => t.glyph).sort()).toEqual([".AI", "•", "•"]);
     for (const { colour, glyph, ratio } of tspans) {
       expect(colour).toBe("#ca0303");
-      expect(ratio, `tspan ${glyph}`).toBeGreaterThanOrEqual(
-        glyph === ".AI" ? 4.5 : 3,
-      );
+      expect(ratio, `tspan ${glyph}`).toBeGreaterThanOrEqual(4.5);
     }
   });
 });
