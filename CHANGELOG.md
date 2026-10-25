@@ -7,6 +7,10 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+### Changed
+
+- Fonts: the notices for Moonhouse no longer say its redistribution permission is unconfirmed; they record the package owner's confirmation of 2026-10-25 (the grant itself is not kept in the repository). The font file is unchanged.
+
 ## [0.1.2] - 2026-10-25
 
 ### Added

@@ -96,7 +96,7 @@ describe("the bundled display fonts", () => {
       "The font files may not be modified without written permission from Andres Moreno W. / NimaVisual.",
     );
     expect(note).toContain(
-      "Bundled at the package owner's instruction; terms require written permission from NimaVisual for redistribution; confirm or replace before relying on it.",
+      "Bundled unmodified. Redistribution is on the package owner's confirmation (recorded 2026-10-25) that Dagnam has NimaVisual's permission; the grant itself is not kept in this repository.",
     );
   });
 
@@ -108,7 +108,7 @@ describe("the bundled display fonts", () => {
       "Moonhouse",
       "SIL Open Font License 1.1",
       "NimaVisual",
-      "written\n  permission from NimaVisual for redistribution",
+      "owner's confirmation (recorded 2026-10-25)",
     ])
       expect(notice).toContain(part);
     const pkg = JSON.parse(
