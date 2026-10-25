@@ -111,7 +111,9 @@ describe("scripts/assets.ts", () => {
   it("copies every face flat into public/fonts only when git confirms the folder is ignored", () => {
     const r = run({ PATH: fakeGit(0) });
     expect(r.status).toBe(0);
-    expect(r.out).toContain("4 fonts copied to public/fonts");
+    expect(r.out).toContain(
+      `${String(BRAND_FONTS.length)} fonts copied to public/fonts`,
+    );
     expect(readdirSync(join(motion, "public/fonts")).sort()).toEqual(
       BRAND_FONTS.map((f) => f.file.replace("fonts/", "")).sort(),
     );
