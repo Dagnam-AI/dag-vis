@@ -2,8 +2,12 @@ import { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 
-import { fieldPresets, type FieldSpec } from "../src/index.js";
-import { VisBackground } from "../src/react/index.js";
+import {
+  fieldPresets,
+  type FieldPresetName,
+  type FieldSpec,
+} from "../src/index.js";
+import { FieldPresetPicker, VisBackground } from "../src/react/index.js";
 
 const spec = (seed: number): FieldSpec => ({
   ...fieldPresets["fluid-dawn"],
@@ -51,10 +55,29 @@ function Demo() {
   );
 }
 
+// The field-preset picker, controlled; every onChange is recorded for field-preset-picker.spec.ts.
+const changes: FieldPresetName[] = [];
+function PickerDemo() {
+  const [value, setValue] = useState<FieldPresetName | null>(null);
+  return (
+    <FieldPresetPicker
+      value={value}
+      onChange={(name) => {
+        changes.push(name);
+        setValue(name);
+      }}
+    />
+  );
+}
+
 const app = document.getElementById("app");
 const cycle = document.getElementById("cycle");
-if (!app || !cycle) throw new Error("vis-background page is not ready");
+const picker = document.getElementById("picker");
+if (!app || !cycle || !picker)
+  throw new Error("vis-background page is not ready");
 createRoot(app).render(<Demo />);
+createRoot(picker).render(<PickerDemo />);
+window.__picker = { changes };
 
 window.__visBg = {
   // Mount and unmount `n` separate backgrounds back to back (flushSync runs the effects before it returns),

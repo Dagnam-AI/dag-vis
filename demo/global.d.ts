@@ -50,6 +50,8 @@ declare global {
       ): Promise<{ lost: boolean; distinct: number }>;
     };
     __visBgReady?: boolean;
+    /** vis-background.html: the field-preset picker's onChange calls, in order. */
+    __picker: { changes: string[] };
     /** vis-background.spec.ts: the canvas the page held before a replace or unmount. */
     __held?: HTMLCanvasElement | null;
   }

@@ -6,7 +6,8 @@ import { defineConfig, devices } from "@playwright/test";
 // the wrong tree): Playwright refuses to start, so stop it first.
 export default defineConfig({
   testDir: "./tests/e2e",
-  testMatch: /(gallery|field-parity|vis-background)\.spec\.ts$/,
+  testMatch:
+    /(gallery|field-parity|vis-background|field-preset-picker)\.spec\.ts$/,
   forbidOnly: !!process.env.CI,
   fullyParallel: false,
   workers: 1,
