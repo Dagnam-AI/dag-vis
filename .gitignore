@@ -15,3 +15,8 @@ motion/node_modules/
 motion/out/
 motion/public/fonts/
 motion/public/generated/
+
+# local secrets (for example motion/.env with the R2 videos token) never enter the public history
+.env
+.env.*
+!.env.example
