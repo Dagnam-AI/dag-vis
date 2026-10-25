@@ -15,6 +15,7 @@
     "store": "node scripts/store.ts",
     "check:render": "node scripts/check-render.ts",
     "sheet": "node scripts/sheet.ts",
+    "captions": "node scripts/captions.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
