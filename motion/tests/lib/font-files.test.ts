@@ -16,7 +16,7 @@ const LIBRARY_FONTS = fileURLToPath(
 );
 
 describe("BRAND_FONTS", () => {
-  it("lists the four faces, Moonhouse under the library's lowercase family", () => {
+  it("lists the six faces, Moonhouse under the library's lowercase family", () => {
     expect(
       BRAND_FONTS.map((f) => [f.family, f.weight, f.from, f.file]),
     ).toEqual([
@@ -28,6 +28,13 @@ describe("BRAND_FONTS", () => {
         "Unbounded-Regular.ttf",
         "fonts/Unbounded-Regular.ttf",
       ],
+      [
+        "Unbounded",
+        "500",
+        "Unbounded-Medium.ttf",
+        "fonts/Unbounded-Medium.ttf",
+      ],
+      ["Unbounded", "700", "Unbounded-Bold.ttf", "fonts/Unbounded-Bold.ttf"],
       ["moonhouse", "400", "moonhouse/moonhouse.ttf", "fonts/moonhouse.ttf"],
     ]);
   });

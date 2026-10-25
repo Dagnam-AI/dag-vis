@@ -19,14 +19,15 @@ npm run studio                             # the Remotion Studio
 
 ## Commands
 
-| command                                                                             | what it does                                                                                                                                    |
-| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm run assets`                                                                    | Copies Inter, Unbounded and Moonhouse from the library into `public/fonts/`; refuses unless git says that folder is ignored.                    |
-| `npm run audio -- <video>`                                                          | Synthesises the video's bed (`src/videos/<video>/audio.ts`), normalises it to -16 LUFS and writes `public/generated/<video>.wav`; fails closed. |
-| `npm run check:render -- <file.mp4> <video> [--json]`                               | Frame count, size, frame rate, audio length against the picture, loudness and true peak of a finished render; exit 1 with named problems.       |
-| `npm run sheet -- <video> [--props <json>]`                                         | Renders the storyboard (the frames in `timing.ts`, captioned) to `out/<video>/<video>-sheet-<yyyymmdd>-v<N>.png`.                               |
-| `npm run render -- <video> [--props <json>] [--crf 18] [--allow-dirty]`             | One deliverable: bed, versioned MP4, checks, local copy, ledger line. `--preview-not-a-deliverable` is the quick-look variant.                  |
-| `npm run store -- out/<video>/<name>.mp4 [--upload]` and `npm run store -- --check` | Local copy (and, only on the owner's own command, the R2 copy) of a finished render; `--check` verifies the local folder.                       |
+| command                                                                             | what it does                                                                                                                                                         |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run assets`                                                                    | Copies Inter, Unbounded and Moonhouse from the library into `public/fonts/`; refuses unless git says that folder is ignored.                                         |
+| `npm run audio -- <video>`                                                          | Synthesises the video's bed (`src/videos/<video>/audio.ts`), normalises it to -16 LUFS and writes `public/generated/<video>.wav`; fails closed.                      |
+| `npm run check:render -- <file.mp4> <video> [--json]`                               | Frame count, size, frame rate, audio length against the picture, loudness and true peak of a finished render; exit 1 with named problems.                            |
+| `npm run captions -- <video>`                                                       | Writes the English WebVTT captions of the video's `CAPTIONS` (in `timing.ts`) to `out/<video>/<video>.vtt`; exit 1, writing nothing, if they overlap or are missing. |
+| `npm run sheet -- <video> [--props <json>]`                                         | Renders the storyboard (the frames in `timing.ts`, captioned) to `out/<video>/<video>-sheet-<yyyymmdd>-v<N>.png`.                                                    |
+| `npm run render -- <video> [--props <json>] [--crf 18] [--allow-dirty]`             | One deliverable: bed, versioned MP4, checks, local copy, ledger line. `--preview-not-a-deliverable` is the quick-look variant.                                       |
+| `npm run store -- out/<video>/<name>.mp4 [--upload]` and `npm run store -- --check` | Local copy (and, only on the owner's own command, the R2 copy) of a finished render; `--check` verifies the local folder.                                            |
 
 ## Starting a real video with the `remotion-video` skill
 
