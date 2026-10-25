@@ -256,7 +256,17 @@ export class Fake2d {
   lineJoin = "miter";
   globalAlpha = 1;
   textBaseline = "alphabetic";
+  /** Every image putImageData was given, in call order (the same object when it was reused). */
+  images: { data: Uint8ClampedArray; width: number; height: number }[] = [];
   constructor(readonly canvas: HTMLCanvasElement) {}
+  putImageData(
+    image: { data: Uint8ClampedArray; width: number; height: number },
+    x: number,
+    y: number,
+  ): void {
+    this.images.push(image);
+    this.calls.push(`putImageData ${image.width} ${image.height} ${x} ${y}`);
+  }
   setTransform(
     a: number,
     b: number,

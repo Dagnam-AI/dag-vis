@@ -115,6 +115,7 @@ export type {
 export {
   FLOW_PRESET_NAMES,
   FLOW_SHAPES,
+  fieldPresetCatalog,
   fieldPresetNames,
   fieldPresets,
   flowPresets,
@@ -124,6 +125,7 @@ export {
 } from "./field/index.js";
 export type {
   FieldHighlight,
+  FieldPresetInfo,
   FieldPresetName,
   FieldSpec,
   FlowFieldSpec,

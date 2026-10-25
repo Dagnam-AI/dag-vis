@@ -7,7 +7,7 @@ Deterministic, parameterised [Dagnam.AI](https://dagnam.ai) visuals: brand token
 | `@dagnam/vis`                      | brand tokens, gradients, patterns, scenes (SVG + CSS strings), the CPU field renderer and presets, browser-safe                        | none                                   |
 | `@dagnam/vis/node` + `dag-vis` CLI | PNG rendering, favicon sets, `exportStatic` / `exportAnimation`, `renderSheet`, the CLI (bundled Inter, Unbounded and Moonhouse fonts) | `@resvg/resvg-js` (optional), `gifenc` |
 | `@dagnam/vis/animate`              | the animated effects (`createDither`, `createGlitch`, ..., `createField`) and `exportCanvas`: WebGL2 / Canvas2D, browser only          | `gifenc`                               |
-| `@dagnam/vis/react`                | `<VisBackground>` (the animated effects) and `<Gradient>` for React 18 and 19                                                          | `react` (optional peer)                |
+| `@dagnam/vis/react`                | `<VisBackground>` (the animated effects), `<Gradient>` and `<FieldPresetPicker>` for React 18 and 19                                   | `react` (optional peer)                |
 
 Seeded generators take `seed` (default `1`); all output is deterministic, so the same options and seed give byte-identical SVG and CSS (`logoSvg` and `animatedGradientCss` take no seed).
 
@@ -77,7 +77,7 @@ ribbon({ width: 1600, height: 900, lines: 120, mesh: true }); // the wave-mesh r
     field_preset === undefined ? undefined : parseFieldPreset(field_preset);
   ```
 
-- **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`; or `title`, `excerpt` and `cover` for the social card), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry).
+- **Scenes**: `brandBackground(opts)` (and `brandBackgroundLayers` for composition), `ogCard(opts)` (`title`, `subtitle`, `eyebrow`, `footer`, `theme`, `background`; or `title`, `excerpt` and `cover` for the social card), `ribbon(opts)` (SVG) and `ribbonCurves(opts)` (the pure curve geometry). The light theme of the brand card is white with near-black text and the deep mark red (`BRAND.mark`) for the logo, eyebrow, rule and `.AI`: crisp hairline curves and a tight glow at the right edge, no pink wash and no vignette; any `background` option overrides these defaults.
 - **Text and core helpers**: `measureText`, `wrapText`, `FONT_FAMILY`, `createRng`, `fmt`, colour helpers (`parseColor`, `toHex`, `toCss`, `mix`, `ramp`, `withAlpha`, `toVec3`), `VisError`. `measureText` and `wrapText` take at most 10,000 characters of text and `wrapText` returns at most 100 lines. The SVG builder, the validators, the stop pipeline, the geometry helpers and the font metrics are internal and not exported.
 
 ### Social card
@@ -112,7 +112,7 @@ await favicons({ outDir: "public" }); // favicon.ico/svg, apple-touch-icon, PWA 
 await appIcon({ outDir: "build/icons" }); // macOS app icon: app-icon.svg, app-icon-<16..1024>.png, app-icon.icns
 ```
 
-- `renderPng(svg, { width?, background?, fontFiles? })` resolves to a PNG `Buffer`. Text is drawn with the bundled fonts only (Inter, Unbounded, Moonhouse; no system fonts), so output does not depend on the machine's fonts.
+- `renderPng(svg, { width?, background?, fontFiles? })` resolves to a PNG `Buffer`. Text is drawn with the bundled fonts only (Inter, Unbounded 400/500/700, Moonhouse; no system fonts), so output does not depend on the machine's fonts.
 - `favicons({ outDir, background?, color?, name?, shortName? })` writes the files listed in `FAVICON_FILES` and resolves to their paths. Every icon draws the mark in `BRAND.mark` (the dark theme's deep red, `oklch(52.768% 0.21534 29.097)`) at `LOGO_ICON_WEIGHT` (an extra 48-unit round stroke, so the strands survive at 16 px); the plain `LOGO` and `logoSvg()` are unchanged. `site.webmanifest` has `id`, `start_url` and `scope` `"/"` and root-absolute icon `src` values (`/icon-192.png`), so serve the set from the site root and link it with `<link rel="manifest" href="/site.webmanifest">`.
 - `appIcon({ outDir, background?, color? })` writes `APP_ICON_FILES`: the SVG master (`app-icon.svg`, `appIconSvg()` in the root entry: an 824 px superellipse plate on a transparent 1024 canvas, Apple's icon grid), its PNGs at 16, 32, 64, 128, 256, 512 and 1024 px and `app-icon.icns`. `icnsFromPngs(pngs)` packs square PNGs into an `.icns` with no dependency (chunk types `icp4 icp5 ic07 ic08 ic09 ic10 ic11 ic12 ic13 ic14`: `iconutil` writes ic07 to ic14 and reads icp4 and icp5).
 - `icoFromPngs(pngs)` packs PNG buffers into an `.ico`; `FONT_FILES` lists the bundled font paths; `run(argv, io)` is the CLI entry (it never calls `process.exit`).
@@ -168,9 +168,11 @@ h.destroy(); // releases the effect's GPU objects and observers
 - **`destroy()`** deletes the effect's GPU objects and removes its listeners but does not call `WEBGL_lose_context`:
   the canvas keeps its context, so recreating an effect on the same canvas works as long as it needs the same alpha
   mode (`createDither` and `createPixelBlast` are premultiplied, `createTerminal` is not; the other mode throws a
-  `VisError`, use a fresh canvas; a 2D effect cannot share a canvas with a WebGL one). To release the context itself,
-  remove the canvas and drop every reference to it, including `handle.canvas`; give each mount its own canvas
-  (`VisBackground` does).
+  `VisError`, use a fresh canvas; a 2D effect cannot share a canvas with a WebGL one). When you are done with a canvas,
+  lose its context yourself after `destroy()`
+  (`canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext()`): a removed canvas otherwise
+  keeps its context until garbage collection, and browsers cap live contexts (16 in Chrome, which then force-loses
+  the oldest). `VisBackground` gives each mount its own canvas and does this on cleanup.
 - **`fps`** is a cap on the display rate: `fps: 60` on a 120 Hz display draws every second frame (60 fps). Raise it to
   follow such a display.
 
@@ -217,11 +219,44 @@ handle.stop(); // pause a running effect before exporting from it
 const mp4 = await exportCanvas(handle, { format: "mp4", fps: 30, duration: 6 }); // a Blob
 ```
 
-- **Root** (`@dagnam/vis`, no DOM types): `renderField(spec, { width, height, t?, loop? })`, `fieldPresets`, `flowPresets`, `FLOW_PRESET_NAMES`, `FLOW_SHAPES`, `randomFlow({ seed?, mood? })`, the `*FieldSpec` types and `FieldPresetName` (the keys of `fieldPresets`, so `fieldPresets[name]` needs no `undefined` check). A frame is at most 16384 px a side and 2^25 pixels, and `|t|` is at most 1,000,000 s. A bad spec or option throws a `VisError` naming the parameter.
+- **Root** (`@dagnam/vis`, no DOM types): `renderField(spec, { width, height, t?, loop? })`, `fieldPresets`, `flowPresets`, `FLOW_PRESET_NAMES`, `FLOW_SHAPES`, `fieldPresetCatalog` (every preset as `{ name, label, kind }`, deep-frozen, in `fieldPresets` order; type `FieldPresetInfo`), `randomFlow({ seed?, mood? })`, the `*FieldSpec` types and `FieldPresetName` (the keys of `fieldPresets`, so `fieldPresets[name]` needs no `undefined` check). A frame is at most 16384 px a side and 2^25 pixels, and `|t|` is at most 1,000,000 s. A bad spec or option throws a `VisError` naming the parameter.
 - **`./animate`**: `createField(canvas, spec, options?)` returns an `EffectHandle` (`start`, `stop`, `update`, `renderAt`, `destroy`) on the shared WebGL2 runtime. The options are the common ones; there is no `seed` or `colors` option because both live in the spec. A field never changes its spec live: `update({ spec })` throws unless the spec is equal, so `destroy()` and create a new one.
 - **Presets**, in `fieldPresets` order: `violet-dusk`, `lunar`, `lagoon`, `bronze`, `sunset-ring`, `citrus-mist`, `orchid`, `lilac-wave`, `forest-glow`, `rose`, `emerald`, `glacier`, `rainbow-band`, `cobalt`, `crimson`, `pine`, `brand` (these 17 are `flowPresets`), then `fluid-dawn` and `fluted-ember`. They are frozen. `randomFlow({ seed, mood })` makes a new flow spec; `mood` is `dark` (the default), `light` or `vivid`, a tendency in the colours it picks rather than a guarantee about what the screen shows.
 - **Loops**: `loop: T` samples the noise on a circle, so on the CPU the frame at `t` and at `t + T` are byte-identical. On the GPU the frames agree to the tolerance below. A loop above about 40,000 s leaves the range where that tolerance holds.
 - **CPU and GPU agree to within a few 1/255, not exactly.** A shader works in float32 where the reference uses float64, so the pictures differ in the last bits. A Playwright test (`npm run test:e2e`) draws every preset in headless Chromium on SwiftShader (a software rasteriser) and compares 64 sample points per preset with `renderField`: every channel is within 2/255 (the broader replay behind it measured at most 1/255 over 1270 frames). By kind, `fluid` agreed to 0.0078/255 and `fluted` to 0.56/255 at the extremes tried. Extreme settings (nested warps at scale 10 and strength 3) can reach about 4/255. The shaders avoid the built-in `sin` and `cos`, but `pow`, `exp` and the other built-ins are the driver's. **Nothing has been verified on a real GPU, in Safari or in Firefox**; the 2/255 figure is a result for that one browser and rasteriser, not a guarantee.
+
+### Field-preset browser
+
+An editor that stores a `field_preset` needs a list to choose from. `fieldPresetCatalog` (root, DOM-free) is every preset as `{ name, label, kind }` in `fieldPresets` order (`"violet-dusk"` is `"Violet dusk"`, `kind` is `"flow"`, `"fluid"` or `"fluted"`), and `<FieldPresetPicker>` (`@dagnam/vis/react`) is that list as a controlled `radiogroup`, each name under a thumbnail:
+
+```tsx
+import { FieldPresetPicker } from "@dagnam/vis/react";
+import { parseFieldPreset, type FieldPresetName } from "@dagnam/vis";
+
+// A stored name that a later version removed makes the picker throw while rendering: parse it first.
+function initialPreset(stored: unknown): FieldPresetName | null {
+  try {
+    return parseFieldPreset(stored);
+  } catch {
+    return null;
+  }
+}
+const [preset, setPreset] = useState(initialPreset(stored));
+
+<FieldPresetPicker
+  value={preset}
+  onChange={setPreset} // the name to store
+  thumbSize={{ width: 160, height: 90 }} // the default; whole pixels, each side 1..512
+  t={0} // the second of the animation the thumbnails show
+  className="presets" // style `.presets [aria-checked="true"]`; the layout is a minimal grid
+  aria-label="Cover look"
+/>;
+```
+
+- Keyboard: the checked radio (the first when none is) is the one tab stop; the arrow keys move focus and selection together and wrap, Home and End jump to the ends, Space and Enter select. A key with Alt, Ctrl or Cmd held (Alt+Left is Back) is left to the browser. The focus ring is the browser's.
+- **Cost.** The thumbnails are the CPU `renderField` frames, so the 19 of them use no WebGL context. They are drawn after mount, each in a task of its own, cancelled on unmount and when `thumbSize` or `t` change. Measured on a loaded laptop: roughly 5 to 30 ms per thumbnail and a few hundred ms for all 19 at the default 160 x 90, so the page stays responsive. **Each task blocks the page while it runs**: at the 512 px cap one thumbnail takes 250 to 380 ms, so keep thumbnails small.
+- **Cache.** The newest 128 thumbnails are kept by name, size and `t`, so a picker that opens again is instant. The cache lives for the life of the page and is never released: about 7 MB at the default size, up to about 128 MB at 512 x 512. Server rendering emits the list with empty canvases.
+- **Errors.** A bad `thumbSize` (a side that is not an integer in 1..512), `t` or `value` throws a `VisError` while rendering. `value` is the prop most likely to come from stored data, so run it through `parseFieldPreset` (and catch, as above) rather than passing it raw.
 
 ## Exports
 
@@ -272,8 +307,9 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
 ```
 
 - **One canvas per mount.** Each effect instance creates its own `<canvas>` (`aria-hidden`, `pointer-events: none`)
-  in an effect and removes it on cleanup, so StrictMode and switching `effect` are safe. The server renders an empty
-  wrapper and every DOM access happens in effects.
+  in an effect, and on cleanup removes it and loses its WebGL context, so StrictMode and switching `effect` are
+  safe and mounting and unmounting many backgrounds stays under the browser's cap on live contexts. The server
+  renders an empty wrapper and every DOM access happens in effects.
 - **Options.** A changed value is applied with `update()` on the running effect (`seed` re-phases, `colors`
   recolours); equal re-renders do nothing. Adding or removing an option key (turning `loop` on or off, dropping
   `colors`) recreates the effect, because `update()` cannot clear a value.
@@ -292,6 +328,7 @@ import { Gradient, VisBackground } from "@dagnam/vis/react";
   `reduced ? null : <VisBackground ... />`.
 - **`<Gradient>`** gets its `<defs>` ids from `useId()` unless the spec sets an `idPrefix`, so several gradients on one
   page do not collide.
+- **`<FieldPresetPicker>`** is the browsable list of field presets (see Field-preset browser above).
 - `react` (>= 18) is an optional peer; neither the root nor `./animate` imports it.
 
 ## CLI
@@ -367,7 +404,7 @@ Options and gradient specs are validated at the boundary, including ones that co
 
 ## Layering
 
-`core ← brand ← gradient, pattern ← scene ← node`, with `field` and `export` beside that chain: each imports `core` only, and `animate` and `node` import them (the root imports `field` but never `export`; `react` imports `field` for the `FieldSpec` type only). Enforced by eslint `no-restricted-imports` per layer and `tests/structure.test.ts`; `node:*` and `@resvg/resvg-js` are imported only under `src/node/`. No file is over 500 lines and every source file has a mirrored test.
+`core ← brand ← gradient, pattern ← scene ← node`, with `field` and `export` beside that chain: each imports `core` only, and `animate` and `node` import them (the root imports `field` but never `export`; `react` imports `field` for the `FieldSpec` type and for the CPU frames of `<FieldPresetPicker>`). Enforced by eslint `no-restricted-imports` per layer and `tests/structure.test.ts`; `node:*` and `@resvg/resvg-js` are imported only under `src/node/`. No file is over 500 lines and every source file has a mirrored test.
 
 ## Develop
 
@@ -403,10 +440,12 @@ Only plain `vis/vX.Y.Z` tags are supported: a prerelease suffix (`vis/v0.2.0-rc.
 `dist/node/fonts/` ships the fonts `renderPng` draws with ([`NOTICE`](NOTICE) lists them):
 
 - **Inter 4.1** (`Inter-Regular.ttf`, `Inter-Bold.ttf`): SIL Open Font License 1.1, [`OFL.txt`](src/node/fonts/OFL.txt).
-- **Unbounded** (`Unbounded-Regular.ttf`, a static wght 400 instance of the variable font): SIL Open Font License 1.1, [`OFL-Unbounded.txt`](src/node/fonts/OFL-Unbounded.txt).
+- **Unbounded** (`Unbounded-Regular.ttf`, `Unbounded-Medium.ttf`, `Unbounded-Bold.ttf`: static wght 400, 500 and 700 instances of the variable font, upstream commit and recipe in [`UNBOUNDED-SOURCE.txt`](src/node/fonts/UNBOUNDED-SOURCE.txt), so SVG text can use `font-family="Unbounded"` with `font-weight` 400, 500 or 700): SIL Open Font License 1.1, [`OFL-Unbounded.txt`](src/node/fonts/OFL-Unbounded.txt).
 - **Moonhouse** (`moonhouse/moonhouse.ttf`, Copyright (c) 2013 by NimaVisual, licensor Andres Moreno W. / NimaVisual), byte for byte as received. **Its embedded licence forbids modification and redistribution without written permission. It is bundled at the package owner's instruction; confirm the permission with NimaVisual or replace the font before relying on it.** Removing it is one directory (`src/node/fonts/moonhouse/`) and one entry in `FONT_FILES` (`src/node/render-png.ts`); the licence text is in [`LICENSE-NOTE.txt`](src/node/fonts/moonhouse/LICENSE-NOTE.txt).
 
 The advance tables behind the social card's wrapping (`src/brand/moonhouse-metrics.ts`, `src/brand/unbounded-metrics.ts`) are generated from these files by `node scripts/gen-font-metrics.mjs` (`--check` fails when they are stale; a test runs it).
+
+Tables for the 500 and 700 faces (`src/brand/unbounded-500-metrics.ts`, `src/brand/unbounded-700-metrics.ts`) are generated the same way, for wrapping text set in those weights. No built-in layout uses them yet (the social card is set in Unbounded 400), and they are not exported from the package.
 
 ## Licence
 

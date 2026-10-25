@@ -12,6 +12,7 @@ describe("field barrel", () => {
       "MAX_T",
       "TIME_RATE",
       "fbm",
+      "fieldPresetCatalog",
       "fieldPresetNames",
       "fieldPresets",
       "flowPresets",
@@ -33,6 +34,7 @@ describe("field barrel", () => {
     for (const name of [
       "FLOW_PRESET_NAMES",
       "FLOW_SHAPES",
+      "fieldPresetCatalog",
       "fieldPresetNames",
       "fieldPresets",
       "flowPresets",

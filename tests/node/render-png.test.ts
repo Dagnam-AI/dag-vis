@@ -30,11 +30,13 @@ import {
 } from "./png-helpers.js";
 
 describe("FONT_FILES", () => {
-  it("point at the bundled Inter Regular and Bold (first), Unbounded and Moonhouse next to the module, Inter under the OFL", () => {
+  it("point at the bundled Inter Regular and Bold (first), Unbounded 400, 500 and 700 and Moonhouse next to the module, Inter under the OFL", () => {
     expect(FONT_FILES.map((p) => p.split("/").pop())).toEqual([
       "Inter-Regular.ttf",
       "Inter-Bold.ttf",
       "Unbounded-Regular.ttf",
+      "Unbounded-Medium.ttf",
+      "Unbounded-Bold.ttf",
       "moonhouse.ttf",
     ]);
     for (const p of FONT_FILES) expect(existsSync(p)).toBe(true);

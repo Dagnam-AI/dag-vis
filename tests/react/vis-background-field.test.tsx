@@ -15,6 +15,7 @@ import { createField, type EffectHandle } from "../../src/animate/index.js";
 import { VisError } from "../../src/core/index.js";
 import { fieldPresets, type FieldSpec } from "../../src/field/index.js";
 import { VisBackground } from "../../src/react/index.js";
+import { installFakeGl } from "../animate/fake-gl.js";
 
 // jsdom has no WebGL2 and the fake GL does not run the field shader: createField is replaced
 // (the other effects are tested against the fake GL in vis-background.test.tsx).
@@ -32,7 +33,10 @@ describe('<VisBackground effect="field">', () => {
     destroy: ReturnType<typeof vi.fn>;
   }
   let made: Made[];
+  let fake: ReturnType<typeof installFakeGl>;
   const create = (canvas: HTMLCanvasElement): EffectHandle => {
+    // The real field makes its context when it starts; the fake handle makes it here, on its own canvas.
+    canvas.getContext("webgl2");
     const start = vi.fn();
     const update = vi.fn();
     const destroy = vi.fn();
@@ -50,6 +54,7 @@ describe('<VisBackground effect="field">', () => {
   };
   let error: MockInstance<typeof console.error>;
   beforeEach(() => {
+    fake = installFakeGl();
     made = [];
     error = vi.spyOn(console, "error").mockImplementation(() => {
       /* asserted per test */
@@ -60,7 +65,10 @@ describe('<VisBackground effect="field">', () => {
   afterEach(() => {
     cleanup();
     error.mockRestore();
+    fake.restore();
   });
+  /** Context state per canvas the field made, in creation order. */
+  const lost = (): boolean[] => fake.gls.map((gl) => gl.isContextLost());
 
   const view = (
     options: { spec: FieldSpec; speed?: number },
@@ -85,6 +93,7 @@ describe('<VisBackground effect="field">', () => {
     unmount();
     expect(made[0]?.destroy).toHaveBeenCalledTimes(1);
     expect(container.querySelector("canvas")).toBeNull();
+    expect(lost()).toEqual([true]);
   });
 
   it("applies a changed non-spec option with update() and does not recreate", () => {
@@ -124,6 +133,8 @@ describe('<VisBackground effect="field">', () => {
     expect(made[1]?.start).toHaveBeenCalledTimes(1);
     expect(made[0]?.update).not.toHaveBeenCalled();
     expect(made[1]?.update).not.toHaveBeenCalled();
+    // The replaced canvas's context is lost; the new one's is live.
+    expect(lost()).toEqual([true, false]);
     // The new handle is a live one: a later non-spec change updates it.
     rerender(view({ spec: spec(2), speed: 0.7 }));
     expect(made[1]?.update).toHaveBeenCalledTimes(1);
@@ -164,9 +175,11 @@ describe('<VisBackground effect="field">', () => {
     expect(canvases).toHaveLength(1);
     expect(canvases[0]).toBe(made[1]?.canvas);
     expect(made[1]?.start).toHaveBeenCalledTimes(1);
+    expect(lost()).toEqual([true, false]);
     unmount();
     expect(made[1]?.destroy).toHaveBeenCalledTimes(1);
     expect(container.querySelector("canvas")).toBeNull();
+    expect(lost()).toEqual([true, true]);
   });
 
   it("recreates exactly once more for a spec change under StrictMode", () => {
@@ -183,6 +196,7 @@ describe('<VisBackground effect="field">', () => {
     expect(canvases).toHaveLength(1);
     expect(canvases[0]).toBe(made[2]?.canvas);
     for (const m of made) expect(m.update).not.toHaveBeenCalled();
+    expect(lost()).toEqual([true, true, false]);
     // Created minus destroyed is the one live handle.
     expect(made.filter((m) => m.destroy.mock.calls.length === 0)).toHaveLength(
       1,

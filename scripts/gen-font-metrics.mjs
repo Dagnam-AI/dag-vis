@@ -1,12 +1,13 @@
 #!/usr/bin/env node
-// Generates src/brand/moonhouse-metrics.ts and src/brand/unbounded-metrics.ts
+// Generates src/brand/moonhouse-metrics.ts, src/brand/unbounded-metrics.ts and
+// its 500 and 700 siblings (unbounded-500-metrics.ts, unbounded-700-metrics.ts)
 // from the SHIPPED font files in src/node/fonts/, so wrapping in the social
 // card agrees with the glyphs resvg draws. No dependencies: it reads the
 // tables it needs (head, hhea, hmtx, cmap formats 4 and 12) straight from the
 // TTF. Inter's table (src/brand/inter-metrics.ts) is older and not produced here.
 //
-//   node scripts/gen-font-metrics.mjs          write both files
-//   node scripts/gen-font-metrics.mjs --check  exit 1 if either file is stale
+//   node scripts/gen-font-metrics.mjs          write every file
+//   node scripts/gen-font-metrics.mjs --check  exit 1 if any file is stale
 import { readFileSync, writeFileSync } from "node:fs";
 
 const ROOT = new URL("../", import.meta.url);
@@ -45,6 +46,17 @@ const FONTS = [
     source:
       "https://github.com/googlefonts/unbounded (SIL OFL 1.1, src/node/fonts/OFL-Unbounded.txt).",
   },
+  ...[
+    ["500", "Medium"],
+    ["700", "Bold"],
+  ].map(([weight, face]) => ({
+    name: `UNBOUNDED_${weight}`,
+    label: `Unbounded (static wght ${weight})`,
+    ttf: `src/node/fonts/Unbounded-${face}.ttf`,
+    out: `src/brand/unbounded-${weight}-metrics.ts`,
+    source:
+      "https://github.com/googlefonts/unbounded (SIL OFL 1.1, src/node/fonts/OFL-Unbounded.txt).",
+  })),
 ];
 
 /** The tables of a TTF as { tag: DataView over the table }. */

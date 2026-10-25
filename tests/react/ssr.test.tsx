@@ -3,7 +3,11 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { VisError } from "../../src/core/index.js";
-import { Gradient, VisBackground } from "../../src/react/index.js";
+import {
+  FieldPresetPicker,
+  Gradient,
+  VisBackground,
+} from "../../src/react/index.js";
 
 describe("server rendering", () => {
   it("runs in an environment with no window or document", () => {
@@ -47,6 +51,23 @@ describe("server rendering", () => {
     expect(html).toContain(
       '<svg preserveAspectRatio="xMidYMid slice" style="display:block;width:100%;height:100%"',
     );
+  });
+
+  it("renders <FieldPresetPicker> as the radio list with empty canvases and no DOM access", () => {
+    const html = renderToString(
+      <FieldPresetPicker
+        value="lunar"
+        onChange={() => {
+          /* never called on the server */
+        }}
+      />,
+    );
+    expect(html.match(/role="radio"/g)).toHaveLength(19);
+    expect(html).toContain('role="radiogroup"');
+    expect(html).toContain('aria-checked="true"');
+    expect(html).toContain("Violet dusk</span>");
+    expect(html.match(/<canvas /g)).toHaveLength(19);
+    expect(html).toContain('width="160" height="90"');
   });
 
   it("throws a VisError for an unknown effect, including inherited keys", () => {

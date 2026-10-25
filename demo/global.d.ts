@@ -39,6 +39,21 @@ declare global {
       points: [number, number][],
     ) => number[];
     __parityReady?: boolean;
+    /** vis-background.html: the React wrapper's real-browser hooks. */
+    __visBg: {
+      /** Mount and unmount `n` fields back to back in #cycle, leaving the last mounted; `cycled` holds every canvas. */
+      cycle(n: number): void;
+      cycled: HTMLCanvasElement[];
+      /** Distinct colours over an 8x8 grid of the canvas's drawing buffer (0 and `lost` when its context is lost). */
+      sample(
+        canvas: HTMLCanvasElement,
+      ): Promise<{ lost: boolean; distinct: number }>;
+    };
+    __visBgReady?: boolean;
+    /** vis-background.html: the field-preset picker's onChange calls, in order. */
+    __picker: { changes: string[] };
+    /** vis-background.spec.ts: the canvas the page held before a replace or unmount. */
+    __held?: HTMLCanvasElement | null;
   }
 }
 export {};

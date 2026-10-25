@@ -32,8 +32,10 @@ void main() {
  * same canvas can host a new effect afterwards (React StrictMode mounts twice
  * on one node; switching effects reuses it). Nothing here calls
  * `WEBGL_lose_context.loseContext()`: a lost context stays lost for that
- * canvas and the next effect would fail. Remove the canvas to release the
- * context; the React wrapper gives each mount its own canvas.
+ * canvas and the next effect would fail. A caller that is done with a canvas
+ * loses its context itself (`canvas.getContext("webgl2")?.getExtension("WEBGL_lose_context")?.loseContext()`):
+ * the React wrapper gives each mount its own canvas and does so on unmount,
+ * since a removed canvas otherwise holds its context until garbage collection.
  */
 export function getGl(
   canvas: HTMLCanvasElement,
