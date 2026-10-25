@@ -1,7 +1,7 @@
 import { fieldPresetNames } from "./preset-parse.js";
 import type { FieldPresetName } from "./presets.js";
 import { fieldPresets } from "./presets.js";
-import { deepFreeze } from "./spec.js";
+import { deepFreeze, type FieldSpec } from "./spec.js";
 
 /** One preset as a list shows it: the stored `name`, a human `label` and the spec's `kind`. */
 export interface FieldPresetInfo {
@@ -10,7 +10,7 @@ export interface FieldPresetInfo {
   /** The name with hyphens as spaces and a capital first letter: `"Violet dusk"`, `"Fluted ember"`, `"Brand"`. */
   label: string;
   /** The kind of the preset's spec (`fieldPresets[name].kind`). */
-  kind: "flow" | "fluid" | "fluted";
+  kind: FieldSpec["kind"];
 }
 
 /**

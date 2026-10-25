@@ -233,9 +233,15 @@ An editor that stores a `field_preset` needs a list to choose from. `fieldPreset
 import { FieldPresetPicker } from "@dagnam/vis/react";
 import { parseFieldPreset, type FieldPresetName } from "@dagnam/vis";
 
-const [preset, setPreset] = useState<FieldPresetName | null>(
-  stored === undefined ? null : parseFieldPreset(stored),
-);
+// A stored name that a later version removed makes the picker throw while rendering: parse it first.
+function initialPreset(stored: unknown): FieldPresetName | null {
+  try {
+    return parseFieldPreset(stored);
+  } catch {
+    return null;
+  }
+}
+const [preset, setPreset] = useState(initialPreset(stored));
 
 <FieldPresetPicker
   value={preset}
@@ -247,9 +253,10 @@ const [preset, setPreset] = useState<FieldPresetName | null>(
 />;
 ```
 
-- Keyboard: the checked radio (the first when none is) is the one tab stop; the arrow keys move focus and selection together and wrap, Home and End jump to the ends, Space and Enter select. The focus ring is the browser's.
-- **Cost.** The thumbnails are the CPU `renderField` frames, so the 19 of them use no WebGL context. They are drawn after mount, each in a task of its own so the page stays responsive, cancelled on unmount and when `thumbSize` or `t` change, and the newest 128 are cached by name, size and `t`: a picker that opens again is instant. Expect a few milliseconds per thumbnail at the default size; large sizes (up to 512 a side) cost proportionally more. Server rendering emits the list with empty canvases.
-- A bad `thumbSize`, `t` or `value` throws a `VisError` while rendering.
+- Keyboard: the checked radio (the first when none is) is the one tab stop; the arrow keys move focus and selection together and wrap, Home and End jump to the ends, Space and Enter select. A key with Alt, Ctrl or Cmd held (Alt+Left is Back) is left to the browser. The focus ring is the browser's.
+- **Cost.** The thumbnails are the CPU `renderField` frames, so the 19 of them use no WebGL context. They are drawn after mount, each in a task of its own, cancelled on unmount and when `thumbSize` or `t` change. Measured on a loaded laptop: roughly 5 to 30 ms per thumbnail and a few hundred ms for all 19 at the default 160 x 90, so the page stays responsive. **Each task blocks the page while it runs**: at the 512 px cap one thumbnail takes 250 to 380 ms, so keep thumbnails small.
+- **Cache.** The newest 128 thumbnails are kept by name, size and `t`, so a picker that opens again is instant. The cache lives for the life of the page and is never released: about 7 MB at the default size, up to about 128 MB at 512 x 512. Server rendering emits the list with empty canvases.
+- **Errors.** A bad `thumbSize` (a side that is not an integer in 1..512), `t` or `value` throws a `VisError` while rendering. `value` is the prop most likely to come from stored data, so run it through `parseFieldPreset` (and catch, as above) rather than passing it raw.
 
 ## Exports
 

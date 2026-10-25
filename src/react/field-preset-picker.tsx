@@ -7,7 +7,7 @@ import {
 } from "react";
 
 import type { Size } from "../core/index.js";
-import { bounded, integerIn, parseSize } from "../core/validate.js";
+import { bounded, integerIn } from "../core/validate.js";
 import {
   MAX_T,
   fieldPresetCatalog,
@@ -121,16 +121,20 @@ function Thumb({
  *
  * Keyboard: one tab stop (the checked radio, or the first when none is). The arrow keys
  * move focus and selection together and wrap around, Home and End jump to the ends, and
- * Space and Enter select as on any button.
+ * Space and Enter select as on any button. A key pressed with Alt, Ctrl or Cmd is left to
+ * the browser (Alt+Left is Back), untouched and not prevented.
  *
  * Thumbnails are the CPU `renderField` frame of each preset (no WebGL, so no GL contexts),
- * drawn after mount one per task so the page stays responsive, cancelled on unmount and
- * when `thumbSize` or `t` change, and cached by name, size and `t` (the newest 128), so a
- * picker that opens again is instant. Server rendering emits the list with empty canvases;
- * all DOM work is in effects.
+ * drawn after mount in a task per thumbnail, cancelled on unmount and when `thumbSize` or
+ * `t` change. A task blocks the page: roughly 5 to 30 ms at the default size, 250 to 380 ms
+ * at the 512 cap. Frames are cached by name, size and `t` (the newest 128) for the life of
+ * the page (about 7 MB at the default size, up to about 128 MB at 512 x 512), so a picker
+ * that opens again is instant. Server rendering emits the list with empty canvases; all DOM
+ * work is in effects.
  *
  * A bad `thumbSize`, `t` or `value` is a programmer error and throws a `VisError` while
- * rendering, as `<VisBackground>` does for an unknown effect.
+ * rendering, as `<VisBackground>` does for an unknown effect. A stored name that no longer
+ * exists is such a `value`: run it through `parseFieldPreset` (and catch) first.
  */
 export function FieldPresetPicker({
   value,
@@ -141,7 +145,8 @@ export function FieldPresetPicker({
   style,
   "aria-label": label = "Field preset",
 }: FieldPresetPickerProps) {
-  const { width, height } = parseSize("thumbSize", thumbSize);
+  // Object() turns a null or a primitive from a JS caller into a bag with no sides, so it reports as a missing width.
+  const { width, height } = Object(thumbSize) as Partial<Size>;
   const size: Size = {
     width: integerIn("thumbSize.width", width, 1, MAX_THUMB),
     height: integerIn("thumbSize.height", height, 1, MAX_THUMB),
@@ -150,30 +155,25 @@ export function FieldPresetPicker({
   const checked =
     value == null ? -1 : fieldPresetNames.indexOf(parseFieldPreset(value));
   const tabStop = Math.max(checked, 0);
+  const groupRef = useRef<HTMLDivElement>(null) as RefObject<HTMLDivElement>;
 
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+  const onKeyDown = (event: KeyboardEvent, k: number): void => {
     const move = MOVES.get(event.key);
-    if (!move) return;
+    // Alt+Left is Back and Cmd+Arrow is history: a shortcut is the browser's, not ours.
+    if (!move || event.altKey || event.ctrlKey || event.metaKey) return;
     event.preventDefault(); // the arrow keys and Home and End would scroll the page
-    const radios = Array.from(
-      event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
-    );
-    const to =
-      (move(radios.indexOf(event.target as HTMLButtonElement)) + COUNT) % COUNT;
-    radios.forEach((radio, i) => {
-      if (i === to) radio.focus();
-    });
-    fieldPresetNames.forEach((name, i) => {
-      if (i === to) onChange(name);
-    });
+    const to = (move(k) + COUNT) % COUNT; // wraps; Home and End are absolute
+    // `to` is always in range, so the radio and the name exist (parseFieldPreset narrows the lookup's type).
+    (groupRef.current.children[to] as HTMLElement).focus();
+    onChange(parseFieldPreset(fieldPresetNames[to]));
   };
 
   return (
     <div
+      ref={groupRef}
       role="radiogroup"
       aria-label={label}
       className={className}
-      onKeyDown={onKeyDown}
       style={{
         display: "grid",
         gridTemplateColumns: `repeat(auto-fill, minmax(${size.width}px, 1fr))`,
@@ -190,6 +190,9 @@ export function FieldPresetPicker({
           tabIndex={i === tabStop ? 0 : -1}
           onClick={() => {
             onChange(name);
+          }}
+          onKeyDown={(event) => {
+            onKeyDown(event, i);
           }}
         >
           <Thumb name={name} size={size} t={t} />

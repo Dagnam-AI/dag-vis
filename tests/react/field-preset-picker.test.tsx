@@ -188,6 +188,43 @@ describe("<FieldPresetPicker>", () => {
       expect(notPrevented, "the page must not scroll").toBe(false);
     });
 
+    it.each([
+      ["altKey", "ArrowLeft"],
+      ["altKey", "ArrowRight"],
+      ["ctrlKey", "ArrowDown"],
+      ["ctrlKey", "Home"],
+      ["ctrlKey", "End"],
+      ["metaKey", "ArrowLeft"],
+      ["metaKey", "ArrowRight"],
+      ["metaKey", "ArrowUp"],
+    ] as const)(
+      "leaves %s + %s to the browser: no selection, no focus change, default not prevented",
+      (modifier, key) => {
+        const onChange = vi.fn();
+        const { container } = render(picker({ value: "lunar", onChange }));
+        const button = radios(container)[NAMES.indexOf("lunar")]!;
+        button.focus();
+        const notPrevented = fireEvent.keyDown(button, {
+          key,
+          [modifier]: true,
+        });
+        expect(onChange).not.toHaveBeenCalled();
+        expect(document.activeElement).toBe(button);
+        expect(notPrevented, "Alt+Left is Back, Cmd+Arrow is history").toBe(
+          true,
+        );
+      },
+    );
+
+    it("still acts on Shift + an arrow key", () => {
+      const onChange = vi.fn();
+      const { container } = render(picker({ value: "lunar", onChange }));
+      const button = radios(container)[NAMES.indexOf("lunar")]!;
+      button.focus();
+      fireEvent.keyDown(button, { key: "ArrowRight", shiftKey: true });
+      expect(onChange).toHaveBeenCalledExactlyOnceWith("lagoon");
+    });
+
     it("ignores other keys: no selection, no focus change, default not prevented", () => {
       const onChange = vi.fn();
       const { container } = render(picker({ value: "lunar", onChange }));
@@ -249,7 +286,7 @@ describe("<FieldPresetPicker>", () => {
       expect(painted()).toBe(0);
     });
 
-    it("cancels and restarts when thumbSize or t change: only the new size is painted", () => {
+    it("cancels and restarts when thumbSize changes: only the new size is painted", () => {
       const first = uniqueSize();
       const second = uniqueSize();
       const { rerender } = render(picker({ thumbSize: first }));
@@ -258,9 +295,21 @@ describe("<FieldPresetPicker>", () => {
       expect(painted()).toBe(19);
       for (const ctx of fake.ctx2ds)
         expect(ctx.images.map((i) => i.width)).toEqual([second.width]);
-      rerender(picker({ thumbSize: second, t: 2 }));
+    });
+
+    it("cancels and restarts when t changes before the thumbnails finish: only the new t is painted", () => {
+      const thumbSize = uniqueSize();
+      const { rerender } = render(picker({ thumbSize, t: 1 }));
+      rerender(picker({ thumbSize, t: 2 }));
+      expect(vi.getTimerCount()).toBe(19);
       flush();
-      expect(painted()).toBe(38);
+      expect(painted()).toBe(19);
+      for (const [i, name] of NAMES.entries()) {
+        const image = fake.ctx2ds[i]?.images[0];
+        expect(image?.data, name).toEqual(
+          renderField(fieldPresets[name], { ...thumbSize, t: 2 }).data,
+        );
+      }
     });
 
     it("reuses a cached thumbnail at once, without a task or a new render", () => {
@@ -316,6 +365,8 @@ describe("<FieldPresetPicker>", () => {
       const { container } = render(<StrictMode>{picker({})}</StrictMode>);
       flush();
       expect(radios(container)).toHaveLength(19);
+      // One image per thumbnail: the first mount's tasks were cancelled, the second mount's ran once.
+      expect(painted()).toBe(19);
       expect(new Set(fake.ctx2ds.filter((c) => c.images.length > 0)).size).toBe(
         19,
       );
@@ -331,11 +382,30 @@ describe("<FieldPresetPicker>", () => {
     );
 
     it.each([
-      ["a null thumbSize", { thumbSize: null }, /thumbSize must be an object/],
+      [
+        "a null thumbSize",
+        { thumbSize: null },
+        /thumbSize\.width must be an integer in 1\.\.512, got undefined/,
+      ],
+      [
+        "a thumbSize that is a number",
+        { thumbSize: 9 },
+        /thumbSize\.width must be an integer in 1\.\.512, got undefined/,
+      ],
+      [
+        "a zero height",
+        { thumbSize: { width: 9, height: 0 } },
+        /thumbSize\.height must be an integer in 1\.\.512, got 0/,
+      ],
+      [
+        "a side over the parser's own limit",
+        { thumbSize: { width: 20000, height: 9 } },
+        /thumbSize\.width must be an integer in 1\.\.512, got 20000/,
+      ],
       [
         "a zero width",
         { thumbSize: { width: 0, height: 9 } },
-        /thumbSize\.width must be a number in 1\.\.16384, got 0/,
+        /thumbSize\.width must be an integer in 1\.\.512, got 0/,
       ],
       [
         "a fractional height",
