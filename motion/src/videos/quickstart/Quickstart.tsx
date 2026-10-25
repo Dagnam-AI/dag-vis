@@ -15,7 +15,7 @@ import { EffectCanvas } from "../../bridge/effect-canvas.tsx";
 import { easeInOutCubic, lerp, progress, settle } from "../../lib/ease.ts";
 import { CodeBeat, EndBeat, ModelBeat, TrainBeat } from "./beats-build.tsx";
 import { DataBeat, ProjectBeat, TitleBeat } from "./beats-setup.tsx";
-import { Group, SectionLabel, along } from "./parts.tsx";
+import { Group, SectionLabel, at } from "./parts.tsx";
 import {
   BEATS,
   CAMERA,
@@ -25,18 +25,27 @@ import {
   FIELD_SETTLE,
   HEIGHT,
   TEXT,
-  WIDE,
   WIDTH,
   type BeatId,
+  type CameraMove,
 } from "./timing.ts";
 
-/** The slow push-in of a beat, as a transform that keeps the focus point at the centre of the frame. */
+/** The camera of a beat at `frame`, as a transform that keeps the focus point at the centre of the frame. */
 function cameraTransform(id: BeatId, frame: number): string | undefined {
-  const push = CAMERA[id];
-  if (!push) return undefined;
-  const p = easeInOutCubic(along(frame, push.cue));
-  const s = lerp(WIDE.scale, push.to.scale, p);
-  return `translate(${String(WIDTH / 2)}px, ${String(HEIGHT / 2)}px) scale(${String(s)}) translate(${String(-lerp(WIDE.x, push.to.x, p))}px, ${String(-lerp(WIDE.y, push.to.y, p))}px)`;
+  const keys = CAMERA[id];
+  if (!keys) return undefined;
+  let now: CameraMove = at(keys, 0);
+  keys.slice(1).forEach((to, i) => {
+    const from = at(keys, i);
+    if (frame < from.at) return;
+    const p = easeInOutCubic(progress(frame, from.at, to.at));
+    now = {
+      scale: lerp(from.scale, to.scale, p),
+      x: lerp(from.x, to.x, p),
+      y: lerp(from.y, to.y, p),
+    };
+  });
+  return `translate(${String(WIDTH / 2)}px, ${String(HEIGHT / 2)}px) scale(${String(now.scale)}) translate(${String(-now.x)}px, ${String(-now.y)}px)`;
 }
 
 /** A beat's own clock, its push-in, and the short dip to the dark between beats. */
@@ -57,13 +66,13 @@ const BeatShell: React.FC<{
       : undefined;
   return (
     <Group opacity={fadeIn * fadeOut}>
-      {/* The name of the section stays put while the camera moves. */}
-      {section !== undefined && (
-        <SectionLabel frame={frame}>{section}</SectionLabel>
-      )}
       <Group {...(transform === undefined ? {} : { transform })}>
         {children}
       </Group>
+      {/* Drawn last, outside the camera: a push-in can neither crop the name of the section nor draw a card over it. */}
+      {section !== undefined && (
+        <SectionLabel frame={frame}>{section}</SectionLabel>
+      )}
     </Group>
   );
 };

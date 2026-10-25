@@ -26,6 +26,7 @@ import {
 } from "../../src/videos/quickstart/timing.ts";
 
 const FPS = TIMING.fps;
+const LAYOUT_WIDTH = TIMING.width;
 const length = (id: BeatId): number => beatOf(id).end - beatOf(id).start;
 
 /** Every string the owner approved for the screen: nothing else may be written. */
@@ -139,11 +140,45 @@ describe("quickstart words", () => {
   });
 
   it("are sized for a phone: headlines 72 px or more, everything else 36 px or more", () => {
-    const { label, body, headline, wordmark, address } = LAYOUT.text;
+    const { label, body, card, headline, wordmark, address } = LAYOUT.text;
     expect(headline).toBeGreaterThanOrEqual(72);
     expect(wordmark).toBeGreaterThanOrEqual(72);
-    for (const size of [label, body, address])
+    for (const size of [label, body, card, address])
       expect(size).toBeGreaterThanOrEqual(36);
+  });
+
+  it("scale the dialog and the model cards up by about 1.3x over body text", () => {
+    expect(LAYOUT.text.card / LAYOUT.text.body).toBeGreaterThan(1.25);
+    expect(LAYOUT.text.card / LAYOUT.text.body).toBeLessThan(1.35);
+  });
+
+  it("keep the project dialog and its chip inside the frame, centred, with room below", () => {
+    const { dialog: d, chip } = LAYOUT.project;
+    expect(d.x + d.w / 2).toBe(TIMING.width / 2);
+    expect(d.y).toBeGreaterThanOrEqual(LAYOUT.labelAt.y + LAYOUT.text.label);
+    expect(d.y + d.h).toBeLessThan(chip.y);
+    expect(chip.y + chip.h).toBeLessThanOrEqual(TIMING.height - 60);
+    expect(chip.w).toBeLessThan(d.w);
+  });
+
+  it("keep the model chain and its settings inside their canvas, the chain across the width", () => {
+    const { canvas, row, panel } = LAYOUT.model;
+    const chainRight =
+      row.x0 + row.widths.reduce((a, b) => a + b, 0) + 3 * row.gap;
+    expect(row.x0).toBeGreaterThan(canvas.x);
+    expect(chainRight).toBeLessThan(canvas.x + canvas.w);
+    expect(chainRight - row.x0).toBeGreaterThan(0.85 * TIMING.width);
+    expect(panel.x + panel.w).toBeLessThanOrEqual(chainRight);
+    expect(row.y).toBeGreaterThan(canvas.y);
+    // Before the settings arrive the canvas is snug: the chain sits inside it with room, and it is short.
+    expect(row.y + row.h).toBeLessThan(canvas.y + LAYOUT.model.tightH);
+    expect(LAYOUT.model.tightH).toBeLessThan(row.h + 200);
+    expect(panel.y + panel.h).toBeLessThan(canvas.y + canvas.h);
+    // Trimmed: under 60 px of empty canvas below the settings.
+    expect(canvas.y + canvas.h - (panel.y + panel.h)).toBeLessThan(60);
+    expect(canvas.y).toBeGreaterThanOrEqual(
+      LAYOUT.labelAt.y + 2 * LAYOUT.text.label,
+    );
   });
 
   it("keep the product name and the address up for at least 2 s on the end card, and the title for 2 s", () => {
@@ -179,13 +214,40 @@ describe("quickstart cues, events and camera", () => {
       );
   });
 
-  it("puts the camera pushes inside their beats and ends each before the fade out", () => {
-    for (const [id, push] of Object.entries(CAMERA)) {
-      const beat = id as BeatId;
-      expect(push.cue[0], id).toBeGreaterThanOrEqual(0);
-      expect(push.cue[1], id).toBeLessThanOrEqual(length(beat) - CUES.fade);
-      expect(push.to.scale, id).toBeGreaterThan(1);
+  it("keeps every camera keyframe in order inside its beat, ending before the fade out", () => {
+    for (const [id, keys] of Object.entries(CAMERA)) {
+      const ats = keys.map((k) => k.at);
+      expect(ats, id).toEqual([...ats].sort((x, y) => x - y));
+      expect(ats[0], id).toBeGreaterThanOrEqual(0);
+      expect(ats.at(-1), id).toBeLessThanOrEqual(
+        length(id as BeatId) - CUES.fade,
+      );
+      for (const k of keys) expect(k.scale, id).toBeGreaterThanOrEqual(1);
     }
+  });
+
+  it("frames the model chain close, then wide as Output arrives, then pushes in on its settings", () => {
+    const keys = CAMERA.model ?? [];
+    const [first] = keys;
+    const [outputStart] = CUES.model.nodes[3];
+    // Output arrives late, and the camera is back to the whole canvas by the time it is in.
+    expect(outputStart).toBeGreaterThanOrEqual(200);
+    const wide = keys.find((k) => k.scale === 1);
+    expect(wide?.at).toBeGreaterThanOrEqual(outputStart);
+    expect(wide?.at).toBeLessThanOrEqual(CUES.model.nodes[3][1] + 8);
+    expect(keys.at(-1)?.at).toBe(CUES.model.pushIn[1]);
+    expect(keys.at(-1)?.scale).toBeGreaterThan(1);
+    // Close stage: the first three cards fill the width, with a margin each side.
+    const { row } = LAYOUT.model;
+    const left = row.x0;
+    const right =
+      row.x0 + row.widths.slice(0, 3).reduce((a, b) => a + b, 0) + 2 * row.gap;
+    const screen = (x: number): number =>
+      LAYOUT_WIDTH / 2 + (x - (first?.x ?? 0)) * (first?.scale ?? 1);
+    expect(screen(left)).toBeGreaterThan(60);
+    expect(screen(left)).toBeLessThan(200);
+    expect(screen(right)).toBeLessThan(LAYOUT_WIDTH - 60);
+    expect(screen(right)).toBeGreaterThan(LAYOUT_WIDTH - 200);
   });
 
   it("puts every sound event on a frame inside its own beat, in order", () => {

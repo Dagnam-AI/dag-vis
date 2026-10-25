@@ -2,7 +2,12 @@
 import { useMemo } from "react";
 import { useCurrentFrame } from "remotion";
 
-import { easeInOutCubic, easeOutCubic, progress } from "../../lib/ease.ts";
+import {
+  easeInOutCubic,
+  easeOutCubic,
+  lerp,
+  progress,
+} from "../../lib/ease.ts";
 import { Canvas } from "./beats-setup.tsx";
 import { codeLines, lossCurve } from "./curve.ts";
 import {
@@ -15,6 +20,7 @@ import {
   appear,
   along,
   at,
+  centred,
 } from "./parts.tsx";
 import { CUES, LAYOUT, TEXT } from "./timing.ts";
 
@@ -22,17 +28,23 @@ const { text: SIZE } = LAYOUT;
 
 export const ModelBeat: React.FC = () => {
   const frame = useCurrentFrame();
-  const { row, panel } = LAYOUT.model;
+  const { row, panel, canvas, tightH } = LAYOUT.model;
   const m = CUES.model;
   const xs = row.widths.map(
     (_, i) =>
       row.x0 + row.widths.slice(0, i).reduce((a, b) => a + b, 0) + row.gap * i,
   );
   const midY = row.y + row.h / 2;
+  // The canvas grows to hold the output settings as they arrive.
+  const grow = easeInOutCubic(progress(frame, m.stem[0], m.panel[1]));
   const outCentre = at(xs, 3) + at(row.widths, 3) / 2;
   return (
     <>
-      <Canvas frame={frame} cue={m.canvas} />
+      <Canvas
+        frame={frame}
+        cue={m.canvas}
+        box={{ ...canvas, h: lerp(tightH, canvas.h, grow) }}
+      />
       <Layer>
         {m.links.map((cue, i) => {
           const from = at(xs, i) + at(row.widths, i);
@@ -41,13 +53,13 @@ export const ModelBeat: React.FC = () => {
           // Red while it is new, then back to grey.
           const heat =
             1 - progress(frame, cue[1] + m.hot, cue[1] + m.hot + m.cool);
-          const d = `M${String(from)} ${String(midY)}H${String(to - 14)}`;
-          const head = `${String(to)},${String(midY)} ${String(to - 18)},${String(midY - 10)} ${String(to - 18)},${String(midY + 10)}`;
+          const d = `M${String(from)} ${String(midY)}H${String(to - 20)}`;
+          const head = `${String(to)},${String(midY)} ${String(to - 26)},${String(midY - 13)} ${String(to - 26)},${String(midY + 13)}`;
           const arrow = progress(p, 0.85, 1);
           return (
             <g key={TEXT.model.nodes[i + 1]}>
-              <Stroke d={d} p={p} color={C.dim} />
-              <Stroke d={d} p={p} color={C.accent} opacity={heat} />
+              <Stroke d={d} p={p} color={C.dim} width={5} />
+              <Stroke d={d} p={p} color={C.accent} width={5} opacity={heat} />
               <polygon points={head} fill={C.dim} opacity={arrow} />
               <polygon points={head} fill={C.accent} opacity={arrow * heat} />
             </g>
@@ -74,7 +86,12 @@ export const ModelBeat: React.FC = () => {
             opacity={shown}
             transform={`translateY(${String((1 - shown) * 20)}px)`}
           >
-            <Txt center w={w - 4} y={row.h / 2 - 24} size={SIZE.body}>
+            <Txt
+              center
+              w={w - 4}
+              y={centred(row.h, SIZE.card)}
+              size={SIZE.card}
+            >
               {label}
             </Txt>
           </Box>
@@ -97,8 +114,8 @@ export const ModelBeat: React.FC = () => {
             <Txt
               key={line}
               x={panel.pad + 8}
-              y={panel.pad + i * 66}
-              size={SIZE.body}
+              y={panel.pad + i * 87}
+              size={SIZE.card}
               opacity={shown}
               lift={(1 - shown) * 10}
             >

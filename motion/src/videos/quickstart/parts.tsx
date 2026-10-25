@@ -18,12 +18,19 @@ export const C = {
   /** Inputs and chips on a panel. */
   raised: mix(13, THEME.background),
   hairline: mix(24, "transparent"),
+  /** Section names and field labels: quiet, but easy to read on a phone. */
+  label: mix(78, "transparent"),
   dim: mix(62, "transparent"),
   /** Grey bars: abstract code, tracks. */
   bar: mix(26, THEME.background),
   /** The canvas the nodes sit on: lets the field show through. */
   canvas: `color-mix(in srgb, ${THEME.background} 62%, transparent)`,
 } as const;
+
+/** Line height of every Txt, and where a line of `size` px starts to sit centred in a box `h` px tall with a 2 px border. */
+export const LINE = 1.22;
+export const centred = (h: number, size: number): number =>
+  (h - 2 * LAYOUT.hairline - size * LINE) / 2;
 
 export const UI = `${THEME.ui}, ${THEME.text}`;
 export const DISPLAY = `${THEME.display}, ${THEME.text}`;
@@ -126,7 +133,7 @@ export const Txt: React.FC<TxtProps> = ({
       fontFamily: UI,
       fontWeight: weight,
       fontSize: size,
-      lineHeight: 1.22,
+      lineHeight: LINE,
       textWrap: "balance",
       color,
       opacity,
@@ -148,7 +155,7 @@ export const SectionLabel: React.FC<{ frame: number; children: string }> = ({
     y={LAYOUT.labelAt.y}
     size={LAYOUT.text.label}
     weight={500}
-    color={C.dim}
+    color={C.label}
     opacity={appear(frame, CUES.label)}
   >
     {children}
@@ -190,7 +197,16 @@ export const Group: React.FC<{
   transform?: string;
   children: ReactNode;
 }> = ({ opacity = 1, transform, children }) => (
-  <div style={{ position: "absolute", inset: 0, opacity, transform }}>
+  <div
+    style={{
+      position: "absolute",
+      inset: 0,
+      opacity,
+      transform,
+      // The camera maths measures from the frame's top left corner.
+      transformOrigin: "0 0",
+    }}
+  >
     {children}
   </div>
 );

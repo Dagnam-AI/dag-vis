@@ -13,6 +13,7 @@ import {
   appear,
   along,
   at,
+  centred,
 } from "./parts.tsx";
 import { CUES, LAYOUT, TEXT } from "./timing.ts";
 
@@ -22,8 +23,9 @@ const { text: SIZE } = LAYOUT;
 export const Canvas: React.FC<{
   frame: number;
   cue: readonly [number, number];
-}> = ({ frame, cue }) => {
-  const { x, y, w, h } = LAYOUT.canvas;
+  box?: { x: number; y: number; w: number; h: number };
+}> = ({ frame, cue, box = LAYOUT.canvas }) => {
+  const { x, y, w, h } = box;
   return (
     <Box
       x={x}
@@ -82,7 +84,7 @@ const Select: React.FC<{
   const set = appear(frame, cue);
   return (
     <>
-      <Txt x={x} y={labelY} size={SIZE.body} weight={400} color={C.dim}>
+      <Txt x={x} y={labelY} size={SIZE.card} weight={400} color={C.label}>
         {label}
       </Txt>
       <Box x={x} y={inputY} w={w} h={h} fill={C.raised} border={C.hairline}>
@@ -94,14 +96,14 @@ const Select: React.FC<{
           border={C.fg}
           opacity={set * 0.7}
         />
-        <Txt x={22} y={14} size={SIZE.body} opacity={set}>
+        <Txt x={28} y={centred(h, SIZE.card)} size={SIZE.card} opacity={set}>
           {value}
         </Txt>
         <Layer>
           <polygon
-            points="0,0 22,0 11,14"
+            points="0,0 28,0 14,18"
             fill={C.dim}
-            transform={`translate(${String(w - 56)} ${String(h / 2 - 9)})`}
+            transform={`translate(${String(w - 76)} ${String(h / 2 - 11)})`}
           />
         </Layer>
       </Box>
@@ -144,9 +146,9 @@ export const ProjectBeat: React.FC = () => {
         <Txt
           x={left}
           y={title.labelY}
-          size={SIZE.body}
+          size={SIZE.card}
           weight={400}
-          color={C.dim}
+          color={C.label}
         >
           {t.title}
         </Txt>
@@ -205,8 +207,8 @@ export const ProjectBeat: React.FC = () => {
           <Txt
             center
             w={inner - 4}
-            y={button.h / 2 - 24}
-            size={SIZE.body}
+            y={centred(button.h, SIZE.card)}
+            size={SIZE.card}
             weight={700}
             opacity={0.55 + 0.45 * ready}
           >
@@ -224,8 +226,8 @@ export const ProjectBeat: React.FC = () => {
         opacity={created}
         transform={`translateY(${String((1 - created) * 22)}px)`}
       >
-        <Box x={chip.pad} y={chip.h / 2 - 9} w={14} h={14} fill={C.accent} />
-        <Txt x={chip.pad + 32} y={chip.h / 2 - 24} size={SIZE.body}>
+        <Box x={chip.pad} y={chip.h / 2 - 11} w={18} h={18} fill={C.accent} />
+        <Txt x={chip.pad + 42} y={centred(chip.h, SIZE.card)} size={SIZE.card}>
           {t.chip}
         </Txt>
       </Box>

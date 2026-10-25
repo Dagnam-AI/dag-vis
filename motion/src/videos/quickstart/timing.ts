@@ -210,19 +210,38 @@ export interface CameraMove {
   readonly y: number;
 }
 const REST: CameraMove = { scale: 1, x: WIDTH / 2, y: HEIGHT / 2 };
-export interface Push {
+export interface Keyframe extends CameraMove {
   /** Frames inside the beat. */
-  readonly cue: readonly [number, number];
-  readonly to: CameraMove;
+  readonly at: number;
 }
-/** A slow push-in from the wide frame, per beat. */
-export const CAMERA: Partial<Record<BeatId, Push>> = {
-  data: { cue: CUES.data.pushIn, to: { scale: 1.1, x: 930, y: 550 } },
-  model: { cue: CUES.model.pushIn, to: { scale: 1.15, x: 1100, y: 560 } },
-  code: { cue: CUES.code.pushIn, to: { scale: 1.08, x: 900, y: 500 } },
-  train: { cue: CUES.train.pushIn, to: { scale: 1.06, x: 880, y: 540 } },
+const key = (at: number, move: CameraMove): Keyframe => ({ at, ...move });
+const wide = (at: number): Keyframe => key(at, REST);
+/** The whole model canvas in view, a little low so the chain keeps company with the settings that arrive under it. */
+const WHOLE_CANVAS: CameraMove = { scale: 1, x: WIDTH / 2, y: 470 };
+/** Camera moves per beat, eased between keyframes; before the first and after the last it holds still. */
+export const CAMERA: Partial<Record<BeatId, readonly Keyframe[]>> = {
+  data: [
+    wide(CUES.data.pushIn[0]),
+    key(CUES.data.pushIn[1], { scale: 1.1, x: 930, y: 550 }),
+  ],
+  // Close on the first three cards so the chain fills the frame, back to the whole
+  // chain as Output arrives, then a slow push-in on the output settings.
+  model: [
+    key(0, { scale: 1.2, x: 760, y: 375 }),
+    key(222, { scale: 1.2, x: 760, y: 375 }),
+    key(262, WHOLE_CANVAS),
+    key(CUES.model.pushIn[0], WHOLE_CANVAS),
+    key(CUES.model.pushIn[1], { scale: 1.15, x: 1100, y: 540 }),
+  ],
+  code: [
+    wide(CUES.code.pushIn[0]),
+    key(CUES.code.pushIn[1], { scale: 1.08, x: 900, y: 500 }),
+  ],
+  train: [
+    wide(CUES.train.pushIn[0]),
+    key(CUES.train.pushIn[1], { scale: 1.06, x: 880, y: 540 }),
+  ],
 };
-export const WIDE = REST;
 
 export type EventKind = "connect" | "step";
 export interface SoundEvent {
@@ -273,17 +292,25 @@ export const CAPTIONS: readonly Caption[] = BEATS.map((b) => ({
 export const LAYOUT = {
   margin: 96,
   labelAt: { x: 96, y: 60 },
-  text: { label: 36, body: 36, headline: 72, wordmark: 200, address: 48 },
+  text: {
+    label: 36,
+    body: 36,
+    /** The dialog and the model cards: body text at about 1.3x, for a phone. */
+    card: 47,
+    headline: 72,
+    wordmark: 200,
+    address: 48,
+  },
   hairline: 2,
   title: { wordmarkY: 300, subtitleY: 610 },
   project: {
-    dialog: { x: 480, y: 190, w: 960, h: 552, pad: 56 },
-    input: { h: 80 },
-    title: { labelY: 246, inputY: 296 },
-    row2: { labelY: 412, inputY: 462, w: 400, rightX: 984 },
-    typedBar: { w: 300, h: 14, inset: 24 },
-    button: { y: 590, h: 96 },
-    chip: { y: 800, h: 88, pad: 36, w: 680 },
+    dialog: { x: 336, y: 140, w: 1248, h: 704, pad: 72 },
+    input: { h: 104 },
+    title: { labelY: 212, inputY: 276 },
+    row2: { labelY: 424, inputY: 488, w: 528, rightX: 984 },
+    typedBar: { w: 390, h: 18, inset: 31 },
+    button: { y: 648, h: 124 },
+    chip: { y: 884, h: 112, pad: 48, w: 900 },
     pressScale: 0.97,
   },
   canvas: { x: 96, y: 190, w: 1728, h: 720 },
@@ -301,8 +328,12 @@ export const LAYOUT = {
     drop: 60,
   },
   model: {
-    row: { y: 340, h: 130, x0: 144, widths: [250, 230, 340, 230], gap: 194 },
-    panel: { x: 1086, y: 590, w: 690, h: 190, pad: 40 },
+    /** The model's own canvas: just tall enough for the chain and the output settings. */
+    canvas: { x: 64, y: 220, w: 1792, h: 640 },
+    /** Its height before the settings arrive: snug around the chain, so no empty canvas shows. */
+    tightH: 300,
+    row: { y: 290, h: 170, x0: 110, widths: [320, 290, 440, 290], gap: 120 },
+    panel: { x: 890, y: 560, w: 920, h: 256, pad: 56 },
   },
   code: {
     window: { x: 360, y: 190, w: 1200, h: 700, bar: 72 },
