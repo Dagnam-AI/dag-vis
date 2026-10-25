@@ -46,9 +46,17 @@ export interface OgCardOptions {
   eyebrow?: string;
   /** One line along the bottom, in Unbounded; a "•" in it is drawn in the brand red. Omitted when blank. */
   footer?: string;
-  /** Overrides for the brand background layers. */
+  /**
+   * Overrides for the brand background layers. They win over the theme's own defaults
+   * (see `theme`).
+   */
   background?: OgBackground;
-  /** Default "dark". */
+  /**
+   * Default "dark". "light" is a white page with near-black text and `BRAND.mark` (deep
+   * red) accents, and its own background defaults: `band` 0.04, `glow` 0.35 at
+   * `glowRadius` 0.22, `hairlineWidth` 2.4, no `vignette`. Any `background` option
+   * overrides these.
+   */
   theme?: "dark" | "light";
   /** Safe integer, default 1; seeds the background. */
   seed?: number;
@@ -70,6 +78,8 @@ export interface OgCardOptions {
 }
 
 const MIN_SIDE = 16;
+/** The light card's accent: `BRAND.mark` as hex (an oklch token), 6.0:1 on white where the bright `BRAND.red` is 3.8:1. */
+const MARK_HEX = toHex(parseColor(BRAND.mark));
 
 /**
  * A social-preview card: logo + wordmark (Moonhouse), wrapped title, accent rule,
@@ -129,8 +139,8 @@ export function ogCard(opts: OgCardOptions): string {
 
   const dark = theme === "dark";
   const fg = dark ? BRAND.foreground.dark : BRAND.foreground.light;
-  // On white the bright BRAND.red is a pale 3.8:1; the deep mark red is 6.0:1.
-  const red = dark ? BRAND.red : toHex(parseColor(BRAND.mark));
+  // On white the bright BRAND.red is a pale 3.8:1; see MARK_HEX.
+  const red = dark ? BRAND.red : MARK_HEX;
   const bg = within("background", () =>
     brandBackgroundLayers({
       ...(dark

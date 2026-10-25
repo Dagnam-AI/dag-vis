@@ -57,6 +57,9 @@ describe("ogCard light theme", () => {
       const rg = (pixels[i] ?? 0) - (pixels[i + 1] ?? 0);
       if (rg >= 8 && rg <= 70 && (pixels[i + 1] ?? 0) > 180) haze++;
     }
+    // Measured 0.0793 (0.0791 without text, so fonts do not matter) against this
+    // 0.09 bound: about 1.1 points of headroom, 11 points under the old card. A tweak
+    // that moves it past the bound is a real change to the look, not noise.
     expect(haze / (width * height)).toBeLessThan(0.09);
     // A white page: the far-left corner is pure white (no vignette).
     expect([...pixels.slice(0, 4)]).toEqual([255, 255, 255, 255]);
@@ -72,6 +75,19 @@ describe("ogCard light theme", () => {
     // The text-free card is the background alone.
     const bg = rasterize(card.replace(/<text[\s\S]*?<\/text>/g, ""));
     const seen: Record<string, number> = {};
+    /** Contrast of `colour` at `alpha` over the darkest background pixel in the box. */
+    const over = (
+      colour: number[],
+      alpha: number,
+      box: [number, number, number, number],
+    ): number => {
+      const behind = darkest(bg, ...box);
+      const ink = colour.map(
+        (c, i) => c * alpha + (behind[i] ?? 0) * (1 - alpha),
+      );
+      return contrast(ink, behind);
+    };
+    const tspans: { colour: string; glyph: string; ratio: number }[] = [];
     for (const m of card.matchAll(/<text ([^>]*)>(.*?)<\/text>/g)) {
       const attrs = m[1] ?? "";
       const num = (name: string): number =>
@@ -87,23 +103,42 @@ describe("ogCard light theme", () => {
       const wide =
         fontWidth(font, line, size) +
         (num("letter-spacing") || 0) * Array.from(line).length;
-      const behind = darkest(bg, x, y - size, x + wide, y + 0.25 * size);
-      const ink = colour.map(
-        (c, i) => c * alpha + (behind[i] ?? 0) * (1 - alpha),
-      );
+      const box: [number, number, number, number] = [
+        x,
+        y - size,
+        x + wide,
+        y + 0.25 * size,
+      ];
       seen[String(size)] = Math.min(
         seen[String(size)] ?? Infinity,
-        contrast(ink, behind),
+        over(colour, alpha, box),
       );
+      // The red `.AI` and the red bullets are tspans with their own fill: check them over
+      // the whole line's box, which is the darkest background they can sit on.
+      for (const t of (m[2] ?? "").matchAll(
+        /<tspan [^>]*fill="(#[0-9a-f]{6})"[^>]*>(.*?)<\/tspan>/g,
+      ))
+        tspans.push({
+          colour: t[1] ?? "",
+          glyph: t[2] ?? "",
+          ratio: over(hex(t[1] ?? "#000000"), alpha, box),
+        });
     }
-    const sizes = Object.keys(seen)
-      .map(Number)
-      .sort((a, b) => b - a);
-    // title 56.7, subtitle 25.2, eyebrow and footer 17.6, wordmark 34.7
-    expect(sizes).toContain(56.7);
+    // The title is the largest text on the card; every other line is held to 4.5:1.
+    const title = Math.max(...Object.keys(seen).map(Number));
+    expect(Object.keys(seen).length).toBeGreaterThan(3);
     for (const [size, ratio] of Object.entries(seen))
       expect(ratio, `font-size ${size}`).toBeGreaterThanOrEqual(
-        size === "56.7" ? 7 : 4.5,
+        Number(size) === title ? 7 : 4.5,
       );
+    // `.AI` (wordmark, full opacity) is text: 4.5:1. The footer's bullets are decorative separators
+    // inside a 60% opacity line, so they only owe the 3:1 of WCAG 1.4.11 (measured 3.3:1).
+    expect(tspans.map((t) => t.glyph).sort()).toEqual([".AI", "•", "•"]);
+    for (const { colour, glyph, ratio } of tspans) {
+      expect(colour).toBe("#ca0303");
+      expect(ratio, `tspan ${glyph}`).toBeGreaterThanOrEqual(
+        glyph === ".AI" ? 4.5 : 3,
+      );
+    }
   });
 });
