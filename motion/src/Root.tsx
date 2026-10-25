@@ -5,6 +5,7 @@ import { sheetColumns } from "./lib/sheet.ts";
 import { loopFrames } from "./lib/timing.ts";
 import { Sheet, sheetMetadata, type SheetProps } from "./sheet/Sheet.tsx";
 import { PipelineProof } from "./videos/pipeline-proof/PipelineProof.tsx";
+import { DEFAULT_PROPS as PROOF_PROPS } from "./videos/pipeline-proof/props.ts";
 import { TIMING as PROOF } from "./videos/pipeline-proof/timing.ts";
 
 void loadBrandFonts();
@@ -18,7 +19,7 @@ export const Root: React.FC = () => (
       fps={PROOF.fps}
       width={PROOF.width}
       height={PROOF.height}
-      defaultProps={{ seed: 1 }}
+      defaultProps={PROOF_PROPS}
     />
     <Composition
       id="sheet"

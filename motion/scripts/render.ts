@@ -25,6 +25,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { dirtyPaths } from "../src/lib/git-state.ts";
 import {
@@ -55,7 +56,7 @@ try {
 } catch (e) {
   args = fail(USAGE, (e as Error).message);
 }
-const { video, props, crf, preview, allowDirty } = args;
+const { video, crf, preview, allowDirty } = args;
 
 // The renderer is part of a render's identity: refuse before any work is done.
 const renderer = gl();
@@ -89,6 +90,17 @@ if (dirty && !preview && !allowDirty)
     USAGE,
     `uncommitted changes, so commit ${git.slice(0, 7)} does not describe this video:\n  ${changed.slice(0, 10).join("\n  ")}${changed.length > 10 ? `\n  ... and ${String(changed.length - 10)} more` : ""}\nCommit them, or pass ${ALLOW_DIRTY_FLAG} to record dirty: true.`,
   );
+
+// The props the render draws with: the video's defaults (src/videos/<video>/props.ts,
+// which Root.tsx registers too) under any --props. The file handed to remotion and
+// the ledger line both carry this, so a default such as the seed is on the record.
+// Resolved from this file, not MOTION: the video's source is the checkout's own.
+const propsModule = new URL(`../src/videos/${video}/props.ts`, import.meta.url);
+const defaults = existsSync(fileURLToPath(propsModule))
+  ? ((await import(propsModule.href)) as { DEFAULT_PROPS: object })
+      .DEFAULT_PROPS
+  : {};
+const props = { ...defaults, ...args.props };
 
 // 0. fail fast, before a long render, if the local videos folder cannot be used (the message names DAG_VIDEOS_DIR)
 if (!preview) console.log(script("store", "--check").trim());
