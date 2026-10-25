@@ -3,11 +3,16 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { BRAND_FONTS } from "../../src/lib/font-files.ts";
+import {
+  BRAND_FONTS,
+  FONT_FOLDER,
+  FONT_SOURCE_DIR,
+  PUBLIC_DIR,
+} from "../../src/lib/font-files.ts";
 
-// The library's src/node/fonts/: three levels up from motion/tests/lib/.
+// FONT_SOURCE_DIR is relative to motion/, which is two levels up from here.
 const LIBRARY_FONTS = fileURLToPath(
-  new URL("../../../src/node/fonts/", import.meta.url),
+  new URL(`../../${FONT_SOURCE_DIR}/`, import.meta.url),
 );
 
 describe("BRAND_FONTS", () => {
@@ -30,6 +35,11 @@ describe("BRAND_FONTS", () => {
   it("copies every face flat into public/fonts, whatever folder it sits in", () => {
     for (const f of BRAND_FONTS)
       expect(f.file).toBe(`fonts/${f.from.split("/").at(-1)!}`);
+  });
+
+  it("names the library's own font folder, and the gitignored public/fonts as the destination", () => {
+    expect(FONT_SOURCE_DIR).toBe("../src/node/fonts");
+    expect(`${PUBLIC_DIR}/${FONT_FOLDER}`).toBe("public/fonts");
   });
 
   it("only lists files the library ships (a library rename fails here, not in a render)", () => {

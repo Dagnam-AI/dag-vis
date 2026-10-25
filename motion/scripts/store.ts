@@ -11,6 +11,9 @@
 // Credentials come from the environment only (R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
 // R2_SECRET_ACCESS_KEY, R2_VIDEOS_BUCKET): this script never reads, writes or
 // prints them, and every message it prints has them removed.
+// The upload test points the endpoint at a server on this machine through a
+// loopback-only override that readR2 validates (README); unset, the host is built
+// from R2_ACCOUNT_ID.
 //
 // The upload starts with a HEAD of each key, so the token needs READ as well as
 // write: grant it Object Read & Write on the videos bucket. A 403 on HEAD stops
@@ -31,13 +34,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
-import { parseArgs } from "node:util";
 
 import { storedCheckProblems } from "../src/lib/ledger.ts";
 import { putIfAbsent, type HttpRequest } from "../src/lib/r2.ts";
 import { sha256Hex } from "../src/lib/sigv4.ts";
 import {
   contentTypeFor,
+  endpointNotice,
   ledgerRow,
   markUploaded,
   readR2,
@@ -46,7 +49,7 @@ import {
   uploadProblem,
   videoKey,
 } from "../src/lib/store.ts";
-import { MOTION, fail, requireMotionCwd } from "./cli.ts";
+import { MOTION, cli, fail, requireMotionCwd } from "./cli.ts";
 import { requireUsableVideosDir, videosDir } from "./videos-dir.ts";
 
 const USAGE =
@@ -54,21 +57,10 @@ const USAGE =
 // RENDERS.jsonl and the relative render paths are motion/'s.
 requireMotionCwd(USAGE);
 
-let parsed: ReturnType<typeof parseArgs>;
-try {
-  parsed = parseArgs({
-    options: {
-      upload: { type: "boolean" },
-      check: { type: "boolean" },
-    },
-    allowPositionals: true,
-    strict: true,
-  });
-} catch (e) {
-  fail(USAGE, (e as Error).message);
-}
-const { upload = false, check = false } = parsed.values;
-const [target, ...extra] = parsed.positionals;
+const { flags, positionals } = cli(USAGE, ["upload", "check"]);
+const upload = flags.has("upload");
+const check = flags.has("check");
+const [target, ...extra] = positionals;
 if (extra.length > 0 || (check && target !== undefined))
   fail(USAGE, "expected one render file, or --check alone");
 
@@ -99,6 +91,8 @@ async function store(mp4: string): Promise<void> {
   // --upload with no usable credentials is a failure (exit 1), named before anything is copied.
   const unusable = upload ? uploadProblem(r2) : null;
   if (unusable !== null) throw new Error(unusable);
+  const notice = upload ? endpointNotice(r2) : null;
+  if (notice !== null) console.error(notice);
   for (const f of files) {
     if (!existsSync(f)) throw new Error(`missing ${f}`);
     videoKey(video, basename(f)); // validates the names before anything is copied or sent
@@ -150,8 +144,23 @@ async function store(mp4: string): Promise<void> {
     );
 
   // HEAD then PUT, never an overwrite (putIfAbsent). Two owners uploading one name at once could race; there is one owner.
-  const send = (url: string, init: HttpRequest): Promise<Response> =>
-    fetch(url, { ...init, signal: AbortSignal.timeout(10 * 60_000) });
+  // A redirect is never followed: the bytes and the metadata would go to a host
+  // nobody chose, and its 2xx would be recorded as an upload that R2 never stored.
+  const send = async (url: string, init: HttpRequest): Promise<Response> => {
+    try {
+      return await fetch(url, {
+        ...init,
+        redirect: "error",
+        signal: AbortSignal.timeout(10 * 60_000),
+      });
+    } catch (e) {
+      const reason = ((e as Error).cause as Error | undefined) ?? (e as Error);
+      throw new Error(
+        `r2 ${init.method} failed: ${reason.message}${/redirect/i.test(reason.message) ? " (a redirect is never followed; nothing was recorded)" : ""}`,
+        { cause: e },
+      );
+    }
+  };
   for (const f of files) {
     const key = videoKey(video, basename(f));
     const buf = readFileSync(f);

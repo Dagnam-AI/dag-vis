@@ -15,6 +15,8 @@ export interface SignInput {
   /** Further headers to sign and send, lower-case names (e.g. `x-amz-meta-sha256`). */
   extraHeaders?: Readonly<Record<string, string>> | undefined;
   now: Date;
+  /** Origin of a local test double (`http://127.0.0.1:<port>`) instead of the account's R2 host. Only readR2 hands one in, after it has checked it is loopback. */
+  endpoint?: string | undefined;
 }
 export interface Signed {
   url: string;
@@ -54,7 +56,10 @@ const encodeSegment = (s: string): string =>
 export function signRequest(i: SignInput): Signed {
   const amzDate = i.now.toISOString().replace(/[-:]|\.\d{3}/g, ""); // 20261023T120000Z
   const date = amzDate.slice(0, 8);
-  const host = `${i.accountId}.r2.cloudflarestorage.com`;
+  const host =
+    i.endpoint === undefined
+      ? `${i.accountId}.r2.cloudflarestorage.com`
+      : new URL(i.endpoint).host;
   const path = `/${[i.bucket, ...i.key.split("/")].map(encodeSegment).join("/")}`;
   const sent: Record<string, string> = {
     ...(i.contentType === undefined ? {} : { "content-type": i.contentType }),
@@ -87,7 +92,7 @@ export function signRequest(i: SignInput): Signed {
     toSign,
   ).toString("hex");
   return {
-    url: `https://${host}${path}`,
+    url: `${i.endpoint ?? `https://${host}`}${path}`,
     headers: {
       ...sent,
       authorization: `AWS4-HMAC-SHA256 Credential=${i.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,

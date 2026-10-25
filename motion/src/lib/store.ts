@@ -35,12 +35,15 @@ export const contentTypeFor = (file: string): string =>
 export type R2Status =
   | { kind: "absent" }
   | { kind: "partial"; missing: string[] }
+  | { kind: "endpoint"; problem: string }
   | {
       kind: "ready";
       accountId: string;
       accessKeyId: string;
       secretAccessKey: string;
       bucket: string;
+      /** Origin of a loopback test double; undefined for the real bucket. */
+      endpoint?: string | undefined;
     };
 
 const R2_VARS = [
@@ -50,6 +53,31 @@ const R2_VARS = [
   "R2_VIDEOS_BUCKET",
 ] as const;
 
+/**
+ * Set only by the upload test: the origin of a server on this machine that
+ * stands in for R2. Unset, the endpoint is built from R2_ACCOUNT_ID.
+ */
+export const R2_ENDPOINT_VAR = "MOTION_R2_ENDPOINT";
+
+/** Why `value` may not stand in for R2, or null: only `http://127.0.0.1[:port]` and `http://[::1][:port]`, nothing else in the URL, so the signed upload can never be sent to another machine. */
+export function endpointProblem(value: string): string | null {
+  const rule = `${R2_ENDPOINT_VAR} must be http://127.0.0.1:<port> or http://[::1]:<port> (a test double on this machine) and nothing more`;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return rule;
+  }
+  const loopback = url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+  const bare =
+    url.pathname === "/" &&
+    url.search === "" &&
+    url.hash === "" &&
+    url.username === "" &&
+    url.password === "";
+  return url.protocol === "http:" && loopback && bare ? null : rule;
+}
+
 /** The owner's bucket and credentials come from the environment only; nothing is read from a file. */
 export function readR2(
   env: Readonly<Record<string, string | undefined>>,
@@ -58,8 +86,12 @@ export function readR2(
   const missing = R2_VARS.filter((name) => value(name) === "");
   if (missing.length === R2_VARS.length) return { kind: "absent" };
   if (missing.length > 0) return { kind: "partial", missing };
+  const endpoint = env[R2_ENDPOINT_VAR] ?? "";
+  const problem = endpoint === "" ? null : endpointProblem(endpoint);
+  if (problem !== null) return { kind: "endpoint", problem };
   return {
     kind: "ready",
+    endpoint: endpoint === "" ? undefined : new URL(endpoint).origin,
     accountId: value("R2_ACCOUNT_ID"),
     accessKeyId: value("R2_ACCESS_KEY_ID"),
     secretAccessKey: value("R2_SECRET_ACCESS_KEY"),
@@ -67,9 +99,16 @@ export function readR2(
   };
 }
 
+/** The line `--upload` prints to stderr when the requests go to a local test double and not to R2, so a variable left exported cannot go unnoticed. No credential in it. Null for the real bucket. */
+export function endpointNotice(r2: R2Status): string | null {
+  if (r2.kind !== "ready" || r2.endpoint === undefined) return null;
+  return `${R2_ENDPOINT_VAR} is set: this upload goes to the test double at ${new URL(r2.endpoint).host}, not to R2`;
+}
+
 /** Why `--upload` cannot start, naming the missing variables (never a value), or null when all four are set. */
 export function uploadProblem(r2: R2Status): string | null {
   if (r2.kind === "ready") return null;
+  if (r2.kind === "endpoint") return `R2 upload: ${r2.problem}`;
   if (r2.kind === "partial")
     return `R2 upload: also set ${r2.missing.join(", ")}`;
   return `R2 upload: set ${R2_VARS.join(", ")} (none is set)`;

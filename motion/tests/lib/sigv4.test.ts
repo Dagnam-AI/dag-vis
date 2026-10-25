@@ -123,3 +123,33 @@ describe("signRequest", () => {
     expect(s.url.endsWith("/dagnam-videos/a%20b/%28c%29/d%27e")).toBe(true);
   });
 });
+
+describe("signRequest with a test double's endpoint", () => {
+  const INPUT = {
+    method: "HEAD" as const,
+    ...BASE,
+    payloadSha256: sha256Hex(""),
+  };
+
+  it("sends to that origin, signing its host (and port) instead of the account's", () => {
+    const real = signRequest(INPUT);
+    const local = signRequest({ ...INPUT, endpoint: "http://127.0.0.1:8123" });
+    expect(local.url).toBe(
+      "http://127.0.0.1:8123/dagnam-videos/videos/pipeline-proof/pipeline-proof-20261023-v1.mp4",
+    );
+    expect(local.headers.authorization).toContain(
+      "SignedHeaders=host;x-amz-content-sha256;x-amz-date,",
+    );
+    // A different host is a different canonical request, so a different signature.
+    expect(local.headers.authorization).not.toBe(real.headers.authorization);
+  });
+
+  it("without one, still builds the account's R2 URL", () => {
+    expect(signRequest(INPUT).url).toBe(
+      "https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com/dagnam-videos/videos/pipeline-proof/pipeline-proof-20261023-v1.mp4",
+    );
+    expect(signRequest({ ...INPUT, endpoint: undefined }).url).toBe(
+      signRequest(INPUT).url,
+    );
+  });
+});

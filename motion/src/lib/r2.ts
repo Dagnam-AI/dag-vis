@@ -8,6 +8,8 @@ export interface R2Target {
   accessKeyId: string;
   secretAccessKey: string;
   bucket: string;
+  /** A loopback test double's origin; absent for the real bucket (see readR2). */
+  endpoint?: string | undefined;
 }
 export interface HttpRequest {
   method: "HEAD" | "PUT";
