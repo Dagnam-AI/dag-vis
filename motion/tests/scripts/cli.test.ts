@@ -4,7 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+import {
+  MOTION,
+  REMOTION_BIN,
+  cli,
+  fail,
+  nameOrFail,
+  requireMotionCwd,
+} from "../../scripts/cli.ts";
+import { ExitError } from "./harness.ts";
 
 // scripts/cli.ts parses process.argv and exits the process, so it is driven
 // from a child: a throwaway driver (outside the repo) imports it by path.
@@ -87,4 +97,99 @@ describe("scripts/cli.ts", () => {
       expect(r.stderr).toContain("usage:");
     },
   );
+});
+
+// The same module, in this process: the helpers every script calls first.
+describe("scripts/cli.ts helpers", () => {
+  const exiting = <T>(
+    f: () => T,
+  ): { code?: number; err: string; value?: T } => {
+    const err: string[] = [];
+    const log = vi.spyOn(console, "error").mockImplementation((m: unknown) => {
+      err.push(String(m));
+    });
+    const exit = vi.spyOn(process, "exit").mockImplementation((code) => {
+      throw new ExitError(Number(code ?? 0));
+    });
+    try {
+      return { value: f(), err: err.join("\n") };
+    } catch (e) {
+      if (!(e instanceof ExitError)) throw e;
+      return { code: e.code, err: err.join("\n") };
+    } finally {
+      log.mockRestore();
+      exit.mockRestore();
+    }
+  };
+  const withArgv = <T>(args: string[], f: () => T): T => {
+    const saved = process.argv;
+    process.argv = ["node", "tool", ...args];
+    try {
+      return f();
+    } finally {
+      process.argv = saved;
+    }
+  };
+
+  it("knows motion/ and the local remotion bin whatever the cwd is", () => {
+    expect(MOTION).toBe(
+      fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, ""),
+    );
+    expect(REMOTION_BIN).toBe(join(MOTION, "node_modules/.bin/remotion"));
+  });
+
+  it("fail exits 1 with the message and the usage line", () => {
+    expect(exiting(() => fail("tool <a>", "nope"))).toEqual({
+      code: 1,
+      err: "nope\nusage: tool <a>",
+    });
+  });
+
+  it("nameOrFail returns a usable video name and exits 1 naming the rule for another", () => {
+    expect(exiting(() => nameOrFail("u", "pipeline-proof")).value).toBe(
+      "pipeline-proof",
+    );
+    const bad = exiting(() => nameOrFail("u", "Bad_Name"));
+    expect(bad.code).toBe(1);
+    expect(bad.err).toContain(
+      'a video name (lower-case letters and digits joined by single hyphens) is required, got "Bad_Name"',
+    );
+    expect(exiting(() => nameOrFail("u", undefined)).code).toBe(1);
+  });
+
+  it("requireMotionCwd accepts motion/ and refuses any other folder, naming both", () => {
+    const cwd = vi.spyOn(process, "cwd");
+    cwd.mockReturnValue(MOTION);
+    expect(
+      exiting(() => {
+        requireMotionCwd("u");
+      }).code,
+    ).toBeUndefined();
+    cwd.mockReturnValue(tmpdir());
+    const refused = exiting(() => {
+      requireMotionCwd("u");
+    });
+    cwd.mockRestore();
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain(`run from ${MOTION}, not ${tmpdir()}`);
+  });
+
+  it("cli parses process.argv: flags without dashes, the positionals, and no count check when none is given", () => {
+    const parsed = withArgv(["--json", "a", "b", "c"], () =>
+      cli("u", ["json"]),
+    );
+    expect([...parsed.flags]).toEqual(["json"]);
+    expect(parsed.positionals).toEqual(["a", "b", "c"]);
+  });
+
+  it("cli exits 1 for an unknown option and for a wrong count", () => {
+    expect(
+      withArgv(["--jsn"], () => exiting(() => cli("u", ["json"], 0)).code),
+    ).toBe(1);
+    const count = withArgv(["a"], () => exiting(() => cli("u", [], 2)));
+    expect(count).toEqual({
+      code: 1,
+      err: "expected 2 argument(s), got 1\nusage: u",
+    });
+  });
 });

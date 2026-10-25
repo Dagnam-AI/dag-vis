@@ -10,7 +10,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  basename,
+  dirname,
+  isAbsolute,
+  join,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -459,12 +467,20 @@ describe("motion/", () => {
         readFileSync(join(ROOT, ".github/workflows", workflow), "utf8"),
         workflow,
       ).not.toMatch(/--upload|R2_/);
+    // Only these tests run scripts/store.ts or render.ts (which runs it), and
+    // each does so with no endpoint of the real bucket: render.test.ts fakes every
+    // process, store.test.ts sets no R2 variable. No test calls fetch itself.
+    const runsStore = ["render.test.ts", "store.test.ts"];
     for (const file of walk(join(MOTION, "tests")).filter((p) =>
       /\.tsx?$/.test(p),
-    ))
-      expect(readFileSync(file, "utf8"), relative(ROOT, file)).not.toMatch(
-        /\bfetch\(|scripts\/store/,
-      );
+    )) {
+      const text = readFileSync(file, "utf8");
+      const at = relative(ROOT, file);
+      expect(text, at).not.toMatch(/\bfetch\(/);
+      if (runsStore.includes(basename(file)))
+        expect(text, at).not.toMatch(/cloudflarestorage/);
+      else expect(text, at).not.toMatch(/scripts\/store/);
+    }
   });
 
   it("keeps the render ledger to rendered facts: swangle, a local copy, an R2 key or null, no secret names", () => {
