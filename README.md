@@ -157,6 +157,8 @@ h.destroy(); // releases the effect's GPU objects and observers
   `createGlitch` and `createRibbon` use all of it). Invalid values throw a `VisError`, and so does a non-finite `t`
   passed to `renderAt`. Array options (`colors`, `gridMul`) and `loop` are copied when given, so mutating them
   afterwards changes nothing.
+  For a still frame, start a handle with `{ speed: 0, fps: 0.01 }`: the first frame is drawn at once, at time 0, and
+  nothing is redrawn for 100 s (and then only the same frame); a test pins this for `createField`.
 - **The handle**: `start()`, `stop()`, `update(patch)`, `renderAt(t)` and `destroy()`, plus the read-only `canvas`,
   `running` and `duration` (the loop duration, `undefined` without a loop). `loopTime(t, loop)` is the wrap the
   runtime applies to `t` before drawing: `t` modulo `loop.duration` into `[0, duration)`, and `t` unchanged without
