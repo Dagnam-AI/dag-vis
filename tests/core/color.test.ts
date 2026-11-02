@@ -281,3 +281,14 @@ describe("parseColor error messages stay short", () => {
     }
   });
 });
+
+describe("parseColor on adversarial whitespace", () => {
+  it.each(["rgb(", "oklch("])(
+    "rejects %s followed by 200k tabs in linear time",
+    (head) => {
+      const start = performance.now();
+      expect(() => parseColor(head + "\t".repeat(200_000))).toThrow(VisError);
+      expect(performance.now() - start).toBeLessThan(500);
+    },
+  );
+});
