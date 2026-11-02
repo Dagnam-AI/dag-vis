@@ -12,6 +12,9 @@ import {
 } from "../core/validate.js";
 import { gradient } from "../gradient/index.js";
 import type { GradientSpec } from "../gradient/index.js";
+import { OG_SIZE, OG_ZONE, scrimFor } from "./cover-contrast.js";
+import { isCoverLook } from "./cover-look-types.js";
+import { coverSvgParts } from "./cover-svg.js";
 import type { OgCardOptions } from "./og-card.js";
 import {
   DISPLAY_FAMILY,
@@ -77,7 +80,7 @@ export function socialCard(opts: OgCardOptions): string {
   const cover: unknown = opts.cover;
   if (typeof cover !== "object" || cover === null || Array.isArray(cover))
     throw new VisError(
-      `cover must be a gradient spec object, got ${describeValue(cover)}`,
+      `cover must be a gradient spec object or a cover look object, got ${describeValue(cover)}`,
     );
   const seed = parseSeed(opts.seed);
   const idPrefix = parseId(
@@ -85,14 +88,24 @@ export function socialCard(opts: OgCardOptions): string {
     orDefault<unknown>(opts.idPrefix, `vis${seed}`),
     60,
   );
-  const art = within("cover", () =>
-    gradient({
-      ...(cover as GradientSpec),
-      size: { width: SOCIAL.width, height: SOCIAL.height },
-      seed,
-      idPrefix,
-    }),
-  );
+  const size = { width: SOCIAL.width, height: SOCIAL.height };
+  const art = within("cover", () => {
+    if (!isCoverLook(cover))
+      return gradient({ ...(cover as GradientSpec), size, seed, idPrefix });
+    // A look brings its own seed (its blobs and rings must match the hero) and a scrim
+    // fitted to this card's title block, so the card's `seed` does not apply.
+    if (cover.theme !== "dark")
+      throw new VisError(
+        `a cover look must be a dark one for the social card, got ${describeValue(cover.theme)}`,
+      );
+    if (cover.variant !== "banner")
+      throw new VisError(
+        `a cover look must be a banner for the social card (a card's texture is drawn for 400 px), got ${describeValue(cover.variant)}`,
+      );
+    const { scrim } = scrimFor(cover, OG_ZONE, OG_SIZE);
+    const parts = coverSvgParts(cover, { size, idPrefix, scrim });
+    return { defs: parts.defs, svg: parts.body };
+  });
 
   // The title: uppercase, the largest size that fits three lines, else the smallest with an
   // ellipsis. Moonhouse has no curly quotes, dashes or "…", and resvg would then draw the

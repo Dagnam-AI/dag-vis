@@ -383,7 +383,7 @@ describe("parseCoverInput: rejects, naming the field", () => {
 
   it("lists the allowed keys on an unknown key", () => {
     expect(message(() => parseCoverInput({ ...base, extra: 1 }))).toContain(
-      "(allowed: family, item, index, count, theme, variant, seed, hue, region, intensity)",
+      "(allowed: family, item, index, count, theme, variant, seed, hue, region, intensity, look)",
     );
   });
 });
@@ -519,6 +519,33 @@ describe("parseCoverInput: edges, own data and exotic input", () => {
   });
 });
 
+describe("parseCoverInput and parseCoverChoices: look", () => {
+  it("accepts each look, and null for derive", () => {
+    for (const look of [
+      "ember",
+      "aurora",
+      "contour",
+      "silk",
+      "halftone",
+      null,
+    ]) {
+      expect(parseCoverInput({ ...base, look })).toEqual({ ...base, look });
+      expect(parseCoverChoices({ look })).toEqual({ look });
+    }
+  });
+
+  it("rejects anything else, naming cover.look", () => {
+    for (const look of ["nope", 1, "", true, {}]) {
+      expect(message(() => parseCoverInput({ ...base, look }))).toMatch(
+        /^cover\.look: expected one of ember, aurora, contour, silk, halftone, got /,
+      );
+      expect(message(() => parseCoverChoices({ look }))).toMatch(
+        /^cover\.look: /,
+      );
+    }
+  });
+});
+
 describe("parseCoverChoices", () => {
   it.each<[string, CoverChoices]>([
     ["nothing", {}],
@@ -554,7 +581,9 @@ describe("parseCoverChoices", () => {
   ])("rejects %s as an unknown key", (key, value) => {
     const text = message(() => parseCoverChoices(value));
     expect(text).toContain("cover: unknown key");
-    expect(text).toContain("(allowed: family, seed, hue, region, intensity)");
+    expect(text).toContain(
+      "(allowed: family, seed, hue, region, intensity, look)",
+    );
     if (!key.includes(" ")) expect(text).toContain(`"${key}"`);
   });
 

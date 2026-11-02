@@ -37,8 +37,8 @@ function assertNumber(name: string, v: unknown): void {
 /** Clamp to 0..1; NaN counts as 0 so it can never reach a serialised colour. */
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v || 0));
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
-const RGB = /^rgba?\(\s*[^)]*\)$/i;
-const OKLCH = /^oklch\(\s*[^)]*\)$/i;
+const RGB = /^rgba?\([^)]*\)$/i;
+const OKLCH = /^oklch\([^)]*\)$/i;
 /** Plain decimal numbers only: no empty string, no 0x/0b literals, no Infinity. */
 const DECIMAL = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
 /** Text between the first "(" and the final ")". */

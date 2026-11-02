@@ -16,6 +16,7 @@ import {
   within,
 } from "../core/validate.js";
 import type { GradientSpec } from "../gradient/index.js";
+import type { CoverLook } from "./cover-look-types.js";
 import { brandBackgroundLayers } from "./brand-background.js";
 import type { BrandBackgroundOptions } from "./brand-background.js";
 import { socialCard } from "./og-social-card.js";
@@ -67,12 +68,14 @@ export interface OgCardOptions {
    * at 1200x630, is the background; pass `coverSpec({ theme: "dark", variant:
    * "banner", ... })`. The social layout takes only `title`, `excerpt`, `seed`,
    * `idPrefix` and `cover` (its `seed`, default 1, and `idPrefix` override any inside the
-   * spec; and a `width` of 1200, `height` of 630 and `theme` of
+   * spec; a `coverLook({ theme: "dark", ... })` is accepted too: it keeps its own seed,
+   * draws its texture and gets a scrim fitted to the title block, so the card matches the
+   * hero; and a `width` of 1200, `height` of 630 and `theme` of
    * "dark", which are all it draws); `subtitle`, `eyebrow`, `footer` and
    * `background` throw. Its text is set in Moonhouse and Unbounded, which the PNG
    * pipeline bundles.
    */
-  cover?: GradientSpec;
+  cover?: GradientSpec | CoverLook;
   /** The social layout's second text: at most 2 lines, omitted when blank. Needs `cover`. */
   excerpt?: string;
 }

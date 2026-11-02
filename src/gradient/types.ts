@@ -18,6 +18,11 @@ export interface GradientBase {
   size?: Size;
   /** 0..1 film-grain overlay (SVG only). */
   grain?: number;
+  /**
+   * How the grain blends with the artwork. Default "overlay", which is an identity on
+   * white (so invisible on a pale cover): "multiply" darkens, "soft-light" is gentler.
+   */
+  grainBlend?: "overlay" | "multiply" | "soft-light";
   overlay?: Overlay;
   seed?: number;
   /** `<defs>` id namespace. Default `"vis" + seed`. */

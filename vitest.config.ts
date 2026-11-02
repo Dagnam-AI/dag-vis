@@ -10,6 +10,8 @@ const scope = process.env.COVERAGE_SCOPE;
 
 export default defineConfig({
   test: {
+    // The cover sweeps render every look over many seeds; 5 s leaves no headroom on a shared CI runner.
+    testTimeout: 30_000,
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     coverage: {
       provider: "v8",

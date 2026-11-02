@@ -7,6 +7,7 @@ import {
   orDefault,
 } from "../core/validate.js";
 import type { GlowsSpec } from "../gradient/index.js";
+import type { CoverLookName } from "./cover-look-types.js";
 
 /**
  * Generated covers for blog posts and course lessons: one deterministic look per FAMILY
@@ -40,7 +41,10 @@ export interface CoverInput {
 export type CoverChoices = Pick<
   CoverInput,
   "family" | "seed" | "hue" | "region" | "intensity"
->;
+> & {
+  /** Pins a look (`coverLook` reads it; `coverSpec` ignores it); `null` or omitted derives it. */
+  look?: CoverLookName | null;
+};
 
 export interface CoverGlow {
   /** The ellipse's radii in percent of the box. */
@@ -71,16 +75,24 @@ export interface CoverParams {
   /** Where in an animation loop this item starts: index / count. */
   phase: number;
   intensity: number;
+  /** The anchor region in use, 0..4: the family's, or the editor's `region`. */
+  regionIndex: number;
+  /** The item's hue in degrees from brand red. */
+  hueOffset: number;
+  /** What the family's draws are seeded from: `family`, else the item key. */
+  familyKey: string;
+  /** What the item's draws are seeded from: `seed`, else `item`. */
+  itemKey: string;
 }
 
 /** Brand red `#ef4444` as an OKLCH hue (HSL's hue steps are uneven around red). */
-const BRAND_HUE = 25.3;
+export const BRAND_HUE = 25.3;
 /** The ranges `coverSpec` clamps to, and `parseCoverInput` enforces. */
 export const HUE_RANGE = [-15, 15] as const;
 export const INTENSITY_RANGE = [0.6, 1.4] as const;
-const FAMILY_HUE_DRIFT = 15;
+export const FAMILY_HUE_DRIFT = 15;
 /** An ordered family's items spread this many degrees either way, by index. */
-const ITEM_HUE_SPREAD = 6;
+export const ITEM_HUE_SPREAD = 6;
 /** An item's anchor jitter, in percent of the box, either way. */
 const ITEM_JITTER = 8;
 /** An item's change to its glow's size, as a fraction, either way. */
@@ -110,7 +122,7 @@ const GLOW = {
 } as const;
 
 /** 32-bit FNV-1a: stable across runs and platforms. */
-function fnv1a32(text: string): number {
+export function fnv1a32(text: string): number {
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
@@ -118,7 +130,7 @@ function fnv1a32(text: string): number {
   return hash >>> 0;
 }
 
-const round = (value: number): number => Math.round(value * 100) / 100;
+export const round = (value: number): number => Math.round(value * 100) / 100;
 const clamp = (value: number, lo: number, hi: number): number =>
   Math.min(hi, Math.max(lo, value));
 
@@ -149,7 +161,7 @@ function oneOf<T extends string>(
   return v as T;
 }
 
-interface Parsed {
+export interface Parsed {
   family: string | undefined;
   item: string;
   index: number;
@@ -162,7 +174,7 @@ interface Parsed {
   intensity: number | undefined;
 }
 
-function parse(input: CoverInput): Parsed {
+export function parse(input: CoverInput): Parsed {
   assertOptions(input);
   const o = input as unknown as Record<string, unknown>;
   const item = text("item", o.item, true);
@@ -194,7 +206,7 @@ export function coverParams(input: CoverInput): CoverParams {
   return derive(parse(input));
 }
 
-function derive(p: Parsed): CoverParams {
+export function derive(p: Parsed): CoverParams {
   const itemKey = p.seed ?? p.item;
   const fromFamily = createRng(fnv1a32(p.family ?? itemKey));
   const fromItem = createRng(fnv1a32(itemKey));
@@ -241,6 +253,10 @@ function derive(p: Parsed): CoverParams {
     phase: p.count > 1 ? clamp(p.index, 0, p.count - 1) / p.count : 0,
     intensity:
       p.intensity === undefined ? 1 : clamp(p.intensity, ...INTENSITY_RANGE),
+    regionIndex: regionKey,
+    hueOffset: hue - BRAND_HUE,
+    familyKey: p.family ?? itemKey,
+    itemKey,
   };
 }
 

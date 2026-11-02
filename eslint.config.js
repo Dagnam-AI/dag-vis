@@ -4,7 +4,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 // One-directional layering: core <- brand <- gradient/pattern
-// <- scene <- node (which also takes field and export), with field (core only), export (core only: the DOM-free
+// <- scene (which also takes the field TYPES) <- node (which also takes field and export), with field (core only), export (core only: the DOM-free
 // encoders, imported by animate and node), animate (core, scene, field, export)
 // and react (core, animate, field, gradient) beside them as separate entry points. The
 // root barrel, animate and node import field; the ALLOWED map and these lists widen
@@ -15,7 +15,7 @@ import tseslint from "typescript-eslint";
 // or the native rasteriser (dependency weight rule). Both
 // constraints live in ONE no-restricted-imports entry per layer because eslint
 // keeps only the last matching config for a rule.
-const forbid = (layer, groups, browserSafe = true) => ({
+const forbid = (layer, groups, browserSafe = true, typeOnly = []) => ({
   files: [`src/${layer}/**/*.ts`, `src/${layer}/**/*.tsx`],
   rules: {
     "no-restricted-imports": [
@@ -25,6 +25,11 @@ const forbid = (layer, groups, browserSafe = true) => ({
           ...groups.map((g) => ({
             group: [`**/${g}/**`, `**/${g}`],
             message: `src/${layer} must not import from src/${g} (layer order: core <- brand <- gradient,pattern <- scene <- node; field, animate and react are separate entries).`,
+          })),
+          ...typeOnly.map((g) => ({
+            group: [`**/${g}/**`, `**/${g}`],
+            allowTypeImports: true,
+            message: `src/${layer} may only import types from src/${g}.`,
           })),
           {
             group: ["**/motion/**", "**/motion"],
@@ -124,7 +129,8 @@ export default tseslint.config(
     "react",
     "node",
   ]),
-  forbid("scene", ["field", "export", "animate", "react", "node"]),
+  // scene -> core, brand, gradient, pattern, and the TYPES of field (the FlowFieldSpec of `coverField`).
+  forbid("scene", ["export", "animate", "react", "node"], true, ["field"]),
   // field -> core only (the DOM-free field renderer and its spec).
   forbid("field", [
     "brand",

@@ -5,8 +5,9 @@ import {
   INTENSITY_RANGE,
   REGION_COUNT,
   type CoverChoices,
-  type CoverInput,
 } from "./cover.js";
+import { LOOK_EXPECTED, isLookName } from "./cover-look-types.js";
+import type { CoverLookInput } from "./cover-look-types.js";
 
 /**
  * Strict parsers for cover inputs that come from outside the program (front matter, a
@@ -63,7 +64,9 @@ const NON_EMPTY = `a non-empty string of at most ${MAX_TEXT} characters`;
 const REGION_MAX = REGION_COUNT - 1;
 
 /** Every cover field, in the order they are checked (and listed in an unknown-key error). */
-const RULES: { [K in keyof CoverInput]-?: Rule<NonNullable<CoverInput[K]>> } = {
+const RULES: {
+  [K in keyof CoverLookInput]-?: Rule<NonNullable<CoverLookInput[K]>>;
+} = {
   family: {
     expected: NON_EMPTY,
     accepts: text(1),
@@ -115,9 +118,15 @@ const RULES: { [K in keyof CoverInput]-?: Rule<NonNullable<CoverInput[K]>> } = {
     nullable: true,
     required: false,
   },
+  look: {
+    expected: LOOK_EXPECTED,
+    accepts: isLookName,
+    nullable: true,
+    required: false,
+  },
 };
 
-const ALL_KEYS = Object.keys(RULES) as (keyof CoverInput)[];
+const ALL_KEYS = Object.keys(RULES) as (keyof CoverLookInput)[];
 // `satisfies` fails to compile when a key is added to or dropped from `CoverChoices`.
 const CHOICE_KEYS = Object.keys({
   family: true,
@@ -125,6 +134,7 @@ const CHOICE_KEYS = Object.keys({
   hue: true,
   region: true,
   intensity: true,
+  look: true,
 } satisfies Record<keyof CoverChoices, true>) as (keyof CoverChoices)[];
 
 function isPlainObject(v: unknown): v is Record<PropertyKey, unknown> {
@@ -139,10 +149,10 @@ function isPlainObject(v: unknown): v is Record<PropertyKey, unknown> {
  * first problem: a non-plain object, an unknown key (own symbol keys and `__proto__`
  * included), then each field in turn.
  */
-function parseKeys<K extends keyof CoverInput>(
+function parseKeys<K extends keyof CoverLookInput>(
   value: unknown,
   keys: readonly K[],
-): Pick<CoverInput, K> {
+): Pick<CoverLookInput, K> {
   if (!isPlainObject(value))
     throw new VisError(
       `cover: expected a plain object, got ${Array.isArray(value) ? "array" : describeValue(value)}`,
@@ -165,8 +175,8 @@ function parseKeys<K extends keyof CoverInput>(
     out[key] = v;
   }
   // The one cast: `out` holds, per key, a value that key's `RULES` entry accepted, and
-  // `RULES` is typed per key against `CoverInput`, so this is `Pick<CoverInput, K>`.
-  return out as Pick<CoverInput, K>;
+  // `RULES` is typed per key against `CoverLookInput`, so this is `Pick<CoverLookInput, K>`.
+  return out as Pick<CoverLookInput, K>;
 }
 
 /**
@@ -177,7 +187,7 @@ function parseKeys<K extends keyof CoverInput>(
  * `coverSpec(parseCoverInput(x))` equals `coverSpec(x)` for any `x` it accepts, and never
  * throws.
  */
-export function parseCoverInput(value: unknown): CoverInput {
+export function parseCoverInput(value: unknown): CoverLookInput {
   const parsed = parseKeys(value, ALL_KEYS);
   const { index, count } = parsed;
   if (index !== undefined && index >= (count ?? 1))
@@ -188,7 +198,7 @@ export function parseCoverInput(value: unknown): CoverInput {
 }
 
 /**
- * The editor's choices alone (`family`, `seed`, `hue`, `region`, `intensity`), validated
+ * The editor's choices alone (`family`, `seed`, `hue`, `region`, `intensity`, `look`), validated
  * like `parseCoverInput` and just as strict: `item`, `theme`, `variant`, `index` and
  * `count` are unknown keys here. Join the result with the rest at the call site:
  * `coverSpec({ ...parseCoverChoices(x), item, theme, variant })`.

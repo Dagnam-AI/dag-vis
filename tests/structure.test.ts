@@ -26,7 +26,8 @@ const ALLOWED: Record<string, readonly string[]> = {
   brand: ["core"],
   gradient: ["core", "brand"],
   pattern: ["core", "brand"],
-  scene: ["core", "brand", "gradient", "pattern"],
+  // scene -> field: `coverField` returns a `FlowFieldSpec` (types only); field imports only core, so no cycle.
+  scene: ["core", "brand", "gradient", "pattern", "field"],
   field: ["core"],
   export: ["core"],
   animate: ["core", "scene", "field", "export"],

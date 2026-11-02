@@ -4,6 +4,7 @@ import { MOONHOUSE } from "../../src/brand/moonhouse-metrics.js";
 import { UNBOUNDED } from "../../src/brand/unbounded-metrics.js";
 import { VisError } from "../../src/core/errors.js";
 import { coverSpec } from "../../src/scene/cover.js";
+import { coverLook } from "../../src/scene/cover-look.js";
 import { ogCard } from "../../src/scene/og-card.js";
 import { textContent } from "../helpers/svg-text.js";
 import {
@@ -62,6 +63,82 @@ const sizeOf = (title: string): number =>
   titleLines(ogCard({ title, cover }))[0]?.size ?? 0;
 const words = (word: string, n: number): string =>
   Array(n).fill(word).join(" ");
+
+describe("ogCard social layout with a cover look", () => {
+  const look = coverLook({
+    family: "tag:ai",
+    item: "building-a-reasoning-model",
+    theme: "dark",
+    variant: "banner",
+    look: "contour",
+  });
+  const card = { ...input, cover: look };
+
+  it("matches its golden", () => {
+    expectGolden("scene/og-card-cover-look.svg", ogCard(card));
+  });
+
+  it("draws the look, its texture and a scrim made for the title block, then the title", () => {
+    const svg = ogCard(card);
+    expect(svg).toContain("vis1-g");
+    expect(svg).toContain("vis1-tx");
+    expect(svg).toContain("vis1-grain");
+    expect(svg.indexOf("<defs>")).toBeLessThan(svg.indexOf("<text "));
+    expect(svg.indexOf("vis1-grain)")).toBeLessThan(svg.indexOf("<text "));
+  });
+
+  it("uses the look's own seed: the card's seed does not apply, its idPrefix does", () => {
+    const own = { ...card, idPrefix: "post" };
+    expect(ogCard({ ...own, seed: 7 })).toBe(ogCard(own));
+    expect(ogCard(own)).toContain("post-g");
+    expect(ogCard(own)).not.toContain("vis");
+  });
+
+  it("is deterministic and rasterises at 1200 x 630", () => {
+    expect(ogCard(card)).toBe(ogCard(card));
+    const { width, height } = rasterize(ogCard(card));
+    expect([width, height]).toEqual([1200, 630]);
+  });
+
+  it("only takes a dark look, naming cover", () => {
+    const light = coverLook({ item: "a", theme: "light", variant: "banner" });
+    expect(() => ogCard({ ...input, cover: light })).toThrow(VisError);
+    expect(() => ogCard({ ...input, cover: light })).toThrow(
+      /^cover: a cover look must be a dark one for the social card, got "light"/,
+    );
+  });
+
+  it("only takes a banner look: a card's texture is drawn for 400 px", () => {
+    const small = coverLook({ item: "a", theme: "dark", variant: "card" });
+    expect(() => ogCard({ ...input, cover: small })).toThrow(VisError);
+    expect(() => ogCard({ ...input, cover: small })).toThrow(
+      /^cover: a cover look must be a banner for the social card .* got "card"/,
+    );
+  });
+
+  it("names a forged theme or variant safely, not as [object Object]", () => {
+    const forged = { ...look, theme: { toString: () => "x" } } as never;
+    expect(() => ogCard({ ...input, cover: forged })).toThrow(
+      /must be a dark one for the social card, got /,
+    );
+    expect(() => ogCard({ ...input, cover: forged })).not.toThrow(
+      /\[object Object\]/,
+    );
+  });
+
+  it("rejects a forged look's out-of-range numbers, naming the field", () => {
+    const tx = look.texture;
+    if (!tx) throw new Error("contour has a texture");
+    const forged = { ...look, texture: { ...tx, opacity: 5 } };
+    expect(() => ogCard({ ...input, cover: forged })).toThrow(
+      /^cover: texture\.opacity must be a number in 0\.\.1, got 5/,
+    );
+  });
+
+  it("leaves a plain gradient spec cover byte-identical to before", () => {
+    expect(ogCard(input)).toBe(ogCard({ ...input, cover: { ...cover } }));
+  });
+});
 
 describe("ogCard social layout", () => {
   it("is selected by `cover`: 1200×630 with the cover's art underneath", () => {
