@@ -90,7 +90,7 @@ export const BRAND_HUE = 25.3;
 /** The ranges `coverSpec` clamps to, and `parseCoverInput` enforces. */
 export const HUE_RANGE = [-15, 15] as const;
 export const INTENSITY_RANGE = [0.6, 1.4] as const;
-const FAMILY_HUE_DRIFT = 15;
+export const FAMILY_HUE_DRIFT = 15;
 /** An ordered family's items spread this many degrees either way, by index. */
 export const ITEM_HUE_SPREAD = 6;
 /** An item's anchor jitter, in percent of the box, either way. */

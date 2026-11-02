@@ -3,6 +3,7 @@ import type { GlowPoint, GradientSpec } from "../gradient/index.js";
 import type { PatternSpec } from "../pattern/index.js";
 import {
   BRAND_HUE,
+  FAMILY_HUE_DRIFT,
   ITEM_HUE_SPREAD,
   derive,
   fnv1a32,
@@ -50,13 +51,14 @@ type Pair = [number, number];
  * A look takes the family's hue drift from the glows cover's +-15 degree range but
  * compresses it (`share`) and leans warm: at the cooler end of that range OKLCH red turns
  * crimson and then pink, which on near black reads as washed magenta. Every hue stays in
- * `min`..`max` degrees (about 15 degrees warmer than brand red at the floor, deliberately:
+ * `min`..`max` degrees (the floor is about 7 degrees warmer than brand red, deliberately:
  * below 32 the ruby core on light turns raspberry).
  *
- * The lessons of one chapter do not share that squeezed range: they spread over a `span`
- * of it, in index order, so siblings read red to ember. The span SLIDES inside the band
- * with the family's hue instead of being clamped at its ends, which would give long
- * chapters whole runs of identical colours.
+ * A post (standalone or one of a tag) takes `centre + share * drift + its own nudge`.
+ * The lessons of one chapter spread over a `span` of the band in index order, so siblings
+ * read red to ember; the span SLIDES inside the band, linearly with the drift (no dead
+ * zone, so the editor's hue always moves the picture), instead of being clamped at its
+ * ends, which would give long chapters whole runs of identical colours.
  */
 const LOOK_HUE = { centre: 40, share: 0.4, span: 18, min: 32, max: 54 };
 /**
@@ -358,19 +360,22 @@ function walked(params: CoverParams, count: number, index: number): Pair {
   ];
 }
 
-/** The hue of a look, in degrees: the family's slid span, and the item's place in it. */
-function lookHue(params: CoverParams): number {
-  const place = (params.hue - params.familyHue) / (2 * ITEM_HUE_SPREAD) + 0.5;
-  const start = Math.min(
-    LOOK_HUE.max - LOOK_HUE.span,
-    Math.max(
-      LOOK_HUE.min,
-      LOOK_HUE.centre +
-        LOOK_HUE.share * (params.familyHue - BRAND_HUE) -
-        LOOK_HUE.span / 2,
-    ),
+/** The hue of a look, in degrees: a post's own, or a lesson's place in its family's span. */
+function lookHue(params: CoverParams, count: number): number {
+  const drift = params.familyHue - BRAND_HUE;
+  const nudge = params.hue - params.familyHue;
+  if (count < 2)
+    return Math.min(
+      LOOK_HUE.max,
+      Math.max(LOOK_HUE.min, LOOK_HUE.centre + LOOK_HUE.share * drift + nudge),
+    );
+  const slack = LOOK_HUE.max - LOOK_HUE.min - LOOK_HUE.span;
+  const place = nudge / (2 * ITEM_HUE_SPREAD) + 0.5;
+  return (
+    LOOK_HUE.min +
+    (slack * (drift + FAMILY_HUE_DRIFT)) / (2 * FAMILY_HUE_DRIFT) +
+    LOOK_HUE.span * place
   );
-  return start + LOOK_HUE.span * place;
 }
 
 /**
@@ -392,7 +397,7 @@ export function coverLook(input: CoverLookInput): CoverLook {
   const name = pinned ?? pickLook(params.familyKey);
   const { theme, variant } = parsed;
   const banner = variant === "banner";
-  const pal = coverPalette(lookHue(params), theme);
+  const pal = coverPalette(lookHue(params, parsed.count), theme);
   const [ax, ay] = params.anchor;
   const ctx: Ctx = {
     dark: theme === "dark",

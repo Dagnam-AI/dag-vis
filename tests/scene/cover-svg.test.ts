@@ -233,6 +233,23 @@ describe("coverSvgParts", () => {
     bad(() => parts(look, { ...scrim, color: "not a colour" }), /./);
   });
 
+  it("rejects a forged pair that is not an array of two, as a VisError", () => {
+    const tx = look.texture;
+    if (!tx) throw new Error("halftone has a texture");
+    for (const at of ["50,50", { 0: 1, 1: 2 }, null, [50], [1, 2, 3]]) {
+      const forged = {
+        ...look,
+        texture: { ...tx, mask: { ...tx.mask, at } },
+      } as never;
+      const fn = (): string =>
+        coverSvgParts(forged, { size, idPrefix: "p" }).body;
+      expect(fn).toThrow(VisError);
+      expect(fn).toThrow(
+        /^texture\.mask\.at must be an array of 2 numbers, got /,
+      );
+    }
+  });
+
   it("rejects a bad prefix", () => {
     expect(() => coverSvgParts(look, { size, idPrefix: "" })).toThrow(VisError);
   });

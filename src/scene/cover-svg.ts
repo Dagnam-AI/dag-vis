@@ -2,7 +2,13 @@ import type { Size } from "../core/geometry.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
 import { parseColor } from "../core/color.js";
-import { bounded, parseId, parseSize } from "../core/validate.js";
+import { VisError } from "../core/errors.js";
+import {
+  bounded,
+  describeValue,
+  parseId,
+  parseSize,
+} from "../core/validate.js";
 import { gradient, grainLayer } from "../gradient/index.js";
 import { pattern } from "../pattern/index.js";
 import { BANNER_SIZE, CARD_SIZE, SCRIM_SOLID } from "./cover-contrast.js";
@@ -51,13 +57,12 @@ const stop = (offset: number, colour: string, opacity?: number): string =>
 
 /** A look is code-built, but a hand-made or stored one reaches this as plain data: check the numbers it draws with. */
 function assertLook(look: CoverLook, scrim: CoverScrim | null): void {
-  const pair = (
-    name: string,
-    v: readonly number[],
-    min: number,
-    max: number,
-  ): void => {
-    v.forEach((n, i) => bounded(`${name}[${i}]`, n, min, max));
+  const pair = (name: string, v: unknown, min: number, max: number): void => {
+    if (!Array.isArray(v) || v.length !== 2)
+      throw new VisError(
+        `${name} must be an array of 2 numbers, got ${describeValue(v)}`,
+      );
+    v.forEach((n: unknown, i) => bounded(`${name}[${i}]`, n, min, max));
   };
   const tx = look.texture;
   if (tx) {

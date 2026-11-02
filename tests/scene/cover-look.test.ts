@@ -244,6 +244,67 @@ describe("coverLook: the picture", () => {
   });
 });
 
+describe("coverLook: the hue controls", () => {
+  const accent = (o: Partial<CoverLookInput>): string =>
+    coverLook({
+      item: "a",
+      theme: "dark",
+      variant: "card",
+      look: "ember",
+      ...o,
+    }).palette.accent;
+  const spread = (accents: string[]): { distinct: number; top: number } => {
+    const counts = new Map<string, number>();
+    for (const a of accents) counts.set(a, (counts.get(a) ?? 0) + 1);
+    return {
+      distinct: counts.size,
+      top: Math.max(...counts.values()) / accents.length,
+    };
+  };
+
+  it("the editor's hue -15, -5, 5 and 15 give four different accents, standalone and on a lesson, in a warm-to-ember order", () => {
+    for (const own of [
+      {},
+      { family: "course:c", index: 0, count: 5 },
+      { family: "course:c", index: 3, count: 5 },
+    ]) {
+      const accents = [-15, -5, 5, 15].map((hue) => accent({ ...own, hue }));
+      expect(new Set(accents).size, accents.join(" ")).toBe(4);
+      // Green rises with hue (red to ember).
+      const greens = accents.map((a) => rgb(a)[1]);
+      expect(greens).toEqual([...greens].sort((x, y) => x - y));
+    }
+  });
+
+  it("2000 standalone posts take many accents, none holding more than a tenth", () => {
+    const { distinct, top } = spread(
+      Array.from({ length: 2000 }, (_, i) => accent({ item: `post-${i}` })),
+    );
+    expect(distinct).toBeGreaterThanOrEqual(15);
+    expect(top).toBeLessThan(0.1);
+  });
+
+  it("the posts of one tag take different accents too", () => {
+    const { distinct, top } = spread(
+      Array.from({ length: 2000 }, (_, i) =>
+        accent({ item: `p-${i}`, family: "tag:x" }),
+      ),
+    );
+    expect(distinct).toBeGreaterThanOrEqual(15);
+    expect(top).toBeLessThan(0.1);
+  });
+
+  it("the first lessons of 100 chapters are not one accent (the family's drift moves the span 4 degrees)", () => {
+    const { distinct, top } = spread(
+      Array.from({ length: 100 }, (_, i) =>
+        accent({ item: "l", family: `course:c${i}`, index: 0, count: 8 }),
+      ),
+    );
+    expect(distinct).toBeGreaterThanOrEqual(5);
+    expect(top).toBeLessThan(0.3);
+  });
+});
+
 describe("coverLook: the lessons of a chapter are not duplicates", () => {
   const SIZES = [5, 12, 25] as const;
   const chapter = (
