@@ -4,7 +4,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 // One-directional layering: core <- brand <- gradient/pattern
-// <- scene <- node (which also takes field and export), with field (core only), export (core only: the DOM-free
+// <- scene (which also takes the field TYPES) <- node (which also takes field and export), with field (core only), export (core only: the DOM-free
 // encoders, imported by animate and node), animate (core, scene, field, export)
 // and react (core, animate, field, gradient) beside them as separate entry points. The
 // root barrel, animate and node import field; the ALLOWED map and these lists widen
@@ -124,7 +124,8 @@ export default tseslint.config(
     "react",
     "node",
   ]),
-  forbid("scene", ["field", "export", "animate", "react", "node"]),
+  // scene -> core, brand, gradient, pattern, and field (the FlowFieldSpec type of `coverField` only).
+  forbid("scene", ["export", "animate", "react", "node"]),
   // field -> core only (the DOM-free field renderer and its spec).
   forbid("field", [
     "brand",

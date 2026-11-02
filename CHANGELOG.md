@@ -7,6 +7,17 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+### Added
+
+- Scenes: five cover looks, `ember`, `aurora`, `contour`, `silk` and `halftone` (`COVER_LOOKS`), each a deep red on near black or white with a masked texture and grain. `coverLook(input)` returns the look (`spec`, `palette`, `texture`, `scrim`, `contrast`), `coverSvg(input, { size?, idPrefix? })` the standalone SVG, `coverContrast(look, zone?, size?)` its minimum text contrast, and `coverField(input)` an animated `FlowFieldSpec` twin. The look is picked from the `family` (so a course shares one) unless `look` is given. `CoverLook`, `CoverLookInput`, `CoverLookName`, `CoverPalette`, `CoverScrim`, `CoverTexture` and `CoverSvgOptions` are exported.
+- Scenes: `parseCoverInput` and `parseCoverChoices` accept `look` (a look name, or `null`); `CoverChoices` gains `look`. The unknown-key message lists it.
+- Gradients: `grainBlend` (`"overlay"` default, `"multiply"`, `"soft-light"`) on every gradient spec, for grain that shows on white.
+- Scenes: `ogCard` accepts a dark `coverLook(...)` as `cover`. It draws the look with a scrim fitted to the title block and ignores the card's `seed` (the look has its own); a light look throws. A gradient-spec `cover` is byte-identical to before; only the error text for a bad `cover` now reads "a gradient spec object or a cover look object".
+
+### Changed
+
+- Repository: the eslint layer rules let `scene` import `field` (types, for `coverField`).
+
 ## [0.1.3] - 2026-10-25
 
 ### Changed

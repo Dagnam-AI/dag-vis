@@ -4,6 +4,7 @@ import { createRng } from "../core/rng.js";
 import { el, svgDoc } from "../core/svg.js";
 import {
   bounded,
+  describeValue,
   orDefault,
   parseId,
   parseSeed,
@@ -15,7 +16,8 @@ import { renderConic } from "./conic.js";
 import { renderFluted } from "./fluted.js";
 import { renderFreeform } from "./freeform.js";
 import { renderGlows } from "./glows.js";
-import { grainLayer } from "./grain.js";
+import { GRAIN_BLENDS, grainLayer } from "./grain.js";
+import type { GrainBlend } from "./grain.js";
 import { renderLayers } from "./layers.js";
 import { renderLinear } from "./linear.js";
 import { renderMesh } from "./mesh.js";
@@ -34,6 +36,8 @@ export {
   svgStops,
 } from "./stops.js";
 export type { NormalizedStop } from "./stops.js";
+export { grainLayer } from "./grain.js";
+export type { GrainBlend } from "./grain.js";
 export { animatedGradientCss } from "./animated.js";
 export type { AnimatedOptions } from "./animated.js";
 export {
@@ -77,6 +81,15 @@ function renderKind(spec: GradientSpec, ctx: Ctx): KindOutput {
   }
 }
 
+function parseGrainBlend(v: unknown): GrainBlend | undefined {
+  if (v === undefined) return undefined;
+  if (!GRAIN_BLENDS.includes(v as GrainBlend))
+    throw new VisError(
+      `grainBlend must be one of ${GRAIN_BLENDS.join(", ")}, got ${describeValue(v)}`,
+    );
+  return v as GrainBlend;
+}
+
 /** CSS + SVG for one spec. `svg` is body markup; pair it with `defs`. */
 export function gradient(spec: GradientSpec): GradientResult {
   assertSpec(spec);
@@ -84,6 +97,7 @@ export function gradient(spec: GradientSpec): GradientResult {
   const size = parseSize("size", orDefault<unknown>(spec.size, DEFAULT_SIZE));
   const grain =
     spec.grain === undefined ? undefined : bounded("grain", spec.grain, 0, 1);
+  const grainBlend = parseGrainBlend(spec.grainBlend);
   const overlay =
     spec.overlay === undefined ? undefined : parseOverlay(spec.overlay);
   const seed = parseSeed(spec.seed);
@@ -110,7 +124,7 @@ export function gradient(spec: GradientSpec): GradientResult {
   let blends =
     out.cssBlend === undefined ? undefined : out.cssBlend.split(", ");
   if (grain !== undefined && grain > 0) {
-    const g = grainLayer(id, grain, size, seed);
+    const g = grainLayer(id, grain, size, seed, grainBlend);
     defs += g.defs;
     svg += g.svg;
   }

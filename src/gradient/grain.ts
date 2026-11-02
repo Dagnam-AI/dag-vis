@@ -1,12 +1,16 @@
 import type { Size } from "../core/geometry.js";
 import { el } from "../core/svg.js";
 
+export const GRAIN_BLENDS = ["overlay", "multiply", "soft-light"] as const;
+export type GrainBlend = (typeof GRAIN_BLENDS)[number];
+
 /** Film grain: monochrome fractal noise blended over the artwork. SVG only. */
 export function grainLayer(
   id: string,
   grain: number,
   size: Size,
   seed = 1,
+  blend: GrainBlend = "overlay",
 ): { defs: string; svg: string } {
   const fid = `${id}-grain`;
   return {
@@ -27,7 +31,7 @@ export function grainLayer(
       height: size.height,
       filter: `url(#${fid})`,
       opacity: grain,
-      style: "mix-blend-mode:overlay",
+      style: `mix-blend-mode:${blend}`,
     }),
   };
 }
