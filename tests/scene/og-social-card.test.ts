@@ -108,6 +108,33 @@ describe("ogCard social layout with a cover look", () => {
     );
   });
 
+  it("only takes a banner look: a card's texture is drawn for 400 px", () => {
+    const small = coverLook({ item: "a", theme: "dark", variant: "card" });
+    expect(() => ogCard({ ...input, cover: small })).toThrow(VisError);
+    expect(() => ogCard({ ...input, cover: small })).toThrow(
+      /^cover: a cover look must be a banner for the social card .* got "card"/,
+    );
+  });
+
+  it("names a forged theme or variant safely, not as [object Object]", () => {
+    const forged = { ...look, theme: { toString: () => "x" } } as never;
+    expect(() => ogCard({ ...input, cover: forged })).toThrow(
+      /must be a dark one for the social card, got /,
+    );
+    expect(() => ogCard({ ...input, cover: forged })).not.toThrow(
+      /\[object Object\]/,
+    );
+  });
+
+  it("rejects a forged look's out-of-range numbers, naming the field", () => {
+    const tx = look.texture;
+    if (!tx) throw new Error("contour has a texture");
+    const forged = { ...look, texture: { ...tx, opacity: 5 } };
+    expect(() => ogCard({ ...input, cover: forged })).toThrow(
+      /^cover: texture\.opacity must be a number in 0\.\.1, got 5/,
+    );
+  });
+
   it("leaves a plain gradient spec cover byte-identical to before", () => {
     expect(ogCard(input)).toBe(ogCard({ ...input, cover: { ...cover } }));
   });

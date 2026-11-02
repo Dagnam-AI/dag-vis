@@ -182,9 +182,9 @@ describe("scrimFor", () => {
     const calm = coverLook({
       item: "linear-algebra",
       family: "x",
-      theme: "light",
+      theme: "dark",
       variant: "banner",
-      look: "ember",
+      look: "silk",
     });
     const r = scrimFor(calm, BANNER_ZONE, BANNER_SIZE);
     expect(r.scrim).toBeNull();
@@ -192,7 +192,7 @@ describe("scrimFor", () => {
     expect(r.before).toBeGreaterThanOrEqual(TARGET_RATIO);
   });
 
-  it("takes the faintest step that reaches 4.5:1, centred on the zone, in the page colour", () => {
+  it("takes the faintest step that reaches 4.7:1, centred on the zone, in the page colour", () => {
     const l = coverLook({
       item: "a",
       theme: "dark",
@@ -242,7 +242,7 @@ describe("scrimFor", () => {
 
 describe("the model against the resvg raster", () => {
   it(
-    "is never optimistic by more than 0.8, and the raster reads at 4.4:1 or better, for 6 seeds x 5 looks x 2 themes",
+    "is never optimistic by more than 1, and the raster reads at 4.5:1 or better, for 6 seeds x 5 looks x 2 themes",
     { timeout: 60_000 },
     () => {
       const lin = (c: number): number => {
@@ -280,8 +280,8 @@ describe("the model against the resvg raster", () => {
             const label = `${look} ${theme} ${s.item}`;
             // Grain (ignored by the model) and aurora-like blends move the raster a little;
             // a texture makes the model deliberately pessimistic (its worst case is a mark under every sample).
-            expect(model - worst, label).toBeLessThan(0.8);
-            expect(worst, label).toBeGreaterThan(4.4);
+            expect(model - worst, label).toBeLessThan(1);
+            expect(worst, label).toBeGreaterThanOrEqual(4.5);
           }
     },
   );

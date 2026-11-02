@@ -96,7 +96,11 @@ export function socialCard(opts: OgCardOptions): string {
     // fitted to this card's title block, so the card's `seed` does not apply.
     if (cover.theme !== "dark")
       throw new VisError(
-        `a cover look must be a dark one for the social card, got "${cover.theme}"`,
+        `a cover look must be a dark one for the social card, got ${describeValue(cover.theme)}`,
+      );
+    if (cover.variant !== "banner")
+      throw new VisError(
+        `a cover look must be a banner for the social card (a card's texture is drawn for 400 px), got ${describeValue(cover.variant)}`,
       );
     const { scrim } = scrimFor(cover, OG_ZONE, OG_SIZE);
     const parts = coverSvgParts(cover, { size, idPrefix, scrim });

@@ -30,8 +30,12 @@ export const BANNER_SIZE: Size = { width: 1600, height: 512 };
 export const CARD_SIZE: Size = { width: 400, height: 225 };
 export const OG_SIZE: Size = { width: 1200, height: 630 };
 
-/** WCAG's target for normal text. */
-export const TARGET_RATIO = 4.5;
+/**
+ * The ratio a scrim is solved to. WCAG asks 4.5:1 for normal text; the model ignores the
+ * grain and the texture's thin lines, so it solves with a 0.2 margin and the real picture
+ * stays at or above 4.5.
+ */
+export const TARGET_RATIO = 4.7;
 const GRID = { x: 9, y: 5 };
 /** The scrim steps tried, smallest first. */
 const SCRIM_STEP = 0.05;
@@ -177,7 +181,7 @@ export function coverContrast(
 
 /**
  * The faintest scrim (alpha in 0.05 steps up to 0.7) that lifts the picture's contrast in
- * `zone` to 4.5:1, or none when the picture already meets it. Ignores `look.scrim`.
+ * `zone` to `TARGET_RATIO` (4.7:1, WCAG's 4.5 plus a margin), or none when the picture already meets it. Ignores `look.scrim`.
  */
 export function scrimFor(
   look: CoverLook,

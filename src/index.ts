@@ -115,6 +115,7 @@ export type {
   CoverScrim,
   CoverSvgOptions,
   CoverTexture,
+  CoverZone,
   OgBackground,
   OgCardOptions,
   RibbonOptions,

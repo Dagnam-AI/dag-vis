@@ -5,6 +5,7 @@ import { VisError } from "../../src/core/errors.js";
 import { gradient } from "../../src/gradient/index.js";
 import { assertSpecBudget } from "../../src/gradient/spec.js";
 import { coverParams, fnv1a32 } from "../../src/scene/cover.js";
+import { TARGET_RATIO } from "../../src/scene/cover-contrast.js";
 import { pickLook, coverLook } from "../../src/scene/cover-look.js";
 import { COVER_LOOKS } from "../../src/scene/cover-look-types.js";
 import type { GradientSpec } from "../../src/gradient/index.js";
@@ -25,6 +26,13 @@ const linearAngle = (layer: GradientSpec | undefined): number => {
   if (layer?.kind !== "linear") throw new Error("not a linear layer");
   return layer.angle ?? NaN;
 };
+const rgb = (hex: string): [number, number, number] => [
+  parseInt(hex.slice(1, 3), 16),
+  parseInt(hex.slice(3, 5), 16),
+  parseInt(hex.slice(5, 7), 16),
+];
+const distance = (a: readonly number[], b: readonly number[]): number =>
+  Math.hypot(...a.map((v, i) => v - Number(b[i])));
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 describe("pickLook: the look a family gets", () => {
@@ -109,7 +117,14 @@ describe("coverLook: the picture", () => {
 
   it("carries the derivation, plus the theme and variant", () => {
     const look = coverLook({ ...input, theme: "light", look: "ember" });
-    expect(look.params).toEqual(coverParams({ ...input, theme: "light" }));
+    // The look's own anchor walks round the family's for a lesson (see below).
+    const { anchor, ...rest } = look.params;
+    const { anchor: derived, ...want } = coverParams({
+      ...input,
+      theme: "light",
+    });
+    expect(rest).toEqual(want);
+    expect(anchor).not.toEqual(derived);
     expect(look.theme).toBe("light");
     expect(look.variant).toBe("banner");
     expect(look.params.regionIndex).toBeGreaterThanOrEqual(0);
@@ -197,24 +212,24 @@ describe("coverLook: the picture", () => {
     expect(c.params.hueOffset).toBeCloseTo(-18, 9);
   });
 
-  it("compresses and warms the hue, so no cover turns crimson or pink", () => {
-    const hues = manySeeds(64).map(
-      (s) => coverLook({ ...s, look: "ember" }).params.hueOffset,
-    );
-    expect(Math.min(...hues)).toBeGreaterThanOrEqual(-15);
-    // The accent of the coolest possible item is still a red, not a magenta.
-    const coolest = coverLook({
-      item: "a",
-      theme: "dark",
-      variant: "card",
-      look: "ember",
-      hue: -15,
-    });
-    const [r, g, b] = [1, 3, 5].map((i) =>
-      parseInt(coolest.palette.accent.slice(i, i + 2), 16),
-    ) as [number, number, number];
-    expect(r).toBeGreaterThan(b * 3);
-    expect(g).toBeLessThan(r / 4);
+  it("keeps every cover a red or an ember, never a crimson or a pink", () => {
+    for (const s of manySeeds(48))
+      for (const hue of [-15, 15])
+        for (const index of [0, 4])
+          for (const theme of THEMES) {
+            const { palette } = coverLook({
+              ...s,
+              family: `f-${s.item}`,
+              index,
+              count: 5,
+              hue,
+              theme,
+              look: "ember",
+            });
+            const [r, g, b] = rgb(palette.accent);
+            expect(r, palette.accent).toBeGreaterThan(b * 3);
+            expect(g, palette.accent).toBeLessThan(r / 2);
+          }
   });
 
   it("tilts the floor from the light across the box", () => {
@@ -229,6 +244,80 @@ describe("coverLook: the picture", () => {
   });
 });
 
+describe("coverLook: the lessons of a chapter are not duplicates", () => {
+  const lesson = (
+    index: number,
+    theme: "dark" | "light",
+    look: (typeof COVER_LOOKS)[number],
+    family = FAMILY,
+  ): CoverLook =>
+    coverLook({
+      item: `lesson-${index}`,
+      family,
+      index,
+      count: 5,
+      theme,
+      variant: "banner",
+      look,
+    });
+
+  it("the first and last of five differ in colour (sRGB distance >= 24) and in where the light sits (>= 12 points), for 40 chapters, every look and theme", () => {
+    for (let f = 0; f < 40; f++)
+      for (const theme of THEMES)
+        for (const look of COVER_LOOKS) {
+          const first = lesson(0, theme, look, `course:chapter-${f}`);
+          const last = lesson(4, theme, look, `course:chapter-${f}`);
+          const label = `${look} ${theme} chapter-${f}`;
+          expect(
+            distance(rgb(first.palette.accent), rgb(last.palette.accent)),
+            label,
+          ).toBeGreaterThanOrEqual(24);
+          expect(
+            distance(first.params.anchor, last.params.anchor),
+            label,
+          ).toBeGreaterThanOrEqual(12);
+        }
+  });
+
+  it("all five siblings take different accents and different glow places, in the family's look", () => {
+    const five = [0, 1, 2, 3, 4].map((i) => lesson(i, "dark", "ember"));
+    for (let i = 0; i < 5; i++)
+      for (let j = i + 1; j < 5; j++) {
+        expect(five[i]?.palette.accent).not.toBe(five[j]?.palette.accent);
+        expect(
+          distance(five[i]?.params.anchor ?? [], five[j]?.params.anchor ?? []),
+        ).toBeGreaterThan(10);
+      }
+  });
+
+  it("walks the glow by index, deterministically, inside the box, and only for an ordered family", () => {
+    const again = lesson(3, "dark", "ember");
+    expect(again.params.anchor).toEqual(
+      lesson(3, "dark", "ember").params.anchor,
+    );
+    for (const s of manySeeds(48)) {
+      const { anchor } = coverLook({
+        ...s,
+        family: s.item,
+        index: 4,
+        count: 5,
+      }).params;
+      expect(Math.min(...anchor)).toBeGreaterThanOrEqual(12);
+      expect(Math.max(...anchor)).toBeLessThanOrEqual(88);
+    }
+    // A post of its own (count 1) keeps the family's jittered anchor.
+    const own = coverLook({ item: "solo", theme: "dark", variant: "banner" });
+    expect(own.params.anchor).toEqual(
+      coverParams({ item: "solo", theme: "dark", variant: "banner" }).anchor,
+    );
+  });
+
+  it("moves the mask, the texture and the field's highlight with the walked glow", () => {
+    const l = lesson(2, "dark", "contour");
+    expect(l.texture?.mask.at).toEqual(l.params.anchor.map(r2));
+  });
+});
+
 describe("coverLook: scrim and contrast", () => {
   it("a card has no scrim; a banner has one only when the picture needs it", () => {
     for (const s of manySeeds(24))
@@ -237,8 +326,10 @@ describe("coverLook: scrim and contrast", () => {
         expect(card.scrim).toBeNull();
         expect(card.contrast.after).toBe(card.contrast.before);
         const banner = coverLook({ ...s, look, variant: "banner" });
-        expect(banner.scrim === null).toBe(banner.contrast.before >= 4.5);
-        expect(banner.contrast.after).toBeGreaterThanOrEqual(4.5);
+        expect(banner.scrim === null).toBe(
+          banner.contrast.before >= TARGET_RATIO,
+        );
+        expect(banner.contrast.after).toBeGreaterThanOrEqual(TARGET_RATIO);
         expect(banner.contrast.after).toBeGreaterThanOrEqual(
           banner.contrast.before,
         );

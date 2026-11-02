@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import { VisError } from "../../src/core/errors.js";
 import { coverLook } from "../../src/scene/cover-look.js";
 import { COVER_LOOKS } from "../../src/scene/cover-look-types.js";
+import type {
+  CoverLook,
+  CoverScrim,
+} from "../../src/scene/cover-look-types.js";
 import { coverSvg, coverSvgParts } from "../../src/scene/cover-svg.js";
 import { expectGolden } from "../helpers/golden.js";
 import { pixelAt, rasterize } from "../helpers/render.js";
@@ -187,6 +191,46 @@ describe("coverSvgParts", () => {
     expect(
       coverSvgParts({ ...silk, spec: bare }, { size, idPrefix: "p" }).defs,
     ).not.toContain("feTurbulence");
+  });
+
+  it("rejects a forged look's numbers and colours, naming the field", () => {
+    const tx = look.texture;
+    const scrim = look.scrim;
+    if (!tx || !scrim) throw new Error("halftone banner has both");
+    const parts = (l: CoverLook, s: CoverScrim | null = scrim): string =>
+      coverSvgParts(l, { size, idPrefix: "p", scrim: s }).body;
+    const bad = (fn: () => string, re: RegExp): void => {
+      expect(fn).toThrow(VisError);
+      expect(fn).toThrow(re);
+    };
+    const withTx = (patch: Partial<typeof tx>): CoverLook => ({
+      ...look,
+      texture: { ...tx, ...patch },
+    });
+    bad(
+      () => parts(withTx({ opacity: 2 })),
+      /^texture\.opacity must be a number in 0\.\.1, got 2/,
+    );
+    bad(() => parts(withTx({ opacity: NaN })), /^texture\.opacity/);
+    bad(
+      () => parts(withTx({ mask: { ...tx.mask, floor: -1 } })),
+      /^texture\.mask\.floor/,
+    );
+    bad(
+      () => parts(withTx({ mask: { ...tx.mask, at: [0, 5000] } })),
+      /^texture\.mask\.at\[1\]/,
+    );
+    bad(
+      () => parts(withTx({ mask: { ...tx.mask, radius: [-1, 5] } })),
+      /^texture\.mask\.radius\[0\]/,
+    );
+    bad(() => parts(look, { ...scrim, alpha: 2 }), /^scrim\.alpha/);
+    bad(() => parts(look, { ...scrim, at: [NaN, 0] }), /^scrim\.at\[0\]/);
+    bad(
+      () => parts(look, { ...scrim, radius: [0, 2000] }),
+      /^scrim\.radius\[1\]/,
+    );
+    bad(() => parts(look, { ...scrim, color: "not a colour" }), /./);
   });
 
   it("rejects a bad prefix", () => {

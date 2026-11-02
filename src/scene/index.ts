@@ -18,6 +18,7 @@ export type {
   CoverPalette,
   CoverScrim,
   CoverTexture,
+  Zone as CoverZone,
 } from "./cover-look-types.js";
 export { coverSvg } from "./cover-svg.js";
 export type { CoverSvgOptions } from "./cover-svg.js";

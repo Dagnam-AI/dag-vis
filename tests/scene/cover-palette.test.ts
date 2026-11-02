@@ -11,30 +11,25 @@ describe("coverPalette", () => {
       ink: "#860005",
       accent: "#d40923",
       highlight: "#fa8563",
-      cool: "#003d3e",
+      cool: "#002b2c",
       line: "#fa8563",
       foreground: "#fafafa",
     });
   });
 
-  it("is crisp deep red accents and pale tints on white for light", () => {
-    const p = coverPalette(25.3, "light");
-    expect(p.base).toBe("#ffffff");
-    expect(p.foreground).toBe("#0a0a0a");
+  it("is nested reds on white for light: a pale floor, a salmon halo, the accent, a ruby core", () => {
+    expect(coverPalette(25.3, "light")).toEqual({
+      base: "#ffffff",
+      deep: "#ffedeb",
+      ink: "#940114",
+      accent: "#d40923",
+      highlight: "#f89177",
+      cool: "#c0e7e6",
+      line: "#ca0303",
+      foreground: "#0a0a0a",
+    });
     // The line colour is BRAND.mark (6.0:1 on white), never the pink-prone bright red.
-    expect(p.line).toBe("#ca0303");
-    expect(
-      [
-        p.base,
-        p.deep,
-        p.ink,
-        p.accent,
-        p.highlight,
-        p.cool,
-        p.line,
-        p.foreground,
-      ].every((c) => /^#[0-9a-f]{6}$/.test(c)),
-    ).toBe(true);
+    expect(coverPalette(40, "light").line).toBe("#ca0303");
   });
 
   it("wraps a hue past 360 (the cool colour sits 170 degrees round)", () => {

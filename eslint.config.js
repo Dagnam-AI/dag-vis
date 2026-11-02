@@ -15,7 +15,7 @@ import tseslint from "typescript-eslint";
 // or the native rasteriser (dependency weight rule). Both
 // constraints live in ONE no-restricted-imports entry per layer because eslint
 // keeps only the last matching config for a rule.
-const forbid = (layer, groups, browserSafe = true) => ({
+const forbid = (layer, groups, browserSafe = true, typeOnly = []) => ({
   files: [`src/${layer}/**/*.ts`, `src/${layer}/**/*.tsx`],
   rules: {
     "no-restricted-imports": [
@@ -25,6 +25,11 @@ const forbid = (layer, groups, browserSafe = true) => ({
           ...groups.map((g) => ({
             group: [`**/${g}/**`, `**/${g}`],
             message: `src/${layer} must not import from src/${g} (layer order: core <- brand <- gradient,pattern <- scene <- node; field, animate and react are separate entries).`,
+          })),
+          ...typeOnly.map((g) => ({
+            group: [`**/${g}/**`, `**/${g}`],
+            allowTypeImports: true,
+            message: `src/${layer} may only import types from src/${g}.`,
           })),
           {
             group: ["**/motion/**", "**/motion"],
@@ -124,8 +129,8 @@ export default tseslint.config(
     "react",
     "node",
   ]),
-  // scene -> core, brand, gradient, pattern, and field (the FlowFieldSpec type of `coverField` only).
-  forbid("scene", ["export", "animate", "react", "node"]),
+  // scene -> core, brand, gradient, pattern, and the TYPES of field (the FlowFieldSpec of `coverField`).
+  forbid("scene", ["export", "animate", "react", "node"], true, ["field"]),
   // field -> core only (the DOM-free field renderer and its spec).
   forbid("field", [
     "brand",

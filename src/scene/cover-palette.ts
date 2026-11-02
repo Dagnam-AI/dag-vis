@@ -15,8 +15,8 @@ export function withA(hex: string, alpha: number): string {
 /**
  * The colours of a cover, derived from its hue `h` (degrees, brand red is 25.3): a near
  * black or white page, a deep tint, an ink, the accent red, a warm highlight (towards
- * orange: the ember) and a desaturated teal counter. Dark covers are deep reds on near
- * black; light covers are crisp deep-red accents and pale tints on white, never a pink
+ * orange: the ember) and a dim, desaturated teal counter. Dark covers are deep reds on
+ * near black; light covers are nested red glows with a ruby core on white, never a pink
  * wash.
  */
 export function coverPalette(h: number, theme: "light" | "dark"): CoverPalette {
@@ -27,17 +27,19 @@ export function coverPalette(h: number, theme: "light" | "dark"): CoverPalette {
       ink: oklch(0.38, 0.17, h),
       accent: oklch(0.55, 0.22, h),
       highlight: oklch(0.74, 0.15, h + 12),
-      cool: oklch(0.32, 0.07, h + 170),
+      cool: oklch(0.26, 0.05, h + 170),
       line: oklch(0.74, 0.15, h + 12),
       foreground: BRAND.foreground.dark,
     };
+  // Light: a pale floor, a salmon halo (`highlight`), the accent red, and a deep ruby core
+  // (`ink`): nested glows read red, not pink. `cool` is unused on light covers (no teal).
   return {
     base: BRAND.background.light,
     deep: oklch(0.96, 0.02, h),
-    ink: oklch(0.86, 0.07, h),
-    accent: oklch(0.55, 0.2, h),
-    highlight: oklch(0.97, 0.02, h + 12),
-    cool: oklch(0.93, 0.03, h + 170),
+    ink: oklch(0.42, 0.17, h),
+    accent: oklch(0.55, 0.22, h),
+    highlight: oklch(0.76, 0.13, h + 10),
+    cool: oklch(0.9, 0.04, h + 170),
     line: toHex(parseColor(BRAND.mark)),
     foreground: BRAND.foreground.light,
   };
