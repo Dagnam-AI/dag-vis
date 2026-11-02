@@ -92,7 +92,7 @@ export const HUE_RANGE = [-15, 15] as const;
 export const INTENSITY_RANGE = [0.6, 1.4] as const;
 const FAMILY_HUE_DRIFT = 15;
 /** An ordered family's items spread this many degrees either way, by index. */
-const ITEM_HUE_SPREAD = 6;
+export const ITEM_HUE_SPREAD = 6;
 /** An item's anchor jitter, in percent of the box, either way. */
 const ITEM_JITTER = 8;
 /** An item's change to its glow's size, as a fraction, either way. */

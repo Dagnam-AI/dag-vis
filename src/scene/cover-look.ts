@@ -1,7 +1,14 @@
 import { createRng } from "../core/rng.js";
 import type { GlowPoint, GradientSpec } from "../gradient/index.js";
 import type { PatternSpec } from "../pattern/index.js";
-import { BRAND_HUE, derive, fnv1a32, parse, round } from "./cover.js";
+import {
+  BRAND_HUE,
+  ITEM_HUE_SPREAD,
+  derive,
+  fnv1a32,
+  parse,
+  round,
+} from "./cover.js";
 import type { CoverParams } from "./cover.js";
 import {
   BANNER_SIZE,
@@ -41,19 +48,25 @@ type Pair = [number, number];
 
 /**
  * A look takes the family's hue drift from the glows cover's +-15 degree range but
- * compresses it and leans warm: at the cooler end of that range OKLCH red turns crimson
- * and then pink, which on near black reads as washed magenta. The item's own spread (the
- * lessons of one chapter) is NOT compressed, it is widened: siblings must read as
- * different colours, from red to ember, so they do not look like duplicates in a grid.
- * The result stays within `min`..`max` degrees: below it OKLCH red turns crimson.
+ * compresses it (`share`) and leans warm: at the cooler end of that range OKLCH red turns
+ * crimson and then pink, which on near black reads as washed magenta. Every hue stays in
+ * `min`..`max` degrees (about 15 degrees warmer than brand red at the floor, deliberately:
+ * below 32 the ruby core on light turns raspberry).
+ *
+ * The lessons of one chapter do not share that squeezed range: they spread over a `span`
+ * of it, in index order, so siblings read red to ember. The span SLIDES inside the band
+ * with the family's hue instead of being clamped at its ends, which would give long
+ * chapters whole runs of identical colours.
  */
-const LOOK_HUE = { centre: 40, share: 0.4, itemGain: 1.5, min: 28, max: 54 };
+const LOOK_HUE = { centre: 40, share: 0.4, span: 18, min: 32, max: 54 };
 /**
  * The lessons of an ordered family walk their glow round an ellipse about the family's
- * region (pulled `pull` of the way to the centre so the walk stays in the box), by index:
- * `x` and `y` percent of the box either way, so each sibling lights a different place.
+ * region (pulled `pull` of the way to the centre so the walk stays in the box). Lesson
+ * `i` sits at angle `i` golden angles (about 137.5 degrees) round, so neighbours are always
+ * far apart and, whatever the chapter's length, only lessons a Fibonacci number of places
+ * apart land near each other (and their hues are far apart then).
  */
-const WALK = { x: 20, y: 12, pull: 0.6 };
+const WALK = { x: 20, y: 12, pull: 0.6, step: Math.PI * (3 - Math.sqrt(5)) };
 /** The glow stays this far inside the box edges (percent). */
 const EDGE = { min: 12, max: 88 };
 /** A light cover's glows reach this fraction of a dark one's: crisp accents, never a wash. */
@@ -282,7 +295,7 @@ const BUILDERS: Record<CoverLookName, (c: Ctx) => Built> = {
       },
       c.dark ? 0.3 : 0.45,
       reach(c, [90, 130]),
-      c.dark ? 0.3 : 0.05,
+      c.dark ? 0.3 : 0,
     ),
   }),
   silk: (c) => ({
@@ -328,15 +341,16 @@ const BUILDERS: Record<CoverLookName, (c: Ctx) => Built> = {
 };
 
 /**
- * The item's anchor: the family's jittered one, or for a lesson of an ordered family its
- * place on the walk (a pure function of the region and the index, so it never depends on
- * the item's jitter).
+ * The item's anchor: the family's jittered one, or for lesson `index` of an ordered family
+ * its place on the walk (a pure function of the region and the index, so it never depends
+ * on the item's jitter).
  */
-function walked(params: CoverParams, count: number): Pair {
+function walked(params: CoverParams, count: number, index: number): Pair {
   if (count < 2) return params.anchor;
   const clamp = (v: number): number =>
     Math.min(EDGE.max, Math.max(EDGE.min, v));
-  const angle = params.phase * 2 * Math.PI + params.regionIndex;
+  const lesson = Math.min(Math.max(index, 0), count - 1);
+  const angle = lesson * WALK.step + params.regionIndex;
   const [rx, ry] = params.region;
   return [
     clamp(50 + (rx - 50) * WALK.pull + WALK.x * Math.cos(angle)),
@@ -344,9 +358,24 @@ function walked(params: CoverParams, count: number): Pair {
   ];
 }
 
+/** The hue of a look, in degrees: the family's slid span, and the item's place in it. */
+function lookHue(params: CoverParams): number {
+  const place = (params.hue - params.familyHue) / (2 * ITEM_HUE_SPREAD) + 0.5;
+  const start = Math.min(
+    LOOK_HUE.max - LOOK_HUE.span,
+    Math.max(
+      LOOK_HUE.min,
+      LOOK_HUE.centre +
+        LOOK_HUE.share * (params.familyHue - BRAND_HUE) -
+        LOOK_HUE.span / 2,
+    ),
+  );
+  return start + LOOK_HUE.span * place;
+}
+
 /**
  * A cover with a named look: a gradient spec (`spec`), an optional masked texture, and,
- * for a banner, the faintest scrim that keeps the title zone at 4.5:1. The look is the
+ * for a banner, the faintest scrim that keeps the title zone at `TARGET_RATIO` (4.7:1, WCAG's 4.5 plus a margin). The look is the
  * pinned `look`, else drawn from the FAMILY key, so a family shares one look while its
  * hue, anchor and radius still differ per item.
  */
@@ -356,18 +385,14 @@ export function coverLook(input: CoverLookInput): CoverLook {
   const derived = derive(parsed);
   // The look's own anchor: lessons of an ordered family walk it, so the glow, the mask and
   // the field's highlight all follow.
-  const params = { ...derived, anchor: walked(derived, parsed.count) };
+  const params = {
+    ...derived,
+    anchor: walked(derived, parsed.count, parsed.index),
+  };
   const name = pinned ?? pickLook(params.familyKey);
   const { theme, variant } = parsed;
   const banner = variant === "banner";
-  const hue =
-    LOOK_HUE.centre +
-    LOOK_HUE.share * (params.familyHue - BRAND_HUE) +
-    LOOK_HUE.itemGain * (params.hue - params.familyHue);
-  const pal = coverPalette(
-    Math.min(LOOK_HUE.max, Math.max(LOOK_HUE.min, hue)),
-    theme,
-  );
+  const pal = coverPalette(lookHue(params), theme);
   const [ax, ay] = params.anchor;
   const ctx: Ctx = {
     dark: theme === "dark",

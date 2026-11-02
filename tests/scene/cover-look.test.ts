@@ -245,15 +245,32 @@ describe("coverLook: the picture", () => {
 });
 
 describe("coverLook: the lessons of a chapter are not duplicates", () => {
+  const SIZES = [5, 12, 25] as const;
+  const chapter = (
+    count: number,
+    theme: "dark" | "light",
+    look: (typeof COVER_LOOKS)[number],
+    family: string,
+  ): CoverLook[] =>
+    Array.from({ length: count }, (_, index) =>
+      coverLook({
+        item: `lesson-${index}`,
+        family,
+        index,
+        count,
+        theme,
+        variant: "card",
+        look,
+      }),
+    );
   const lesson = (
     index: number,
     theme: "dark" | "light",
     look: (typeof COVER_LOOKS)[number],
-    family = FAMILY,
-  ): CoverLook =>
+  ) =>
     coverLook({
       item: `lesson-${index}`,
-      family,
+      family: FAMILY,
       index,
       count: 5,
       theme,
@@ -261,33 +278,89 @@ describe("coverLook: the lessons of a chapter are not duplicates", () => {
       look,
     });
 
-  it("the first and last of five differ in colour (sRGB distance >= 24) and in where the light sits (>= 12 points), for 40 chapters, every look and theme", () => {
-    for (let f = 0; f < 40; f++)
-      for (const theme of THEMES)
-        for (const look of COVER_LOOKS) {
-          const first = lesson(0, theme, look, `course:chapter-${f}`);
-          const last = lesson(4, theme, look, `course:chapter-${f}`);
-          const label = `${look} ${theme} chapter-${f}`;
+  /**
+   * Thresholds, and why:
+   * - Two lessons look like duplicates only if BOTH their accents are within 8 sRGB units
+   *   (Euclid, 0..441: about 3 degrees of hue here, the least a flat red field shows) AND
+   *   their glows are within 6 points of the box (under a third of a glow's width).
+   * - Neighbours (the cards that sit side by side in a grid) must be 20 points apart:
+   *   the golden-angle walk gives 22.4 at any chapter length.
+   * - The first and last lesson span the hue range: 24 sRGB units (measured 26.9).
+   * - Chapters of 5, 12 and 25 lessons are the sizes a course has; beyond about 30 the
+   *   Fibonacci-apart lessons start to collide (ponytail: add a radius step if one ships).
+   */
+  const distinct = (ls: CoverLook[], label: string): void => {
+    const colour = ls.map((l) => rgb(l.palette.accent));
+    const place = ls.map((l) => l.params.anchor);
+    for (let i = 0; i < ls.length; i++)
+      for (let j = i + 1; j < ls.length; j++) {
+        const dc = distance(colour[i] ?? [], colour[j] ?? []);
+        const dp = distance(place[i] ?? [], place[j] ?? []);
+        expect(
+          dc < 8 && dp < 6,
+          `${label} lessons ${i} and ${j}: colour ${dc.toFixed(1)}, place ${dp.toFixed(1)}`,
+        ).toBe(false);
+        if (j === i + 1) {
+          expect(dp, `${label} neighbours ${i}, ${j}`).toBeGreaterThanOrEqual(
+            20,
+          );
           expect(
-            distance(rgb(first.palette.accent), rgb(last.palette.accent)),
-            label,
-          ).toBeGreaterThanOrEqual(24);
-          expect(
-            distance(first.params.anchor, last.params.anchor),
-            label,
-          ).toBeGreaterThanOrEqual(12);
+            ls[i]?.palette.accent,
+            `${label} neighbours ${i}, ${j}`,
+          ).not.toBe(ls[j]?.palette.accent);
         }
+      }
+    expect(
+      distance(colour[0] ?? [], colour[colour.length - 1] ?? []),
+      `${label} first and last`,
+    ).toBeGreaterThanOrEqual(24);
+  };
+
+  it(
+    "no two lessons are duplicates in chapters of 5, 12 and 25, for 30 chapters in both themes",
+    { timeout: 60_000 },
+    () => {
+      for (const count of SIZES)
+        for (let f = 0; f < 30; f++)
+          for (const theme of THEMES)
+            distinct(
+              chapter(count, theme, "ember", `course:chapter-${f}`),
+              `${count} ${theme} chapter-${f}`,
+            );
+    },
+  );
+
+  it(
+    "holds for every look in both themes, for 2 chapters of each size",
+    { timeout: 60_000 },
+    () => {
+      for (const count of SIZES)
+        for (let f = 0; f < 2; f++)
+          for (const theme of THEMES)
+            for (const look of COVER_LOOKS)
+              distinct(
+                chapter(count, theme, look, `course:ch-${f}`),
+                `${look} ${count} ${theme} ch-${f}`,
+              );
+    },
+  );
+
+  it("a long chapter keeps its hue inside 32..54 degrees without clamped runs of one colour", () => {
+    const accents = chapter(25, "dark", "ember", FAMILY).map(
+      (l) => l.palette.accent,
+    );
+    expect(new Set(accents).size).toBe(25);
   });
 
-  it("all five siblings take different accents and different glow places, in the family's look", () => {
-    const five = [0, 1, 2, 3, 4].map((i) => lesson(i, "dark", "ember"));
-    for (let i = 0; i < 5; i++)
-      for (let j = i + 1; j < 5; j++) {
-        expect(five[i]?.palette.accent).not.toBe(five[j]?.palette.accent);
-        expect(
-          distance(five[i]?.params.anchor ?? [], five[j]?.params.anchor ?? []),
-        ).toBeGreaterThan(10);
-      }
+  it("the five lessons of the reference chapter differ in colour and place, as the sheet shows", () => {
+    const first = lesson(0, "dark", "ember");
+    const last = lesson(4, "dark", "ember");
+    expect(
+      distance(rgb(first.palette.accent), rgb(last.palette.accent)),
+    ).toBeGreaterThanOrEqual(24);
+    expect(
+      distance(first.params.anchor, last.params.anchor),
+    ).toBeGreaterThanOrEqual(12);
   });
 
   it("walks the glow by index, deterministically, inside the box, and only for an ordered family", () => {
@@ -295,6 +368,18 @@ describe("coverLook: the lessons of a chapter are not duplicates", () => {
     expect(again.params.anchor).toEqual(
       lesson(3, "dark", "ember").params.anchor,
     );
+    // An index past the end is clamped, as `coverSpec` clamps it.
+    const past = (index: number) =>
+      coverLook({
+        item: "x",
+        family: "f",
+        index,
+        count: 5,
+        theme: "dark",
+        variant: "card",
+      }).params.anchor;
+    expect(past(9)).toEqual(past(4));
+    expect(past(-3)).toEqual(past(0));
     for (const s of manySeeds(48)) {
       const { anchor } = coverLook({
         ...s,
