@@ -1,0 +1,8 @@
+{
+  "kind": "flow",
+  "palette": ["#0a0a0a", "#3a0200", "#c2261c", "#ef4444"],
+  "shape": "swirl",
+  "light": { "vignette": 0.4 },
+  "grain": 0.15,
+  "seed": 7
+}

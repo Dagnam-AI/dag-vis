@@ -11,6 +11,8 @@ Deterministic, parameterised [Dagnam.AI](https://dagnam.ai) visuals: brand token
 
 Seeded generators take `seed` (default `1`); all output is deterministic, so the same options and seed give byte-identical SVG and CSS (`logoSvg` and `animatedGradientCss` take no seed).
 
+A hands-on tour of the commands and the outputs, with images: [demo.md](https://github.com/Dagnam-AI/dag-vis/blob/main/demo.md).
+
 ## Install
 
 ```sh
