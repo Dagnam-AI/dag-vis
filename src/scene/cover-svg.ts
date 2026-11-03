@@ -1,18 +1,12 @@
 import type { Size } from "../core/geometry.js";
 import { fmt } from "../core/format.js";
 import { el } from "../core/svg.js";
-import { parseColor } from "../core/color.js";
-import { VisError } from "../core/errors.js";
-import {
-  bounded,
-  describeValue,
-  parseId,
-  parseSize,
-} from "../core/validate.js";
+import { parseId, parseSize } from "../core/validate.js";
 import { gradient, grainLayer } from "../gradient/index.js";
 import { pattern } from "../pattern/index.js";
 import { BANNER_SIZE, CARD_SIZE, SCRIM_SOLID } from "./cover-contrast.js";
 import { coverLook } from "./cover-look.js";
+import { assertLook } from "./cover-validate.js";
 import type {
   CoverLook,
   CoverLookInput,
@@ -54,30 +48,6 @@ function ellipseGradient(
 
 const stop = (offset: number, colour: string, opacity?: number): string =>
   el("stop", { offset, "stop-color": colour, "stop-opacity": opacity });
-
-/** A look is code-built, but a hand-made or stored one reaches this as plain data: check the numbers it draws with. */
-function assertLook(look: CoverLook, scrim: CoverScrim | null): void {
-  const pair = (name: string, v: unknown, min: number, max: number): void => {
-    if (!Array.isArray(v) || v.length !== 2)
-      throw new VisError(
-        `${name} must be an array of 2 numbers, got ${describeValue(v)}`,
-      );
-    v.forEach((n: unknown, i) => bounded(`${name}[${i}]`, n, min, max));
-  };
-  const tx = look.texture;
-  if (tx) {
-    bounded("texture.opacity", tx.opacity, 0, 1);
-    bounded("texture.mask.floor", tx.mask.floor, 0, 1);
-    pair("texture.mask.at", tx.mask.at, -1000, 1000);
-    pair("texture.mask.radius", tx.mask.radius, 0, 1000);
-  }
-  if (scrim) {
-    bounded("scrim.alpha", scrim.alpha, 0, 1);
-    pair("scrim.at", scrim.at, -1000, 1000);
-    pair("scrim.radius", scrim.radius, 0, 1000);
-    parseColor(scrim.color);
-  }
-}
 
 /**
  * The look as `<defs>` and body markup for composition: the gradient, the masked texture,

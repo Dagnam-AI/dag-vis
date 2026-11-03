@@ -97,6 +97,36 @@ describe("coverContrast: the analytic model", () => {
     );
   });
 
+  it("refuses a forged mask as a VisError naming the field, not a TypeError", () => {
+    const textured = coverLook({
+      item: "a",
+      theme: "dark",
+      variant: "banner",
+      look: "halftone",
+    });
+    const tx = textured.texture;
+    if (!tx) throw new Error("halftone has a texture");
+    for (const field of ["at", "radius"] as const)
+      for (const value of [null, undefined]) {
+        const forged = {
+          ...textured,
+          texture: { ...tx, mask: { ...tx.mask, [field]: value } },
+        } as never;
+        const fn = (): number => coverContrast(forged);
+        expect(fn).toThrow(VisError);
+        expect(fn).toThrow(
+          new RegExp(
+            `^texture\\.mask\\.${field} must be an array of 2 numbers`,
+          ),
+        );
+      }
+    const noMask = { ...textured, texture: { ...tx, mask: null } } as never;
+    expect(() => coverContrast(noMask)).toThrow(VisError);
+    expect(() => coverContrast(noMask)).toThrow(
+      /^texture\.mask must be an object/,
+    );
+  });
+
   it("refuses a layer it cannot model", () => {
     const l = coverLook({ item: "a", theme: "dark", variant: "banner" });
     const mesh: CoverLook = {
