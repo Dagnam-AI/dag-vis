@@ -87,7 +87,7 @@ One command makes one deliverable: it synthesises and normalises the video's sou
 
 ## The pipeline proof
 
-`src/videos/pipeline-proof/` is a 6-second seamless loop that exercises the whole pipeline (bed, sheet, render, checks). It was rendered once as a verification run into a throwaway videos folder, and its ledger lines were intentionally not committed: they would point at files that are not in the real videos folder and would use up that day's version numbers. The first real video appends the first committed line to `RENDERS.jsonl`.
+`src/videos/pipeline-proof/` is a 6-second seamless loop that exercises the whole pipeline (bed, sheet, render, checks). It was first rendered as a verification run into a throwaway videos folder, which left no ledger line. `RENDERS.jsonl` holds exactly one pipeline-proof line, `pipeline-proof-20261025-v2.mp4`, the throwaway first upload to R2 (see "R2 copy"); it is part of the record, so never edit or remove it. The real videos follow it in the ledger.
 
 ## Verified toolchain facts
 
