@@ -276,6 +276,35 @@ describe("coverLook: the hue controls", () => {
     }
   });
 
+  it("the editor's hue moves a standalone post at every step, but a tag post whose nudge is cool is pinned at the 32 degree floor at the cool end", () => {
+    const steps = [-15, -10, -5, 0, 5, 10, 15];
+    const standalone = steps.map((hue) => accent({ hue }));
+    expect(new Set(standalone).size).toBe(steps.length);
+    // A tag post's own nudge (+-6) can carry the hue under the floor (family hue 34 at
+    // the editor's -15, 36 at -10): it is clamped, so those two steps give one colour.
+    const pinned = Array.from({ length: 200 }, (_, i) => ({
+      item: `p-${i}`,
+      family: "tag:x",
+    })).find((own) => {
+      const { params } = coverLook({
+        ...own,
+        theme: "dark",
+        variant: "card",
+        look: "ember",
+      });
+      // The look's hue at the editor's -10 is 36 + nudge: under 32 means pinned.
+      return params.hue - params.familyHue < -4.5;
+    });
+    if (!pinned) throw new Error("no cool tag post in 200");
+    expect(accent({ ...pinned, hue: -15 })).toBe(
+      accent({ ...pinned, hue: -10 }),
+    );
+    // Warmer steps recover (-5 gives 38 + nudge, above the floor for any nudge over -6).
+    expect(accent({ ...pinned, hue: -5 })).not.toBe(
+      accent({ ...pinned, hue: -10 }),
+    );
+  });
+
   it("2000 standalone posts take many accents, none holding more than a tenth", () => {
     const { distinct, top } = spread(
       Array.from({ length: 2000 }, (_, i) => accent({ item: `post-${i}` })),

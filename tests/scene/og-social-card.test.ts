@@ -135,6 +135,25 @@ describe("ogCard social layout with a cover look", () => {
     );
   });
 
+  it("rejects a forged mask with a null or missing at or radius as a VisError, not a TypeError", () => {
+    const tx = look.texture;
+    if (!tx) throw new Error("contour has a texture");
+    for (const field of ["at", "radius"] as const)
+      for (const value of [null, undefined]) {
+        const forged = {
+          ...look,
+          texture: { ...tx, mask: { ...tx.mask, [field]: value } },
+        } as never;
+        const fn = (): string => ogCard({ ...input, cover: forged });
+        expect(fn).toThrow(VisError);
+        expect(fn).toThrow(
+          new RegExp(
+            `^cover: texture\\.mask\\.${field} must be an array of 2 numbers`,
+          ),
+        );
+      }
+  });
+
   it("leaves a plain gradient spec cover byte-identical to before", () => {
     expect(ogCard(input)).toBe(ogCard({ ...input, cover: { ...cover } }));
   });

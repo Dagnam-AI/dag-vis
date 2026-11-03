@@ -10,6 +10,7 @@ import type {
   CoverTexture,
   Zone,
 } from "./cover-look-types.js";
+import { assertLook } from "./cover-validate.js";
 
 /**
  * The analytic contrast model of a cover: composites the look at a grid of points in a
@@ -148,6 +149,7 @@ function minRatio(
   zone: Zone,
   size: Size,
 ): number {
+  assertLook(look, scrim);
   const { palette: pal } = look;
   const page = parseColor(pal.base);
   const text = parseColor(pal.foreground);
