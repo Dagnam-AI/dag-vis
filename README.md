@@ -455,4 +455,4 @@ Tables for the 500 and 700 faces (`src/brand/unbounded-500-metrics.ts`, `src/bra
 
 ## Licence
 
-Apache-2.0, see [LICENSE](LICENSE). The bundled fonts have their own licences, see Fonts above and [NOTICE](NOTICE): Inter 4.1 and Unbounded under the SIL Open Font License 1.1, Moonhouse under its own terms (permission to redistribute still to be confirmed).
+Apache-2.0, see [LICENSE](LICENSE). The bundled fonts have their own licences, see Fonts above and [NOTICE](NOTICE): Inter 4.1 and Unbounded under the SIL Open Font License 1.1, Moonhouse under its own terms, bundled on the package owner's confirmation (recorded 2026-10-25) that Dagnam has NimaVisual's permission (see Fonts above).
