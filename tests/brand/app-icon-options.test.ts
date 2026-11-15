@@ -64,7 +64,7 @@ describe("APP_ICON_PRESETS", () => {
       store: {
         shape: "square",
         margin: 0,
-        markScale: 0.6,
+        markScale: 0.78,
         flat: true,
         opaque: true,
       },
