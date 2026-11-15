@@ -7,6 +7,12 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+### Added
+
+- Brand: `appIconSvg` options `preset`, `shape` (`squircle` default, `rounded`, `circle`, `square`), `cornerRadius` (0..0.5 of the plate side, `rounded` only, default 0.22; any other shape throws), `margin` (0..0.4 of the canvas, default 100/1024), `markScale` (0.2..0.9 of the plate side, default 480/824), `flat` (no sheen, no hairline) and `opaque` (declares no transparent pixel: needs `shape: "square"`, `margin: 0` and an opaque background when set explicitly; a preset's own `opaque` just stops applying when its shape or margin is overridden, so `{ preset: "store", shape: "circle" }` is a plain circle). `APP_ICON_PRESETS` is the one table of presets (deep-frozen, with `APP_ICON_SHAPES`): `macos` (today's icon and still the default, byte-identical), `store` (full-bleed opaque flat square for Google and GitHub logos and app-store uploads), `maskable` (the same with the mark inside the 80% PWA safe zone) and `round` (a flat circle for avatars). Explicit options override the preset. Also exported: `APP_ICON_SHAPES` and the `AppIconPreset`, `AppIconShape`, `AppIconLook` and `AppIconLookOptions` types.
+- Node: `appIcon` takes the same options plus `sizes` (PNG sides, integers 16..1024, written ascending; default the seven it always wrote). `sizes` takes at most 16 entries. `app-icon.icns` is written only for the `macos` look (the default preset) and only when the sizes include all seven default ones. `appIcon` rejects a `size` option (the master is always 1024 units). `appIconFiles({ sizes?, preset? })` lists the files for given sizes and preset; `APP_ICON_FILES` stays the default list.
+- CLI: `dag-vis app-icon` takes `--preset`, `--shape`, `--corner-radius`, `--margin`, `--mark-scale`, `--flat`, `--opaque` and `--sizes 120,512`.
+
 ## [0.2.0] - 2026-11-02
 
 ### Added

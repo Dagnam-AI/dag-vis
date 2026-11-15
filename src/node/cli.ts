@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 
+import type { AppIconPreset, AppIconShape } from "../brand/app-icon-options.js";
 import { palette } from "../brand/tokens.js";
 import { VisError } from "../core/errors.js";
 import { describeValue } from "../core/validate.js";
@@ -14,6 +15,7 @@ import {
   oneLine,
   parseArguments,
   parseFocus,
+  parseNumber,
   wantsHelp,
 } from "./cli-args.js";
 import { EXPORT_COMMANDS } from "./cli-export.js";
@@ -39,7 +41,9 @@ export const USAGE = `Dagnam visuals from the command line (dag-vis <command> [o
   dag-vis gradient --spec spec.json [--w W --h H] --out f.(svg|png)
   dag-vis pattern --spec spec.json --out f.(svg|png)
   dag-vis favicons --out DIR [--background C --color C]
-  dag-vis app-icon --out DIR [--background C --color C]
+  dag-vis app-icon --out DIR [--preset macos|store|maskable|round] [--shape squircle|rounded|circle|square]
+                   [--corner-radius N] [--margin N] [--mark-scale N] [--flat] [--opaque]
+                   [--sizes 120,512] [--background C --color C]
   dag-vis export <preset|spec.json> --out FILE [--format F] [--w N --h N | --size NAME]
                  [--fps N --duration S --loop] [--quality Q] [--t S] [--alpha] [--poster FILE]
   dag-vis presets
@@ -50,9 +54,23 @@ case), or the command exits 1 and writes nothing; .png is rasterised with the
 bundled fonts (needs @resvg/resvg-js), .svg is written as is. favicons and
 app-icon take a directory as --out: favicons writes favicon.ico, favicon.svg,
 apple-touch-icon.png, icon-192.png, icon-512.png, icon-maskable-512.png and
-site.webmanifest; app-icon writes the macOS app icon (a squircle plate on a
-transparent 1024 canvas) as app-icon.svg, app-icon-<16|32|64|128|256|512|1024>.png
-and app-icon.icns. Both draw the mark in the brand's deep red unless --color is
+site.webmanifest; app-icon writes the app icon as app-icon.svg,
+app-icon-<16|32|64|128|256|512|1024>.png (or the --sizes you list: whole pixels
+16..1024; at most 16) and, for the macos preset only and when all seven of those sizes
+are written, app-icon.icns. The
+default is the macOS dock icon (a squircle plate on a transparent 1024 canvas).
+--preset picks a look: macos (default), store (opaque full-bleed square, flat:
+Google and GitHub logos, app stores), maskable (the same with the mark inside
+the PWA safe zone) or round (a circle with a small margin, for avatars); the
+other options override it. --shape is squircle, rounded (--corner-radius 0..0.5
+of the plate side, default 0.22; an error with any other shape), circle or
+square; --margin is the transparent border as a fraction of the canvas (0..0.4,
+0 puts the plate on the edge); --mark-scale is the mark's box as a fraction of
+the plate side (0.2..0.9); --flat drops the sheen and the hairline; --opaque
+asserts that no pixel is transparent and needs --shape square, --margin 0 and an
+opaque --background; a preset's own opaque just stops applying when you change its
+shape or margin (--preset store --shape circle is a plain circle).
+Both draw the mark in the brand's deep red unless --color is
 given; --background (opaque) is the tile, or the plate. These commands and sheet
 write atomically (a temp file renamed over the target, so an existing file is
 replaced even if read-only, and the new one gets the default mode) and create
@@ -209,17 +227,12 @@ const COMMANDS = new Map<string, Command>([
       },
     },
   ],
-  ...(
-    [
-      ["favicons", favicons],
-      ["app-icon", appIcon],
-    ] as const
-  ).map(([name, write]): [string, Command] => [
-    name,
+  [
+    "favicons",
     {
       options: ["out", "background", "color"],
       async run(opts, io) {
-        const written = await write({
+        const written = await favicons({
           outDir: required(opts, "out"),
           ...defined({
             background: opts.get("background"),
@@ -229,7 +242,44 @@ const COMMANDS = new Map<string, Command>([
         io.stdout(written.map((p) => `wrote ${p}\n`).join(""));
       },
     },
-  ]),
+  ],
+  [
+    "app-icon",
+    {
+      options: [
+        "out",
+        "background",
+        "color",
+        "preset",
+        "shape",
+        "corner-radius",
+        "margin",
+        "mark-scale",
+        "sizes",
+      ],
+      flags: ["flat", "opaque"],
+      async run(opts, io, parsed) {
+        const sizes = opts.get("sizes");
+        // preset and shape are plain strings here: appIcon checks them against the allowed names.
+        const written = await appIcon({
+          outDir: required(opts, "out"),
+          ...defined({
+            background: opts.get("background"),
+            color: opts.get("color"),
+            preset: opts.get("preset") as AppIconPreset | undefined,
+            shape: opts.get("shape") as AppIconShape | undefined,
+            cornerRadius: numeric(opts, "corner-radius"),
+            margin: numeric(opts, "margin"),
+            markScale: numeric(opts, "mark-scale"),
+            flat: parsed.flags.has("flat") || undefined,
+            opaque: parsed.flags.has("opaque") || undefined,
+            sizes: sizes?.split(",").map((n) => parseNumber("sizes", n)),
+          }),
+        });
+        io.stdout(written.map((p) => `wrote ${p}\n`).join(""));
+      },
+    },
+  ],
 ]);
 
 /**

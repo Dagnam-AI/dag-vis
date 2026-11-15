@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { USAGE, run } from "../../src/node/cli.js";
 import type { CliIo } from "../../src/node/cli.js";
+import { appIconSvg } from "../../src/brand/app-icon.js";
 import { APP_ICON_FILES } from "../../src/node/app-icon.js";
 import { FAVICON_FILES } from "../../src/node/favicons.js";
 import { capture, useTempDir } from "./cli-helpers.js";
@@ -303,6 +304,149 @@ describe("dag-vis CLI", () => {
     );
   });
 
+  it("app-icon takes the preset, the shape options and the sizes", async () => {
+    const store = join(tmp(), "store");
+    expect(
+      await run(
+        ["app-icon", "--out", store, "--preset", "store"],
+        capture().io,
+      ),
+    ).toBe(0);
+    expect(readFileSync(join(store, "app-icon.svg"), "utf8")).toBe(
+      appIconSvg({ preset: "store" }),
+    );
+    const custom = join(tmp(), "custom");
+    const t = capture();
+    expect(
+      await run(
+        [
+          "app-icon",
+          "--out",
+          custom,
+          "--shape=rounded",
+          "--corner-radius",
+          "0.3",
+          "--margin",
+          "0.1",
+          "--mark-scale",
+          "0.5",
+          "--flat",
+          "--sizes",
+          "512,120",
+        ],
+        t.io,
+      ),
+    ).toBe(0);
+    expect(readFileSync(join(custom, "app-icon.svg"), "utf8")).toBe(
+      appIconSvg({
+        shape: "rounded",
+        cornerRadius: 0.3,
+        margin: 0.1,
+        markScale: 0.5,
+        flat: true,
+      }),
+    );
+    expect(t.out.join("")).toBe(
+      ["app-icon.svg", "app-icon-120.png", "app-icon-512.png"]
+        .map((f) => `wrote ${join(custom, f)}\n`)
+        .join(""),
+    );
+    const opaque = join(tmp(), "opaque");
+    expect(
+      await run(
+        [
+          "app-icon",
+          "--out",
+          opaque,
+          "--shape",
+          "square",
+          "--margin",
+          "0",
+          "--opaque",
+          "--sizes",
+          "64",
+        ],
+        capture().io,
+      ),
+    ).toBe(0);
+    expect(readdirSync(opaque).sort()).toEqual([
+      "app-icon-64.png",
+      "app-icon.svg",
+    ]);
+  });
+
+  it("app-icon lets an option override a preset without --no-opaque: --preset store --shape circle", async () => {
+    const out = join(tmp(), "circle");
+    expect(
+      await run(
+        [
+          "app-icon",
+          "--out",
+          out,
+          "--preset",
+          "store",
+          "--shape",
+          "circle",
+          "--sizes",
+          "64",
+        ],
+        capture().io,
+      ),
+    ).toBe(0);
+    expect(readFileSync(join(out, "app-icon.svg"), "utf8")).toBe(
+      appIconSvg({ preset: "store", shape: "circle" }),
+    );
+    expect(readFileSync(join(out, "app-icon.svg"), "utf8")).toContain(
+      "<circle",
+    );
+  });
+
+  it("app-icon --flat and --opaque are valueless: a help request after them still prints usage", async () => {
+    const h = capture();
+    expect(await run(["app-icon", "--flat", "--opaque", "-h"], h.io)).toBe(0);
+    expect(h.out.join("")).toBe(USAGE);
+  });
+
+  it.each([
+    [
+      ["--preset", "nope"],
+      "app icon preset must be one of macos, store, maskable, round",
+    ],
+    [["--shape", "blob"], "app icon shape must be one of"],
+    [["--corner-radius", "0.1"], 'only applies to shape "rounded"'],
+    [["--corner-radius", "-1"], "--corner-radius must be a plain decimal"],
+    [["--margin", "abc"], "--margin must be a plain decimal"],
+    [["--margin", "0.5"], "app icon margin must be a number in 0..0.4"],
+    [["--mark-scale", "1e1"], "--mark-scale must be a plain decimal"],
+    [["--opaque"], 'app icon opaque needs shape "square" and margin 0'],
+    [["--flat=1"], "--flat takes no value"],
+    [["--sizes", "120,x"], "--sizes must be a plain decimal"],
+    [["--sizes", "120,"], "--sizes must be a plain decimal"],
+    [["--sizes", "15"], "sizes[0] must be an integer in 16..1024"],
+    [["--sizes", "64.5"], "sizes[0] must be an integer in 16..1024"],
+    [["--sizes", "64,64"], "sizes repeats 64"],
+  ])("app-icon rejects %j with one line", async (extra, message) => {
+    const t = capture();
+    expect(
+      await run(["app-icon", "--out", join(tmp(), "out"), ...extra], t.io),
+    ).toBe(1);
+    expect(t.err.join("")).toMatch(NAMED_ERROR);
+    expect(t.err.join("")).toContain(message);
+    expect(t.out).toEqual([]);
+    expect(readdirSync(tmp())).toEqual([]);
+  });
+
+  it("favicons does not take the app-icon options", async () => {
+    const t = capture();
+    expect(
+      await run(
+        ["favicons", "--out", join(tmp(), "f"), "--preset", "store"],
+        t.io,
+      ),
+    ).toBe(1);
+    expect(t.err.join("")).toContain('unknown option: "--preset"');
+  });
+
   it("documents every command, favicons and app-icon with the files they write", () => {
     for (const part of [
       "dag-vis favicons --out DIR",
@@ -310,6 +454,10 @@ describe("dag-vis CLI", () => {
       "app-icon.icns",
       "site.webmanifest",
       "app-icon-<16|32|64|128|256|512|1024>.png",
+      "[--preset macos|store|maskable|round]",
+      "[--shape squircle|rounded|circle|square]",
+      "[--corner-radius N] [--margin N] [--mark-scale N] [--flat] [--opaque]",
+      "[--sizes 120,512]",
     ])
       expect(USAGE).toContain(part);
   });

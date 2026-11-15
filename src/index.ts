@@ -24,11 +24,17 @@ export {
   LOGO,
   LOGO_ICON_WEIGHT,
   PALETTES,
+  APP_ICON_PRESETS,
+  APP_ICON_SHAPES,
   appIconSvg,
   logoSvg,
   palette,
 } from "./brand/index.js";
 export type {
+  AppIconLook,
+  AppIconLookOptions,
+  AppIconPreset,
+  AppIconShape,
   AppIconSvgOptions,
   LogoSvgOptions,
   PaletteName,

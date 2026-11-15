@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import * as node from "../../src/node/index.js";
 import { FAVICON_FILES, favicons } from "../../src/node/favicons.js";
-import { appIcon, APP_ICON_FILES } from "../../src/node/app-icon.js";
+import {
+  appIcon,
+  appIconFiles,
+  APP_ICON_FILES,
+} from "../../src/node/app-icon.js";
 import { icoFromPngs } from "../../src/node/ico.js";
 import { icnsFromPngs } from "../../src/node/icns.js";
 import { run } from "../../src/node/cli.js";
@@ -33,6 +37,7 @@ describe("@dagnam/vis/node barrel", () => {
       "FONT_FILES",
       "STATIC_FORMATS",
       "appIcon",
+      "appIconFiles",
       "encodePng",
       "exportAnimation",
       "exportStatic",
@@ -53,6 +58,7 @@ describe("@dagnam/vis/node barrel", () => {
     expect(node.icoFromPngs).toBe(icoFromPngs);
     expect(node.icnsFromPngs).toBe(icnsFromPngs);
     expect(node.appIcon).toBe(appIcon);
+    expect(node.appIconFiles).toBe(appIconFiles);
     expect(node.APP_ICON_FILES).toBe(APP_ICON_FILES);
     expect(node.favicons).toBe(favicons);
     expect(node.FAVICON_FILES).toBe(FAVICON_FILES);
