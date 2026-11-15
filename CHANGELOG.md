@@ -7,6 +7,10 @@ follows [Semantic Versioning](https://semver.org/). A release is the tag
 
 ## [Unreleased]
 
+### Changed
+
+- Brand: the `store` app-icon preset draws the mark at 0.78 of the tile (was 0.6): the mark spans about 76% of the width, in line with the apple-touch and PWA icons (75% to 80%), and still sits inside a circular crop.
+
 ### Added
 
 - Brand: `appIconSvg` options `preset`, `shape` (`squircle` default, `rounded`, `circle`, `square`), `cornerRadius` (0..0.5 of the plate side, `rounded` only, default 0.22; any other shape throws), `margin` (0..0.4 of the canvas, default 100/1024), `markScale` (0.2..0.9 of the plate side, default 480/824), `flat` (no sheen, no hairline) and `opaque` (declares no transparent pixel: needs `shape: "square"`, `margin: 0` and an opaque background when set explicitly; a preset's own `opaque` just stops applying when its shape or margin is overridden, so `{ preset: "store", shape: "circle" }` is a plain circle). `APP_ICON_PRESETS` is the one table of presets (deep-frozen, with `APP_ICON_SHAPES`): `macos` (today's icon and still the default, byte-identical), `store` (full-bleed opaque flat square for Google and GitHub logos and app-store uploads), `maskable` (the same with the mark inside the 80% PWA safe zone) and `round` (a flat circle for avatars). Explicit options override the preset. Also exported: `APP_ICON_SHAPES` and the `AppIconPreset`, `AppIconShape`, `AppIconLook` and `AppIconLookOptions` types.

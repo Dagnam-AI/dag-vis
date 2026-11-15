@@ -124,7 +124,7 @@ await appIcon({ outDir: "build/store", preset: "store", sizes: [120, 512] }); //
   | preset     | plate              | margin | mark (of plate) | flat | opaque | for                                                |
   | ---------- | ------------------ | ------ | --------------- | ---- | ------ | -------------------------------------------------- |
   | `macos`    | squircle           | 0.098  | 0.583           | no   | no     | the dock icon (default)                            |
-  | `store`    | square, full bleed | 0      | 0.6             | yes  | yes    | Google and GitHub OAuth logos, app-store uploads   |
+  | `store`    | square, full bleed | 0      | 0.78            | yes  | yes    | Google and GitHub OAuth logos, app-store uploads   |
   | `maskable` | square, full bleed | 0      | 0.5             | yes  | yes    | PWA maskable icons (mark inside the 80% safe zone) |
   | `round`    | circle             | 0.05   | 0.55            | yes  | no     | avatars                                            |
 
