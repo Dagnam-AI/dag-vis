@@ -20,7 +20,7 @@ export { icoFromPngs } from "./ico.js";
 export { icnsFromPngs } from "./icns.js";
 export { favicons, FAVICON_FILES } from "./favicons.js";
 export type { FaviconsOptions } from "./favicons.js";
-export { appIcon, APP_ICON_FILES } from "./app-icon.js";
+export { appIcon, appIconFiles, APP_ICON_FILES } from "./app-icon.js";
 export type { AppIconOptions } from "./app-icon.js";
 export { run } from "./cli.js";
 export type { CliIo } from "./cli.js";

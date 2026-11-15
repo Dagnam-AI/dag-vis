@@ -5,3 +5,10 @@ export type { LogoSvgOptions } from "./logo.js";
 export { INTER, advance } from "./inter-metrics.js";
 export { APP_ICON, appIconSvg } from "./app-icon.js";
 export type { AppIconSvgOptions } from "./app-icon.js";
+export { APP_ICON_PRESETS, APP_ICON_SHAPES } from "./app-icon-options.js";
+export type {
+  AppIconLook,
+  AppIconLookOptions,
+  AppIconPreset,
+  AppIconShape,
+} from "./app-icon-options.js";

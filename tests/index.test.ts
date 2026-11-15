@@ -166,6 +166,8 @@ describe("@dagnam/vis root barrel", () => {
   // root must type-check without the DOM lib): never add them here.
   it("exports exactly the documented runtime names", () => {
     expect(Object.keys(vis).sort()).toEqual([
+      "APP_ICON_PRESETS",
+      "APP_ICON_SHAPES",
       "BLENDS",
       "BRAND",
       "COVER_LOOKS",
